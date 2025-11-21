@@ -3,8 +3,6 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
 // No Vite, as variáveis de ambiente DEVEM começar com VITE_
-// Se não começarem, elas não são expostas para o navegador por segurança.
-
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -14,15 +12,15 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Log de Debug para ajudar a entender se carregou
-console.group('--- Diagnóstico Firebase ---');
+// Log de Diagnóstico
+console.groupCollapsed('🔥 Diagnóstico Firebase');
 if (!firebaseConfig.apiKey) {
-  console.error('ERRO CRÍTICO: Chaves do Firebase não encontradas!');
-  console.error('Certifique-se de que as variáveis no Render começam com VITE_');
+  console.error('❌ ERRO CRÍTICO: Chaves do Firebase não encontradas!');
+  console.error('Verifique o arquivo .env ou as Environment Variables do Render.');
 } else {
-  console.log('✅ API Key encontrada.');
+  console.log('✅ API Key detectada.');
   console.log(`✅ Project ID: ${firebaseConfig.projectId}`);
-  console.log('Tentando inicializar App...');
+  console.log('✅ Inicializando App...');
 }
 console.groupEnd();
 

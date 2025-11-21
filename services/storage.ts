@@ -76,11 +76,11 @@ export const dbService = {
     });
   },
 
-  subscribeToSettings: (callback: (data: SystemSettings | null) => void) => {
+  subscribeToSettings: (callback: (data: SystemSettings | null) => void, onError?: (msg: string) => void) => {
     console.log('📡 [DB] Conectando em Settings...');
     return onSnapshot(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), (docSnap) => {
       if (docSnap.exists()) {
-        console.log('✅ [DB] Configurações recebidas do banco.');
+        console.log('✅ [DB] Configurações recebidas do banco.', docSnap.data());
         callback(docSnap.data() as SystemSettings);
       } else {
         console.warn('⚠️ [DB] Documento de configurações não existe (ainda). Usando Default.');
@@ -88,9 +88,12 @@ export const dbService = {
       }
     }, (error) => {
       console.error("❌ [DB] Erro crítico ao ler Configurações:", error);
+      let msg = "Erro ao conectar com o banco.";
       if (error.code === 'permission-denied') {
-        console.error("🔒 PERMISSÃO NEGADA: Verifique as Regras de Segurança do Firestore.");
+        msg = "🔒 PERMISSÃO NEGADA: Verifique as Regras (Rules) do Firestore no Console do Firebase.";
+        console.error(msg);
       }
+      if (onError) onError(msg);
     });
   },
 
@@ -155,9 +158,12 @@ export const dbService = {
     console.log('💾 [DB] Tentando salvar Configurações...', settings);
     try {
       await setDoc(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), settings);
-      console.log('✅ [DB] Configurações salvas com sucesso!');
+      console.log('✅ [DB] Configurações gravadas com sucesso!');
     } catch (error: any) {
       console.error('❌ [DB] Erro ao salvar configurações:', error);
+      if (error.code === 'permission-denied') {
+        throw new Error("Sem permissão de escrita. Verifique as Regras do Firebase.");
+      }
       throw error;
     }
   },

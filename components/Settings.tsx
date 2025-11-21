@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior } from '../types';
 import { generateUUID } from '../utils/helpers';
 
@@ -16,21 +16,34 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
 
-  // Loading state para feedback visual
-  const [isSaving, setIsSaving] = useState(false);
+  // Loading states
+  const [savingBranch, setSavingBranch] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [savingRole, setSavingRole] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [savingEvent, setSavingEvent] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
-  // Helper wrapper para salvar com loading
-  const handleSave = async (newSettings: SystemSettings) => {
-    setIsSaving(true);
+  // Reset success states after delay
+  useEffect(() => {
+    if (savingBranch === 'success') setTimeout(() => setSavingBranch('idle'), 2000);
+    if (savingRole === 'success') setTimeout(() => setSavingRole('idle'), 2000);
+    if (savingEvent === 'success') setTimeout(() => setSavingEvent('idle'), 2000);
+  }, [savingBranch, savingRole, savingEvent]);
+
+  // Wrapper auxiliar
+  const performSave = async (
+    newSettings: SystemSettings, 
+    setStat: React.Dispatch<React.SetStateAction<'idle' | 'saving' | 'success'>>,
+    onSuccess?: () => void
+  ) => {
+    setStat('saving');
     try {
       await setSettings(newSettings);
-      // Não precisa de toast aqui pois o App.tsx já mostra, mas limpamos os inputs
-      return true;
+      setStat('success');
+      if (onSuccess) onSuccess();
     } catch (error) {
       console.error(error);
-      return false;
-    } finally {
-      setIsSaving(false);
+      setStat('idle');
+      // O App.tsx já mostra o Toast de erro
     }
   };
 
@@ -42,14 +55,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       return;
     }
     const updated = { ...settings, branches: [...settings.branches, newBranch.trim()] };
-    const success = await handleSave(updated);
-    if (success) setNewBranch('');
+    performSave(updated, setSavingBranch, () => setNewBranch(''));
   };
 
   const removeBranch = async (branch: string) => {
     if (window.confirm(`Remover filial "${branch}"?`)) {
+      setRemovingId(branch);
       const updated = { ...settings, branches: settings.branches.filter(b => b !== branch) };
-      await handleSave(updated);
+      try { await setSettings(updated); } 
+      catch(e) { console.error(e); } 
+      finally { setRemovingId(null); }
     }
   };
 
@@ -61,14 +76,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       return;
     }
     const updated = { ...settings, roles: [...settings.roles, newRole.trim()] };
-    const success = await handleSave(updated);
-    if (success) setNewRole('');
+    performSave(updated, setSavingRole, () => setNewRole(''));
   };
 
   const removeRole = async (role: string) => {
     if (window.confirm(`Remover função "${role}"?`)) {
+      setRemovingId(role);
       const updated = { ...settings, roles: settings.roles.filter(r => r !== role) };
-      await handleSave(updated);
+      try { await setSettings(updated); } 
+      catch(e) { console.error(e); } 
+      finally { setRemovingId(null); }
     }
   };
 
@@ -81,17 +98,19 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       behavior: newEventBehavior
     };
     const updated = { ...settings, eventTypes: [...settings.eventTypes, newType] };
-    const success = await handleSave(updated);
-    if (success) {
+    performSave(updated, setSavingEvent, () => {
       setNewEventLabel('');
       setNewEventBehavior('neutral');
-    }
+    });
   };
 
   const removeEventType = async (id: string) => {
-    if (window.confirm('Remover este tipo de evento? Eventos passados manterão o registro mas a opção sumirá para novos.')) {
+    if (window.confirm('Remover este tipo de evento?')) {
+      setRemovingId(id);
       const updated = { ...settings, eventTypes: settings.eventTypes.filter(e => e.id !== id) };
-      await handleSave(updated);
+      try { await setSettings(updated); } 
+      catch(e) { console.error(e); } 
+      finally { setRemovingId(null); }
     }
   };
 
@@ -105,6 +124,18 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     }
   };
 
+  const getButtonLabel = (state: 'idle' | 'saving' | 'success', defaultText: string) => {
+    if (state === 'saving') return '...';
+    if (state === 'success') return 'Salvo! ✓';
+    return defaultText;
+  };
+
+  const getButtonClass = (state: 'idle' | 'saving' | 'success') => {
+    if (state === 'success') return 'bg-emerald-500 hover:bg-emerald-600 text-white';
+    if (state === 'saving') return 'bg-indigo-400 text-white cursor-not-allowed';
+    return 'bg-indigo-600 text-white hover:bg-indigo-700';
+  };
+
   return (
     <div className="space-y-8">
       
@@ -112,7 +143,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
           Gerenciar Filiais
-          {isSaving && <span className="text-xs font-normal text-indigo-500 animate-pulse">(Salvando no banco...)</span>}
         </h2>
         <div className="flex gap-2 mb-4">
           <input 
@@ -121,21 +151,27 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
             placeholder="Nova Filial..."
             value={newBranch}
             onChange={e => setNewBranch(e.target.value)}
-            disabled={isSaving}
+            disabled={savingBranch === 'saving'}
           />
           <button 
             onClick={addBranch} 
-            disabled={isSaving}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-indigo-400"
+            disabled={savingBranch === 'saving' || !newBranch.trim()}
+            className={`${getButtonClass(savingBranch)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
           >
-            {isSaving ? '...' : 'Adicionar'}
+            {getButtonLabel(savingBranch, 'Adicionar')}
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
           {settings.branches.map((branch) => (
             <div key={branch} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
               <span>{branch}</span>
-              <button onClick={() => removeBranch(branch)} disabled={isSaving} className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50">×</button>
+              <button 
+                onClick={() => removeBranch(branch)} 
+                disabled={removingId === branch}
+                className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
+              >
+                {removingId === branch ? '...' : '×'}
+              </button>
             </div>
           ))}
           {settings.branches.length === 0 && <span className="text-gray-400 text-sm">Nenhuma filial cadastrada.</span>}
@@ -146,7 +182,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
           Gerenciar Funções (Cargos)
-          {isSaving && <span className="text-xs font-normal text-indigo-500 animate-pulse">(Salvando no banco...)</span>}
         </h2>
         <div className="flex gap-2 mb-4">
           <input 
@@ -155,21 +190,27 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
             placeholder="Nova Função..."
             value={newRole}
             onChange={e => setNewRole(e.target.value)}
-            disabled={isSaving}
+            disabled={savingRole === 'saving'}
           />
           <button 
             onClick={addRole} 
-            disabled={isSaving}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-indigo-400"
+            disabled={savingRole === 'saving' || !newRole.trim()}
+            className={`${getButtonClass(savingRole)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
           >
-            {isSaving ? '...' : 'Adicionar'}
+            {getButtonLabel(savingRole, 'Adicionar')}
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
           {settings.roles.map((role) => (
             <div key={role} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
               <span>{role}</span>
-              <button onClick={() => removeRole(role)} disabled={isSaving} className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50">×</button>
+              <button 
+                onClick={() => removeRole(role)} 
+                disabled={removingId === role}
+                className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
+              >
+                 {removingId === role ? '...' : '×'}
+              </button>
             </div>
           ))}
           {settings.roles.length === 0 && <span className="text-gray-400 text-sm">Nenhuma função cadastrada.</span>}
@@ -180,7 +221,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
           Gerenciar Tipos de Evento
-          {isSaving && <span className="text-xs font-normal text-indigo-500 animate-pulse">(Salvando no banco...)</span>}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
            <div>
@@ -191,7 +231,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
               placeholder="Ex: Atestado Médico"
               value={newEventLabel}
               onChange={e => setNewEventLabel(e.target.value)}
-              disabled={isSaving}
+              disabled={savingEvent === 'saving'}
             />
            </div>
            <div>
@@ -200,7 +240,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                className="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                value={newEventBehavior}
                onChange={e => setNewEventBehavior(e.target.value as EventBehavior)}
-               disabled={isSaving}
+               disabled={savingEvent === 'saving'}
              >
                <option value="neutral">Neutro (Não afeta saldo)</option>
                <option value="debit">Debita (Consome folga)</option>
@@ -211,10 +251,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            <div className="flex items-end">
              <button 
                onClick={addEventType} 
-               disabled={isSaving}
-               className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-semibold disabled:bg-indigo-400"
+               disabled={savingEvent === 'saving' || !newEventLabel.trim()}
+               className={`${getButtonClass(savingEvent)} w-full px-4 py-2 rounded-lg transition-all font-semibold`}
              >
-               {isSaving ? '...' : 'Adicionar Tipo'}
+                {getButtonLabel(savingEvent, 'Adicionar Tipo')}
              </button>
            </div>
         </div>
@@ -228,10 +268,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
               </div>
               <button 
                 onClick={() => removeEventType(type.id)} 
-                disabled={isSaving}
+                disabled={removingId === type.id}
                 className="text-red-500 hover:text-red-700 text-sm font-medium bg-red-50 px-3 py-1 rounded disabled:opacity-50"
               >
-                Remover
+                {removingId === type.id ? '...' : 'Remover'}
               </button>
             </div>
           ))}
