@@ -8,9 +8,7 @@ import {
   doc, 
   onSnapshot,
   query,
-  orderBy,
-  setDoc,
-  getDoc
+  setDoc
 } from 'firebase/firestore';
 import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings } from '../types';
 
@@ -31,20 +29,25 @@ const SETTINGS_DOC_ID = 'general_settings';
 export const dbService = {
   // --- GENERIC LISTENERS (TEMPO REAL) ---
   // Essas funções "escutam" o banco. Sempre que algo mudar lá, elas rodam o callback.
+  // Adicionado tratamento de erro (segundo argumento do onSnapshot)
   
   subscribeToCollaborators: (callback: (data: Collaborator[]) => void) => {
     const q = query(collection(db, COLLECTIONS.COLLABORATORS));
     return onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Collaborator));
       callback(data);
+    }, (error) => {
+      console.error("Erro ao carregar Colaboradores:", error);
     });
   },
 
   subscribeToEvents: (callback: (data: EventRecord[]) => void) => {
-    const q = query(collection(db, COLLECTIONS.EVENTS)); // Idealmente ordenar por data
+    const q = query(collection(db, COLLECTIONS.EVENTS));
     return onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventRecord));
       callback(data);
+    }, (error) => {
+      console.error("Erro ao carregar Eventos:", error);
     });
   },
 
@@ -52,6 +55,8 @@ export const dbService = {
     return onSnapshot(collection(db, COLLECTIONS.ON_CALLS), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OnCallRecord));
       callback(data);
+    }, (error) => {
+      console.error("Erro ao carregar Plantões:", error);
     });
   },
 
@@ -59,6 +64,8 @@ export const dbService = {
     return onSnapshot(collection(db, COLLECTIONS.ADJUSTMENTS), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BalanceAdjustment));
       callback(data);
+    }, (error) => {
+      console.error("Erro ao carregar Ajustes:", error);
     });
   },
 
@@ -66,6 +73,8 @@ export const dbService = {
     return onSnapshot(collection(db, COLLECTIONS.VACATION_REQUESTS), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VacationRequest));
       callback(data);
+    }, (error) => {
+      console.error("Erro ao carregar Solicitações de Férias:", error);
     });
   },
 
@@ -76,6 +85,9 @@ export const dbService = {
       } else {
         callback(null);
       }
+    }, (error) => {
+      console.error("Erro ao carregar Configurações:", error);
+      // Se der erro de permissão, o callback pode não ser chamado, mas o erro aparecerá no console.
     });
   },
 
@@ -83,7 +95,6 @@ export const dbService = {
 
   // Colaboradores
   addCollaborator: async (colab: Omit<Collaborator, 'id'>) => {
-    // Firestore cria o ID automaticamente
     await addDoc(collection(db, COLLECTIONS.COLLABORATORS), colab);
   },
   updateCollaborator: async (id: string, data: Partial<Collaborator>) => {
@@ -96,13 +107,7 @@ export const dbService = {
 
   // Eventos
   addEvent: async (evt: EventRecord) => {
-    // Usamos o ID gerado no frontend ou deixamos o firestore gerar. 
-    // Como seu app gera UUIDs, podemos usar setDoc com ID específico ou addDoc ignorando o ID do front.
-    // Vamos usar addDoc e deixar o Firestore gerenciar IDs para ser mais nativo, 
-    // mas como seu app usa IDs para keys, vamos manter a consistência.
     const { id, ...rest } = evt; 
-    // Se o ID já existe no objeto, removemos para o Firestore criar um novo, OU usamos setDoc se quisermos forçar aquele ID.
-    // Vamos usar addDoc para simplicidade, o ID do firestore será o ID oficial.
     await addDoc(collection(db, COLLECTIONS.EVENTS), rest);
   },
   updateEvent: async (id: string, data: Partial<EventRecord>) => {
