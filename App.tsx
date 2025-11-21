@@ -237,7 +237,7 @@ function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#667eea] to-[#764ba2] font-sans pb-10">
+    <div className="min-h-screen bg-[#1E90FF] font-sans flex flex-col">
       <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-4">
            <div className="flex justify-between items-center">
@@ -256,7 +256,7 @@ function App() {
                  className={`
                    px-4 py-3 rounded-t-lg text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2
                    ${activeTab === tab.id 
-                     ? 'bg-white text-[#667eea] shadow-lg transform translate-y-0.5' 
+                     ? 'bg-white text-[#1E90FF] shadow-lg transform translate-y-0.5' 
                      : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'}
                  `}
                >
@@ -267,9 +267,32 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
         {renderContent()}
       </main>
+
+      <footer className="py-6 text-center text-white/80 text-sm">
+        <p>
+          Desenvolvido por{' '}
+          <a 
+            href="https://app.humand.co/profile/4970892" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all"
+          >
+            Fabio de Moraes
+          </a>{' '}
+          e{' '}
+          <a 
+            href="https://app.humand.co/profile/4968748" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all"
+          >
+            Alan Matheus
+          </a>
+        </p>
+      </footer>
 
       {toast && (
         <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-lg shadow-2xl text-white font-bold animate-slideIn z-50 ${toast.error ? 'bg-red-500' : 'bg-emerald-500'}`}>
