@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #f3f4f6;
+}
+
+/* Animações personalizadas */
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-slideIn { animation: slideIn 0.3s ease-out; }
+
+@keyframes fadeIn { 
+  from { opacity: 0; transform: scale(0.95); } 
+  to { opacity: 1; transform: scale(1); } 
+}
+.animate-fadeIn { animation: fadeIn 0.2s ease-out; }
+
+/* Hide Scrollbar but keep functionality */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
