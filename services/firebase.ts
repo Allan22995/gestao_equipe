@@ -1,33 +1,26 @@
+
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
-const getEnv = (key: string) => {
-  // Check for Vite environment variables
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-    return import.meta.env[key];
-  }
-  
-  // Check for Node/Process environment variables (fallback)
-  try {
-    // @ts-ignore
-    if (typeof process !== 'undefined' && process.env) {
-      // @ts-ignore
-      return process.env[key];
-    }
-  } catch (e) {
-    // ignore
-  }
-  return undefined;
-};
+// No Vite, as variáveis de ambiente DEVEM começar com VITE_
+// Se não começarem, elas não são expostas para o navegador por segurança.
 
 const firebaseConfig = {
-  apiKey: getEnv('VITE_FIREBASE_API_KEY') || getEnv('REACT_APP_FIREBASE_API_KEY'),
-  authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN') || getEnv('REACT_APP_FIREBASE_AUTH_DOMAIN'),
-  projectId: getEnv('VITE_FIREBASE_PROJECT_ID') || getEnv('REACT_APP_FIREBASE_PROJECT_ID'),
-  storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET') || getEnv('REACT_APP_FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: getEnv('VITE_FIREBASE_SENDER_ID') || getEnv('REACT_APP_FIREBASE_SENDER_ID'),
-  appId: getEnv('VITE_FIREBASE_APP_ID') || getEnv('REACT_APP_FIREBASE_APP_ID')
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
+
+// Log de Debug para ajudar a entender se carregou
+if (!firebaseConfig.apiKey) {
+  console.error('ERRO CRÍTICO: Chaves do Firebase não encontradas!');
+  console.error('Certifique-se de que as variáveis no Render começam com VITE_');
+} else {
+  console.log('Firebase configurado com sucesso.');
+}
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
