@@ -42,16 +42,25 @@ function App() {
 
   // Initial Data Loading (Subscribing to Firestore)
   useEffect(() => {
+    console.log('🚀 Inicializando App e Listeners...');
+
     const unsubColabs = dbService.subscribeToCollaborators(setCollaborators);
     const unsubEvents = dbService.subscribeToEvents(setEvents);
     const unsubOnCalls = dbService.subscribeToOnCalls(setOnCalls);
     const unsubAdjustments = dbService.subscribeToAdjustments(setAdjustments);
     const unsubVacation = dbService.subscribeToVacationRequests(setVacationRequests);
+    
     const unsubSettings = dbService.subscribeToSettings((data) => {
-      if (data) setSettings(data);
-      else {
-        // First run, save default settings
-        dbService.saveSettings(DEFAULT_SETTINGS);
+      if (data) {
+        setSettings(data);
+      } else {
+        console.log('⚠️ Sem configurações no banco. Usando Padrão Local e salvando...');
+        // First run, save default settings to DB so it persists for next time
+        dbService.saveSettings(DEFAULT_SETTINGS).catch(err => {
+          console.error('Erro ao salvar configs padrão:', err);
+          showToast('Erro ao inicializar banco de dados', true);
+        });
+        setSettings(DEFAULT_SETTINGS);
       }
     });
 
@@ -143,7 +152,11 @@ function App() {
     try { 
       await dbService.saveSettings(s); 
       showToast('Configurações salvas!');
-    } catch (err) { showToast('Erro ao salvar configs', true); }
+    } catch (err) { 
+      console.error('Erro App.tsx:', err);
+      showToast('Erro ao salvar configs. Verifique o console.', true); 
+      throw err; // Propagate error so the component knows it failed
+    }
   };
 
   const renderContent = () => {

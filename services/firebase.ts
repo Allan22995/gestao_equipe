@@ -15,12 +15,16 @@ const firebaseConfig = {
 };
 
 // Log de Debug para ajudar a entender se carregou
+console.group('--- Diagnóstico Firebase ---');
 if (!firebaseConfig.apiKey) {
   console.error('ERRO CRÍTICO: Chaves do Firebase não encontradas!');
   console.error('Certifique-se de que as variáveis no Render começam com VITE_');
 } else {
-  console.log('Firebase configurado com sucesso.');
+  console.log('✅ API Key encontrada.');
+  console.log(`✅ Project ID: ${firebaseConfig.projectId}`);
+  console.log('Tentando inicializar App...');
 }
+console.groupEnd();
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);

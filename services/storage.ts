@@ -28,8 +28,6 @@ const SETTINGS_DOC_ID = 'general_settings';
 
 export const dbService = {
   // --- GENERIC LISTENERS (TEMPO REAL) ---
-  // Essas funções "escutam" o banco. Sempre que algo mudar lá, elas rodam o callback.
-  // Adicionado tratamento de erro (segundo argumento do onSnapshot)
   
   subscribeToCollaborators: (callback: (data: Collaborator[]) => void) => {
     const q = query(collection(db, COLLECTIONS.COLLABORATORS));
@@ -37,7 +35,7 @@ export const dbService = {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Collaborator));
       callback(data);
     }, (error) => {
-      console.error("Erro ao carregar Colaboradores:", error);
+      console.error("❌ [DB] Erro ao carregar Colaboradores:", error.message);
     });
   },
 
@@ -47,7 +45,7 @@ export const dbService = {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventRecord));
       callback(data);
     }, (error) => {
-      console.error("Erro ao carregar Eventos:", error);
+      console.error("❌ [DB] Erro ao carregar Eventos:", error.message);
     });
   },
 
@@ -56,7 +54,7 @@ export const dbService = {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OnCallRecord));
       callback(data);
     }, (error) => {
-      console.error("Erro ao carregar Plantões:", error);
+      console.error("❌ [DB] Erro ao carregar Plantões:", error.message);
     });
   },
 
@@ -65,7 +63,7 @@ export const dbService = {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BalanceAdjustment));
       callback(data);
     }, (error) => {
-      console.error("Erro ao carregar Ajustes:", error);
+      console.error("❌ [DB] Erro ao carregar Ajustes:", error.message);
     });
   },
 
@@ -74,20 +72,25 @@ export const dbService = {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VacationRequest));
       callback(data);
     }, (error) => {
-      console.error("Erro ao carregar Solicitações de Férias:", error);
+      console.error("❌ [DB] Erro ao carregar Solicitações de Férias:", error.message);
     });
   },
 
   subscribeToSettings: (callback: (data: SystemSettings | null) => void) => {
+    console.log('📡 [DB] Conectando em Settings...');
     return onSnapshot(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), (docSnap) => {
       if (docSnap.exists()) {
+        console.log('✅ [DB] Configurações recebidas do banco.');
         callback(docSnap.data() as SystemSettings);
       } else {
+        console.warn('⚠️ [DB] Documento de configurações não existe (ainda). Usando Default.');
         callback(null);
       }
     }, (error) => {
-      console.error("Erro ao carregar Configurações:", error);
-      // Se der erro de permissão, o callback pode não ser chamado, mas o erro aparecerá no console.
+      console.error("❌ [DB] Erro crítico ao ler Configurações:", error);
+      if (error.code === 'permission-denied') {
+        console.error("🔒 PERMISSÃO NEGADA: Verifique as Regras de Segurança do Firestore.");
+      }
     });
   },
 
@@ -95,11 +98,11 @@ export const dbService = {
 
   // Colaboradores
   addCollaborator: async (colab: Omit<Collaborator, 'id'>) => {
+    console.log('💾 [DB] Salvando Colaborador...');
     await addDoc(collection(db, COLLECTIONS.COLLABORATORS), colab);
   },
   updateCollaborator: async (id: string, data: Partial<Collaborator>) => {
-    const ref = doc(db, COLLECTIONS.COLLABORATORS, id);
-    await updateDoc(ref, data);
+    await updateDoc(doc(db, COLLECTIONS.COLLABORATORS, id), data);
   },
   deleteCollaborator: async (id: string) => {
     await deleteDoc(doc(db, COLLECTIONS.COLLABORATORS, id));
@@ -149,7 +152,14 @@ export const dbService = {
 
   // Configurações
   saveSettings: async (settings: SystemSettings) => {
-    await setDoc(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), settings);
+    console.log('💾 [DB] Tentando salvar Configurações...', settings);
+    try {
+      await setDoc(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), settings);
+      console.log('✅ [DB] Configurações salvas com sucesso!');
+    } catch (error: any) {
+      console.error('❌ [DB] Erro ao salvar configurações:', error);
+      throw error;
+    }
   },
 
   // Logs (Apenas escrita)
