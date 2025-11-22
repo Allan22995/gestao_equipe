@@ -11,6 +11,7 @@ import { OnCall } from './components/OnCall';
 import { Balance } from './components/Balance';
 import { VacationForecast } from './components/VacationForecast';
 import { Settings } from './components/Settings';
+import { CommunicationGenerator } from './components/CommunicationGenerator';
 import { generateUUID } from './utils/helpers';
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -227,6 +228,8 @@ function App() {
           showToast={showToast} 
           logAction={logAction} 
         />;
+      case 'comunicados':
+        return <CommunicationGenerator />;
       case 'configuracoes':
         return <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} />;
       default:
@@ -242,6 +245,7 @@ function App() {
     { id: 'plantoes', label: 'Plantões', icon: '🌙' },
     { id: 'saldo', label: 'Saldo', icon: '💰' },
     { id: 'previsao_ferias', label: 'Prev. Férias', icon: '✈️' },
+    { id: 'comunicados', label: 'Comunicados', icon: '📢' },
     { id: 'configuracoes', label: 'Configurações', icon: '⚙️' },
   ];
 

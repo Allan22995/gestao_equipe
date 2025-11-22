@@ -110,4 +110,4 @@ export interface AuditLog {
   timestamp: string;
 }
 
-export type TabType = 'calendario' | 'dashboard' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes';
+export type TabType = 'calendario' | 'dashboard' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados';
