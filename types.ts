@@ -17,10 +17,15 @@ export interface Schedule {
   domingo: DaySchedule;
 }
 
+export type UserProfile = 'admin' | 'colaborador' | 'noc';
+
 export interface Collaborator {
   id: string;
   colabId: string;
   name: string;
+  email: string; // Vinculo com Firebase Auth
+  phone: string; // Contato para NOC/Admin
+  profile: UserProfile; // Perfil de acesso
   branch: string;
   role: string;
   login: string;

@@ -1,7 +1,6 @@
 
-
 import React, { useState, useMemo } from 'react';
-import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings } from '../types';
+import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings, UserProfile } from '../types';
 import { getFeriados } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 
@@ -11,12 +10,15 @@ interface CalendarProps {
   onCalls: OnCallRecord[];
   vacationRequests: VacationRequest[];
   settings?: SystemSettings; // Opcional para compatibilidade, mas idealmente obrigatório
+  currentUserProfile: UserProfile;
 }
 
-export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCalls, vacationRequests, settings }) => {
+export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCalls, vacationRequests, settings, currentUserProfile }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<{ date: string, dayEvents: any[], holiday?: string } | null>(null);
   
+  const canViewPhone = currentUserProfile === 'admin' || currentUserProfile === 'noc';
+
   // Filters
   const [filterName, setFilterName] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
@@ -87,6 +89,10 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
 
   const getCollaboratorName = (id: string) => {
     return collaborators.find(c => c.id === id)?.name || 'Desconhecido';
+  };
+  
+  const getCollaboratorPhone = (id: string) => {
+    return collaborators.find(c => c.id === id)?.phone || null;
   };
 
   const getEventTypeLabel = (evt: EventRecord) => {
@@ -276,6 +282,7 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
 
            {selectedDay?.dayEvents.map((e: any, idx) => {
               const name = getCollaboratorName(e.collaboratorId);
+              const phone = getCollaboratorPhone(e.collaboratorId);
               let borderClass = '';
               let bgClass = '';
               let title = '';
@@ -302,6 +309,11 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
                     <span>{name}</span>
                     <span className="text-xs font-normal opacity-75 uppercase tracking-wider">{title}</span>
                   </div>
+                  {canViewPhone && phone && (
+                    <div className="text-xs text-gray-600 font-semibold flex items-center gap-1 mt-0.5">
+                      📞 {phone}
+                    </div>
+                  )}
                   <div className="text-sm text-gray-600 mt-1">
                     {e.kind === 'plantao' ? `${e.startTime} - ${e.endTime}` : ''}
                     {(e.kind === 'vacation_req' && e.notes) ? <span className="block mt-1 italic text-xs">Obs: {e.notes}</span> : ''}

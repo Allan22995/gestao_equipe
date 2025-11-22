@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Collaborator, Schedule, DaySchedule, SystemSettings } from '../types';
+import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
 
 interface CollaboratorsProps {
@@ -10,6 +10,7 @@ interface CollaboratorsProps {
   onDelete: (id: string) => void;
   showToast: (msg: string, isError?: boolean) => void;
   settings: SystemSettings;
+  currentUserProfile: UserProfile;
 }
 
 const initialSchedule: Schedule = {
@@ -22,11 +23,14 @@ const initialSchedule: Schedule = {
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
 };
 
-export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onAdd, onUpdate, onDelete, showToast, settings }) => {
+export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     colabId: '',
     name: '',
+    email: '',
+    phone: '',
+    profile: 'colaborador' as UserProfile,
     branch: '',
     role: '',
     login: '',
@@ -34,6 +38,9 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
+
+  // Only Admin can edit
+  const canEdit = currentUserProfile === 'admin';
 
   const handleScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, value: any) => {
     setSchedule(prev => ({
@@ -47,6 +54,9 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
     setFormData({
       colabId: colab.colabId,
       name: colab.name,
+      email: colab.email || '',
+      phone: colab.phone || '',
+      profile: colab.profile || 'colaborador',
       branch: colab.branch,
       role: colab.role,
       login: colab.login,
@@ -65,7 +75,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setFormData({ colabId: '', name: '', branch: '', role: '', login: '', shiftType: '' });
+    setFormData({ colabId: '', name: '', email: '', phone: '', profile: 'colaborador', branch: '', role: '', login: '', shiftType: '' });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
   };
 
@@ -82,6 +92,14 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       showToast('Já existe um colaborador com este Login', true);
       return;
     }
+    // Check duplicate email
+    if (formData.email) {
+      const isDuplicateEmail = collaborators.some(c => c.email === formData.email && c.id !== editingId);
+      if (isDuplicateEmail) {
+        showToast('Já existe um colaborador com este E-mail', true);
+        return;
+      }
+    }
 
     const hasWorkDays = (Object.values(schedule) as DaySchedule[]).some(day => day.enabled && day.start && day.end);
     if (!hasWorkDays) {
@@ -94,13 +112,13 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
         id: editingId,
         ...formData,
         schedule,
-        createdAt: new Date().toISOString(), // Keep original? Firestore ignores this usually if we don't pass it, but we are passing full obj
+        createdAt: new Date().toISOString(),
       });
       showToast('Colaborador atualizado com sucesso!');
       handleCancelEdit();
     } else {
       const newColab: Collaborator = {
-        id: generateUUID(), // Frontend ID, Firestore will rewrite it if we used addDoc properly, but here we pass it
+        id: generateUUID(),
         ...formData,
         schedule,
         createdAt: new Date().toISOString(),
@@ -123,6 +141,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
 
   return (
     <div className="space-y-8">
+      {/* Formulário visível apenas para Admin, ou apenas leitura para outros se desejado. Mas "Cadastrar" implica ação. */}
+      {canEdit ? (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">
@@ -149,6 +169,29 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
               <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Nome do colaborador" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
             </div>
 
+            {/* Email (Vinculo Auth) */}
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">E-mail Google (Login) *</label>
+              <input required type="email" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="email@gmail.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              <span className="text-[10px] text-gray-400">Usado para autenticação no sistema</span>
+            </div>
+
+            {/* Telefone */}
+             <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Telefone (Celular) *</label>
+              <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="(XX) 9XXXX-XXXX" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+            </div>
+
+            {/* Perfil de Acesso */}
+             <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Perfil de Acesso *</label>
+              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.profile} onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}>
+                 <option value="colaborador">Colaborador</option>
+                 <option value="admin">Administrador</option>
+                 <option value="noc">NOC</option>
+              </select>
+            </div>
+
             {/* Branch Select */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Filial *</label>
@@ -167,10 +210,10 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
               </select>
             </div>
 
-            {/* Login */}
+            {/* Login (Legado/Display) */}
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Login *</label>
-              <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Login de acesso" value={formData.login} onChange={e => setFormData({...formData, login: e.target.value})} />
+              <label className="text-xs font-semibold text-gray-600 mb-1">Usuário de Rede/Login *</label>
+              <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Login de rede" value={formData.login} onChange={e => setFormData({...formData, login: e.target.value})} />
             </div>
 
             {/* Turno */}
@@ -256,6 +299,12 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
           </button>
         </form>
       </div>
+      ) : (
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-center text-blue-800">
+          <p className="font-bold">Modo Leitura</p>
+          <p className="text-sm">Seu perfil permite apenas visualizar a lista de colaboradores. Entre em contato com um Administrador para alterações.</p>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4">Colaboradores Cadastrados ({collaborators.length})</h2>
@@ -281,30 +330,39 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                       <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-0.5 rounded">ID: {colab.colabId}</span>
                       <h3 className="font-bold text-gray-800">{colab.name}</h3>
                       <span className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded ml-auto md:ml-0">{colab.shiftType}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded border ${colab.profile === 'admin' ? 'bg-red-50 text-red-600 border-red-200' : colab.profile === 'noc' ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-600'}`}>
+                        {colab.profile?.toUpperCase() || 'COLABORADOR'}
+                      </span>
                     </div>
                     <div className="text-sm text-gray-600 grid grid-cols-1 sm:grid-cols-3 gap-2">
                        <span>🏢 {colab.branch}</span>
                        <span>🔧 {colab.role}</span>
-                       <span>👤 {colab.login}</span>
+                       <span>📧 {colab.email || 'Sem e-mail'}</span>
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      📞 Tel: {canEdit ? (colab.phone || 'Sem telefone') : '***********'}
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
                       📅 {workDays}
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-4 md:mt-0">
-                    <button 
-                      onClick={() => handleEdit(colab)}
-                      className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium transition-colors"
-                    >
-                      Editar
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(colab.id)}
-                      className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-medium transition-colors"
-                    >
-                      Excluir
-                    </button>
-                  </div>
+                  
+                  {canEdit && (
+                    <div className="flex gap-2 mt-4 md:mt-0">
+                      <button 
+                        onClick={() => handleEdit(colab)}
+                        className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-sm font-medium transition-colors"
+                      >
+                        Editar
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(colab.id)}
+                        className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-medium transition-colors"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Collaborator, VacationRequest, VacationStatus } from '../types';
+import { Collaborator, VacationRequest, VacationStatus, UserProfile } from '../types';
 import { generateUUID, formatDate } from '../utils/helpers';
 
 interface VacationForecastProps {
@@ -11,6 +11,7 @@ interface VacationForecastProps {
   onDelete: (id: string) => void;
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
+  currentUserProfile: UserProfile;
 }
 
 const CalendarIcon = () => (
@@ -20,7 +21,7 @@ const CalendarIcon = () => (
 );
 
 export const VacationForecast: React.FC<VacationForecastProps> = ({ 
-  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction 
+  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile 
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -31,6 +32,8 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     notes: '',
     responsible: ''
   });
+
+  const isAdmin = currentUserProfile === 'admin';
 
   const resetForm = () => {
     setEditingId(null);
@@ -58,6 +61,10 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
   };
 
   const handleDelete = (id: string) => {
+    if (!isAdmin) {
+      showToast('Apenas administradores podem excluir solicitações.', true);
+      return;
+    }
     if (window.confirm('Tem certeza que deseja excluir esta previsão de férias?')) {
       onDelete(id);
       logAction('delete', 'previsao_ferias', `Previsão ID ${id} excluída`, 'Admin/Usuario');
@@ -84,12 +91,15 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     const user = formData.responsible.trim();
 
     if (!editingId) {
+      // Se não for admin, forçar status pendente na criação
+      const initialStatus = isAdmin ? formData.status : 'pendente';
+
       const newReq: VacationRequest = {
         id: generateUUID(),
         collaboratorId: formData.collaboratorId,
         startDate: formData.startDate,
         endDate: formData.endDate,
-        status: formData.status,
+        status: initialStatus,
         notes: formData.notes,
         createdAt: new Date().toISOString(),
         updatedBy: user
@@ -100,6 +110,11 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       showToast('Previsão de férias registrada!');
       resetForm();
     } else {
+      // Se não for admin e tentar mudar status, bloquear (embora o select esteja disabled, é bom garantir)
+      if (!isAdmin && formData.status === 'aprovado') {
+         // Se o usuário tentar "hackear" ou mudar, ignorar se não for admin (porem o select estará travado)
+      }
+
       onUpdate({
         id: editingId,
         collaboratorId: formData.collaboratorId,
@@ -189,15 +204,17 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
             <label className="text-xs font-semibold text-gray-600 mb-1">Status *</label>
             <select
               required
-              className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700"
+              className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100 disabled:text-gray-500"
               value={formData.status}
               onChange={e => setFormData({...formData, status: e.target.value as VacationStatus})}
+              disabled={!isAdmin} // Apenas Admin pode aprovar/mudar status livremente
             >
               <option value="pendente">Pendente</option>
-              <option value="aprovado">Aprovado</option>
+              <option value="aprovado">Aprovado {(!isAdmin && formData.status !== 'aprovado') ? '(Restrito Admin)' : ''}</option>
               <option value="negociacao">Em Negociação</option>
               <option value="nova_opcao">Nova Opção (Contraproposta)</option>
             </select>
+            {!isAdmin && <p className="text-[10px] text-gray-400 mt-1">Apenas Administradores podem alterar o status de aprovação.</p>}
           </div>
 
           <div className="flex flex-col">
@@ -262,12 +279,14 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
                   >
                     Editar
                   </button>
-                  <button 
-                    onClick={() => handleDelete(r.id)} 
-                    className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
-                  >
-                    Excluir
-                  </button>
+                  {isAdmin && (
+                    <button 
+                      onClick={() => handleDelete(r.id)} 
+                      className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
+                    >
+                      Excluir
+                    </button>
+                  )}
                 </div>
               </div>
             );

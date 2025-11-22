@@ -1,8 +1,9 @@
 
-
 import React, { useState, useEffect } from 'react';
-import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings } from './types';
-import { dbService } from './services/storage'; // Note: mudou de storageService para dbService
+import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile } from './types';
+import { dbService } from './services/storage'; 
+import { auth } from './services/firebase'; 
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { Calendar } from './components/Calendar';
 import { Dashboard } from './components/Dashboard';
 import { Collaborators } from './components/Collaborators';
@@ -12,6 +13,7 @@ import { Balance } from './components/Balance';
 import { VacationForecast } from './components/VacationForecast';
 import { Settings } from './components/Settings';
 import { CommunicationGenerator } from './components/CommunicationGenerator';
+import { Login } from './components/Login';
 import { generateUUID } from './utils/helpers';
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -26,6 +28,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
 };
 
 function App() {
+  // Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userColabId, setUserColabId] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<TabType>('calendario');
   
   // Data State (Realtime from Firestore)
@@ -43,8 +51,33 @@ function App() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Listen for Auth Changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Match Authenticated User with Collaborator Data to determine Role
+  useEffect(() => {
+    if (user && collaborators.length > 0) {
+      const foundColab = collaborators.find(c => c.email === user.email);
+      if (foundColab) {
+        setUserProfile(foundColab.profile || 'colaborador');
+        setUserColabId(foundColab.id);
+      } else {
+        // Email autenticado no Google mas não cadastrado na base
+        setUserProfile(null); 
+      }
+    }
+  }, [user, collaborators]);
+
   // Initial Data Loading (Subscribing to Firestore)
   useEffect(() => {
+    if (!user) return; // Only load data if logged in
+
     console.log('🚀 Inicializando App e Listeners...');
 
     const unsubColabs = dbService.subscribeToCollaborators(setCollaborators);
@@ -53,11 +86,9 @@ function App() {
     const unsubAdjustments = dbService.subscribeToAdjustments(setAdjustments);
     const unsubVacation = dbService.subscribeToVacationRequests(setVacationRequests);
     
-    // Passamos uma função de erro para capturar problemas de Permissão/Rules
     const unsubSettings = dbService.subscribeToSettings(
       (data) => {
         if (data) {
-          // Garantir que spreadsheetUrl exista mesmo em configs antigas
           setSettings({ ...DEFAULT_SETTINGS, ...data });
         } else {
           console.log('⚠️ Sem configurações no banco. Usando Padrão Local e salvando...');
@@ -72,7 +103,6 @@ function App() {
       }
     );
 
-    // Cleanup listeners on unmount
     return () => {
       unsubColabs();
       unsubEvents();
@@ -81,7 +111,7 @@ function App() {
       unsubVacation();
       unsubSettings();
     };
-  }, []);
+  }, [user]); // Run when user logs in
 
   // --- ACTION HANDLERS ---
   const logAction = (action: string, entity: string, details: string, user: string) => {
@@ -159,25 +189,61 @@ function App() {
       showToast('Configurações salvas!');
     } catch (err: any) { 
       console.error('Erro App.tsx:', err);
-      // Se for erro de permissão, a mensagem já vem formatada do storage.ts ou capturada no listener
       const msg = err.message || 'Erro ao salvar configs.';
       showToast(msg, true); 
       throw err; 
     }
   };
 
+  // --- ACCESS CONTROL LOGIC ---
+  const getVisibleTabs = (): {id: TabType, label: string, icon: string}[] => {
+    if (!userProfile) return [];
+
+    const allTabs: {id: TabType, label: string, icon: string}[] = [
+      { id: 'calendario', label: 'Calendário', icon: '📆' },
+      { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+      { id: 'colaboradores', label: 'Colaboradores', icon: '👥' },
+      { id: 'eventos', label: 'Eventos', icon: '📅' },
+      { id: 'plantoes', label: 'Plantões', icon: '🌙' },
+      { id: 'saldo', label: 'Saldo', icon: '💰' },
+      { id: 'previsao_ferias', label: 'Prev. Férias', icon: '✈️' },
+      { id: 'comunicados', label: 'Comunicados', icon: '📢' },
+      { id: 'configuracoes', label: 'Configurações', icon: '⚙️' },
+    ];
+
+    if (userProfile === 'admin') return allTabs;
+    
+    if (userProfile === 'noc') {
+      // NOC: Calendário e Dashboard apenas
+      return allTabs.filter(t => ['calendario', 'dashboard'].includes(t.id));
+    }
+
+    if (userProfile === 'colaborador') {
+      // Colaborador: Tudo MENOS Configurações
+      return allTabs.filter(t => t.id !== 'configuracoes');
+    }
+
+    return [];
+  };
+
+  const visibleTabs = getVisibleTabs();
+
+  // Redirect if current tab is not allowed
+  useEffect(() => {
+    if (visibleTabs.length > 0) {
+      const isAllowed = visibleTabs.some(t => t.id === activeTab);
+      if (!isAllowed) setActiveTab(visibleTabs[0].id);
+    }
+  }, [userProfile, visibleTabs]);
+
   const renderContent = () => {
+    if (!userProfile) return null;
+
     switch (activeTab) {
       case 'calendario':
-        return <Calendar collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} settings={settings} />;
+        return <Calendar collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} settings={settings} currentUserProfile={userProfile} />;
       case 'dashboard':
-        return <Dashboard 
-          collaborators={collaborators} 
-          events={events} 
-          onCalls={onCalls} 
-          vacationRequests={vacationRequests}
-          settings={settings} 
-        />;
+        return <Dashboard collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} settings={settings} />;
       case 'colaboradores':
         return <Collaborators 
           collaborators={collaborators} 
@@ -186,6 +252,7 @@ function App() {
           onDelete={handleDeleteCollaborator}
           showToast={showToast} 
           settings={settings} 
+          currentUserProfile={userProfile}
         />;
       case 'eventos':
         return <Events 
@@ -207,7 +274,7 @@ function App() {
           onDelete={handleDeleteOnCall}
           showToast={showToast} 
           logAction={logAction} 
-          settings={settings} // Passando Settings
+          settings={settings} 
         />;
       case 'saldo':
         return <Balance 
@@ -226,28 +293,74 @@ function App() {
           onUpdate={handleUpdateVacation}
           onDelete={handleDeleteVacation}
           showToast={showToast} 
-          logAction={logAction} 
+          logAction={logAction}
+          currentUserProfile={userProfile}
         />;
       case 'comunicados':
         return <CommunicationGenerator />;
       case 'configuracoes':
-        return <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} />;
+        return userProfile === 'admin' ? <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} /> : <div>Acesso Negado</div>;
       default:
         return null;
     }
   };
 
-  const tabs: {id: TabType, label: string, icon: string}[] = [
-    { id: 'calendario', label: 'Calendário', icon: '📆' },
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'colaboradores', label: 'Colaboradores', icon: '👥' },
-    { id: 'eventos', label: 'Eventos', icon: '📅' },
-    { id: 'plantoes', label: 'Plantões', icon: '🌙' },
-    { id: 'saldo', label: 'Saldo', icon: '💰' },
-    { id: 'previsao_ferias', label: 'Prev. Férias', icon: '✈️' },
-    { id: 'comunicados', label: 'Comunicados', icon: '📢' },
-    { id: 'configuracoes', label: 'Configurações', icon: '⚙️' },
-  ];
+  // LOADING STATE
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#1E90FF] flex items-center justify-center text-white">
+        <div className="animate-pulse text-xl font-bold">Carregando Sistema...</div>
+      </div>
+    );
+  }
+
+  // NOT LOGGED IN
+  if (!user) {
+    return <Login />;
+  }
+
+  // LOGGED IN BUT NO PROFILE (Not in DB)
+  if (!userProfile && collaborators.length > 0) { // Only show "Denied" if we have data loaded but no match. If DB is empty, we might want to allow first register logic? 
+    // To be safe, if DB has collaborators and current user is not one of them:
+     return (
+      <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white p-8 rounded-xl shadow-xl max-w-md">
+          <div className="text-amber-500 mb-4 flex justify-center">
+             <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+             </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Acesso Pendente</h2>
+          <p className="text-gray-600 mb-6">
+            Seu e-mail <b>{user.email}</b> foi autenticado com sucesso, mas não encontramos seu cadastro na base de colaboradores.
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            Solicite a um <b>Administrador</b> para cadastrar seu e-mail no sistema.
+          </p>
+          <button onClick={() => signOut(auth)} className="bg-gray-800 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+            Sair / Tentar outra conta
+          </button>
+        </div>
+      </div>
+     );
+  }
+
+  // Fallback if DB is empty (First Run) -> Let's assume first user is Admin for setup or just show Empty state
+  // If collaborators.length === 0 and we are logged in, we might be the first user.
+  // For safety in this specific requested app flow, I will allow the view but Profile will be null in state initially.
+  // However, logic above handles "Access Denied" if colabs exist. If length is 0, we probably need to let them in to setup.
+  if (collaborators.length === 0 && !userProfile) {
+      // Temporary Setup Mode
+      return (
+        <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center p-6">
+           <div className="bg-white p-8 rounded-xl shadow-lg max-w-lg text-center">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Configuração Inicial</h2>
+              <p className="text-gray-600 mb-6">Não existem colaboradores cadastrados. Como você é o primeiro usuário, acesse o banco de dados do Firebase e crie manualmente o primeiro registro para o email: <b>{user.email}</b> com perfil <b>admin</b>.</p>
+              <button onClick={() => signOut(auth)} className="text-indigo-600 underline">Sair</button>
+           </div>
+        </div>
+      );
+  }
 
   return (
     <div className="min-h-screen bg-[#1E90FF] font-sans flex flex-col">
@@ -255,14 +368,23 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 py-4">
            <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-white drop-shadow-sm">Sistema de Gestão de Equipe</h1>
-                <p className="text-white/80 text-sm mt-1">Online • Firebase</p>
+                <h1 className="text-xl md:text-3xl font-bold text-white drop-shadow-sm">Sistema de Gestão</h1>
+                <p className="text-white/80 text-xs md:text-sm mt-1 flex items-center gap-2">
+                  <span className="bg-white/20 px-2 py-0.5 rounded text-white font-mono">{userProfile?.toUpperCase()}</span>
+                  {user.email}
+                </p>
               </div>
+              <button 
+                onClick={() => signOut(auth)}
+                className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+              >
+                Sair <span>➜</span>
+              </button>
            </div>
         </div>
         <div className="max-w-7xl mx-auto px-4 mt-4">
            <div className="flex space-x-1 overflow-x-auto pb-0 scrollbar-hide">
-             {tabs.map(tab => (
+             {visibleTabs.map(tab => (
                <button
                  key={tab.id}
                  onClick={() => setActiveTab(tab.id)}
@@ -287,21 +409,11 @@ function App() {
       <footer className="py-6 text-center text-white/80 text-sm">
         <p>
           Desenvolvido por{' '}
-          <a 
-            href="https://app.humand.co/profile/4970892" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all"
-          >
+          <a href="#" className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all">
             Fabio de Moraes
           </a>{' '}
           e{' '}
-          <a 
-            href="https://app.humand.co/profile/4968748" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all"
-          >
+          <a href="#" className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all">
             Alan Matheus
           </a>
         </p>
