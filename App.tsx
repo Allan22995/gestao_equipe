@@ -168,7 +168,13 @@ function App() {
       case 'calendario':
         return <Calendar collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} settings={settings} />;
       case 'dashboard':
-        return <Dashboard collaborators={collaborators} events={events} onCalls={onCalls} settings={settings} />;
+        return <Dashboard 
+          collaborators={collaborators} 
+          events={events} 
+          onCalls={onCalls} 
+          vacationRequests={vacationRequests}
+          settings={settings} 
+        />;
       case 'colaboradores':
         return <Collaborators 
           collaborators={collaborators} 

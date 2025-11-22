@@ -1,17 +1,18 @@
 
 
 import React, { useEffect, useState } from 'react';
-import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings } from '../types';
+import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest } from '../types';
 import { weekDayMap } from '../utils/helpers';
 
 interface DashboardProps {
   collaborators: Collaborator[];
   events: EventRecord[];
   onCalls: OnCallRecord[];
+  vacationRequests: VacationRequest[];
   settings: SystemSettings;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onCalls, settings }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onCalls, vacationRequests, settings }) => {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [details, setDetails] = useState<any[]>([]);
   const [upcoming, setUpcoming] = useState<any[]>([]);
@@ -57,7 +58,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
     });
 
     filteredCollaborators.forEach(c => {
-      // 1. Checar Eventos (Prioridade máxima: Férias, Folga)
+      // 0. Checar Previsão de Férias Aprovada (PRIORIDADE MÁXIMA)
+      // Se o colaborador tiver férias aprovadas para hoje, ele está AUSENTE, independente da escala.
+      const approvedVacation = vacationRequests.find(v => {
+        if (v.collaboratorId !== c.id || v.status !== 'aprovado') return false;
+        const start = new Date(v.startDate + 'T00:00:00');
+        const end = new Date(v.endDate + 'T00:00:00');
+        const check = new Date(todayStr + 'T00:00:00');
+        return check >= start && check <= end;
+      });
+
+      // 1. Checar Eventos (Legado)
       const todayEvent = events.find(e => {
         const start = new Date(e.startDate + 'T00:00:00');
         const end = new Date(e.endDate + 'T00:00:00');
@@ -125,7 +136,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
       let statusColor = 'bg-blue-100 text-blue-800';
       let isActive = false;
 
-      if (todayEvent) {
+      // Lógica de Prioridade
+      if (approvedVacation) {
+        status = 'Férias (Aprovadas)';
+        statusColor = 'bg-purple-100 text-purple-800';
+        inactiveCount++;
+        isActive = false;
+      } else if (todayEvent) {
         const evtType = settings.eventTypes.find(t => t.id === todayEvent.type);
         const isHolidayLike = todayEvent.type === 'ferias' || (evtType && evtType.behavior === 'neutral');
         const isOffLike = todayEvent.type === 'folga' || (evtType && evtType.behavior === 'debit');
@@ -139,6 +156,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
           statusColor = 'bg-emerald-100 text-emerald-800';
           inactiveCount++;
         } else {
+          // Tipo "trabalhado" ou outros que contam como presença
           status = isWorkingShift ? 'Trabalhando (Extra)' : 'Dia Extra (Fora Horário)';
           statusColor = 'bg-red-100 text-red-800';
           if (isWorkingShift) { activeCount++; isActive = true; }
@@ -181,14 +199,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
 
     // Upcoming: Filter based on the selected collaborators too
     const filteredIds = filteredCollaborators.map(c => c.id);
-    const nextEvents = [...events.map(e => ({...e, k: 'evt'})), ...onCalls.map(o => ({...o, k: 'oc'}))]
+    
+    // Combinar Eventos, Plantões e agora Férias Aprovadas
+    const vacationEvents = vacationRequests
+      .filter(v => v.status === 'aprovado')
+      .map(v => ({
+        collaboratorId: v.collaboratorId,
+        startDate: v.startDate,
+        endDate: v.endDate,
+        k: 'vacation',
+        typeLabel: 'Férias (Aprovadas)',
+        type: 'ferias_aprovadas'
+      }));
+
+    const allUpcoming = [
+      ...events.map(e => ({...e, k: 'evt'})),
+      ...onCalls.map(o => ({...o, k: 'oc'})),
+      ...vacationEvents
+    ];
+
+    const nextEvents = allUpcoming
       .filter(x => filteredIds.includes(x.collaboratorId) && new Date(x.startDate) >= new Date(todayStr))
       .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
       .slice(0, 5);
     
     setUpcoming(nextEvents);
 
-  }, [collaborators, events, onCalls, settings, filterName, filterBranch, filterRole]);
+  }, [collaborators, events, onCalls, vacationRequests, settings, filterName, filterBranch, filterRole]);
 
   return (
     <div className="space-y-6">
@@ -232,7 +269,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
           <div className="text-4xl font-bold">{stats.active}</div>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
-          <div className="text-sm font-medium opacity-90 uppercase tracking-wide mb-1">Ausentes / Folga</div>
+          <div className="text-sm font-medium opacity-90 uppercase tracking-wide mb-1">Ausentes / Folga / Férias</div>
           <div className="text-4xl font-bold">{stats.inactive}</div>
         </div>
       </div>
@@ -267,6 +304,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
                // Resolve Label
                let typeLabel = 'Evento';
                if (u.k === 'oc') typeLabel = 'Plantão';
+               else if (u.k === 'vacation') typeLabel = u.typeLabel;
                else {
                    const typeConfig = settings.eventTypes.find(t => t.id === u.type);
                    typeLabel = u.typeLabel || typeConfig?.label || u.type;
