@@ -41,6 +41,7 @@ export interface SystemSettings {
   branches: string[];
   roles: string[];
   eventTypes: EventTypeConfig[];
+  spreadsheetUrl?: string; // Novo campo para link da planilha
 }
 
 // Mantemos compatibilidade com string, mas o valor virá do config

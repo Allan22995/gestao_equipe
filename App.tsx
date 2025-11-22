@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings } from './types';
 import { dbService } from './services/storage'; // Note: mudou de storageService para dbService
@@ -19,7 +20,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
     { id: 'ferias', label: 'Férias', behavior: 'neutral' },
     { id: 'folga', label: 'Folga', behavior: 'debit' },
     { id: 'trabalhado', label: 'Trabalhado', behavior: 'credit_2x' }
-  ]
+  ],
+  spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781'
 };
 
 function App() {
@@ -54,12 +56,12 @@ function App() {
     const unsubSettings = dbService.subscribeToSettings(
       (data) => {
         if (data) {
-          setSettings(data);
+          // Garantir que spreadsheetUrl exista mesmo em configs antigas
+          setSettings({ ...DEFAULT_SETTINGS, ...data });
         } else {
           console.log('⚠️ Sem configurações no banco. Usando Padrão Local e salvando...');
           dbService.saveSettings(DEFAULT_SETTINGS).catch(err => {
             console.error('Erro ao salvar configs padrão:', err);
-            // Não mostramos toast aqui para não assustar no primeiro load, só log
           });
           setSettings(DEFAULT_SETTINGS);
         }
@@ -204,6 +206,7 @@ function App() {
           onDelete={handleDeleteOnCall}
           showToast={showToast} 
           logAction={logAction} 
+          settings={settings} // Passando Settings
         />;
       case 'saldo':
         return <Balance 

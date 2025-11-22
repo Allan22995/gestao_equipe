@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -15,19 +16,27 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newRole, setNewRole] = useState('');
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
 
   // Loading states
   const [savingBranch, setSavingBranch] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingRole, setSavingRole] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingEvent, setSavingEvent] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [savingIntegration, setSavingIntegration] = useState<'idle' | 'saving' | 'success'>('idle');
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // Atualiza o estado local se as configs mudarem (ex: primeira carga)
+  useEffect(() => {
+     if (settings.spreadsheetUrl) setSpreadsheetUrl(settings.spreadsheetUrl);
+  }, [settings.spreadsheetUrl]);
 
   // Reset success states after delay
   useEffect(() => {
     if (savingBranch === 'success') setTimeout(() => setSavingBranch('idle'), 2000);
     if (savingRole === 'success') setTimeout(() => setSavingRole('idle'), 2000);
     if (savingEvent === 'success') setTimeout(() => setSavingEvent('idle'), 2000);
-  }, [savingBranch, savingRole, savingEvent]);
+    if (savingIntegration === 'success') setTimeout(() => setSavingIntegration('idle'), 2000);
+  }, [savingBranch, savingRole, savingEvent, savingIntegration]);
 
   // Wrapper auxiliar
   const performSave = async (
@@ -114,6 +123,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     }
   };
 
+  // --- Handler Integrações ---
+  const saveIntegration = async () => {
+    const updated = { ...settings, spreadsheetUrl: spreadsheetUrl.trim() };
+    performSave(updated, setSavingIntegration);
+  };
+
   const getBehaviorLabel = (b: EventBehavior) => {
     switch (b) {
       case 'neutral': return 'Neutro (Apenas Registro)';
@@ -138,6 +153,36 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   return (
     <div className="space-y-8">
+
+      {/* INTEGRAÇÕES (Sheets) */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+          Integrações
+        </h2>
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-bold text-gray-500 uppercase">Link da Planilha de Plantão (Google Sheets)</label>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+              placeholder="https://docs.google.com/spreadsheets/..."
+              value={spreadsheetUrl}
+              onChange={e => setSpreadsheetUrl(e.target.value)}
+              disabled={savingIntegration === 'saving'}
+            />
+            <button 
+              onClick={saveIntegration} 
+              disabled={savingIntegration === 'saving'}
+              className={`${getButtonClass(savingIntegration)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
+            >
+              {getButtonLabel(savingIntegration, 'Salvar Link')}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">
+            Se preenchido, um botão aparecerá na aba "Plantões" redirecionando para este link.
+          </p>
+        </div>
+      </div>
       
       {/* FILIAIS */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">

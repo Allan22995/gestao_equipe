@@ -1,6 +1,7 @@
 
+
 import React, { useState } from 'react';
-import { Collaborator, OnCallRecord } from '../types';
+import { Collaborator, OnCallRecord, SystemSettings } from '../types';
 import { generateUUID, formatDate, promptForUser } from '../utils/helpers';
 
 interface OnCallProps {
@@ -11,6 +12,7 @@ interface OnCallProps {
   onDelete: (id: string) => void;
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
+  settings: SystemSettings;
 }
 
 const CalendarIcon = () => (
@@ -19,7 +21,7 @@ const CalendarIcon = () => (
   </svg>
 );
 
-export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, onUpdate, onDelete, showToast, logAction }) => {
+export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, onUpdate, onDelete, showToast, logAction, settings }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     collaboratorId: '',
@@ -100,15 +102,33 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
   return (
     <div className="space-y-8">
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <h2 className="text-xl font-bold text-gray-800">
             {editingId ? 'Editar Plantão' : 'Registrar Plantão'}
           </h2>
-          {editingId && (
-            <button onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700 underline">
-              Cancelar Edição
-            </button>
-          )}
+          
+          <div className="flex items-center gap-4">
+            {/* Link da Planilha Externa */}
+            {settings.spreadsheetUrl && (
+              <a 
+                href={settings.spreadsheetUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-md flex items-center gap-2 transition-all hover:-translate-y-0.5"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM10 10H16V12H10V10ZM10 14H16V16H10V14Z" />
+                </svg>
+                Abrir Escala no Sheets ↗
+              </a>
+            )}
+            
+            {editingId && (
+              <button onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700 underline">
+                Cancelar Edição
+              </button>
+            )}
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -202,7 +222,9 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Plantões Registrados</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-800">Plantões Registrados</h2>
+        </div>
         <div className="space-y-3">
            {onCalls.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhum plantão registrado.</p> : onCalls.map(o => (
              <div key={o.id} className="flex flex-col md:flex-row justify-between items-center p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-all">
