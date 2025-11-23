@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { auth, googleProvider } from '../services/firebase';
 import { signInWithPopup } from 'firebase/auth';
@@ -24,11 +23,11 @@ export const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center animate-fadeIn">
         <div className="mb-6 flex justify-center">
-          <div className="bg-blue-100 p-4 rounded-full">
-             <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-             </svg>
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="Logo do Sistema" 
+            className="w-28 h-28 object-contain drop-shadow-md"
+          />
         </div>
         
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Sistema de Gestão</h1>
