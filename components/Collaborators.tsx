@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -82,6 +83,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const isNoc = formData.profile === 'noc';
+
     const isDuplicateId = collaborators.some(c => c.colabId === formData.colabId && c.id !== editingId);
     if (isDuplicateId) {
       showToast('Já existe um colaborador com este ID', true);
@@ -101,8 +104,15 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       }
     }
 
+    // Validation for Phone (Not required for NOC)
+    if (!formData.phone && !isNoc) {
+       showToast('Telefone é obrigatório para este perfil.', true);
+       return;
+    }
+
+    // Validation for Schedule (Not required for NOC)
     const hasWorkDays = (Object.values(schedule) as DaySchedule[]).some(day => day.enabled && day.start && day.end);
-    if (!hasWorkDays) {
+    if (!hasWorkDays && !isNoc) {
       showToast('Defina pelo menos um dia de trabalho com horários', true);
       return;
     }
@@ -138,6 +148,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   };
 
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+
+  // Helper to check if profile list is available, otherwise fallback
+  const profileOptions = settings.accessProfiles && settings.accessProfiles.length > 0 
+    ? settings.accessProfiles 
+    : ['admin', 'colaborador', 'noc'];
 
   return (
     <div className="space-y-8">
@@ -176,20 +191,28 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
               <span className="text-[10px] text-gray-400">Usado para autenticação no sistema</span>
             </div>
 
-            {/* Telefone */}
-             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Telefone (Celular) *</label>
-              <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="(XX) 9XXXX-XXXX" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-            </div>
-
             {/* Perfil de Acesso */}
              <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Perfil de Acesso *</label>
-              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.profile} onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}>
-                 <option value="colaborador">Colaborador</option>
-                 <option value="admin">Administrador</option>
-                 <option value="noc">NOC</option>
+              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white capitalize" value={formData.profile} onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}>
+                 {profileOptions.map(p => (
+                   <option key={p} value={p}>{p}</option>
+                 ))}
               </select>
+            </div>
+
+            {/* Telefone */}
+             <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Telefone (Celular)</label>
+              <input 
+                type="text" 
+                required={formData.profile !== 'noc'}
+                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-gray-100" 
+                placeholder={formData.profile === 'noc' ? 'Opcional para NOC' : '(XX) 9XXXX-XXXX'} 
+                value={formData.phone} 
+                onChange={e => setFormData({...formData, phone: e.target.value})} 
+              />
+              {formData.profile === 'noc' && <span className="text-[10px] text-gray-400">Opcional para perfil NOC</span>}
             </div>
 
             {/* Branch Select */}
@@ -235,8 +258,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
             </div>
           </div>
 
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
-            <h3 className="font-bold text-gray-700 mb-2">Jornada Semanal</h3>
+          <div className={`bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 ${formData.profile === 'noc' ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold text-gray-700">Jornada Semanal</h3>
+              {formData.profile === 'noc' && <span className="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded">Desabilitado para NOC</span>}
+            </div>
             <p className="text-xs text-gray-500 mb-4">
               Configure os dias trabalhados. Se o turno inicia no dia anterior (Ex: A escala de Segunda começa Domingo às 22:00), marque a caixa <b>"Inicia dia anterior"</b>.
             </p>
@@ -330,8 +356,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                       <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-0.5 rounded">ID: {colab.colabId}</span>
                       <h3 className="font-bold text-gray-800">{colab.name}</h3>
                       <span className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded ml-auto md:ml-0">{colab.shiftType}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded border ${colab.profile === 'admin' ? 'bg-red-50 text-red-600 border-red-200' : colab.profile === 'noc' ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-600'}`}>
-                        {colab.profile?.toUpperCase() || 'COLABORADOR'}
+                      <span className={`text-xs px-2 py-0.5 rounded border uppercase ${colab.profile === 'admin' ? 'bg-red-50 text-red-600 border-red-200' : colab.profile === 'noc' ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-600'}`}>
+                        {colab.profile}
                       </span>
                     </div>
                     <div className="text-sm text-gray-600 grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -343,7 +369,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                       📞 Tel: {canEdit ? (colab.phone || 'Sem telefone') : '***********'}
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
-                      📅 {workDays}
+                      📅 {workDays || 'Sem escala definida'}
                     </div>
                   </div>
                   

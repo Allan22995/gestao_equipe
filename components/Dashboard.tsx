@@ -59,7 +59,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
 
     filteredCollaborators.forEach(c => {
       // 0. Checar Previsão de Férias Aprovada (PRIORIDADE MÁXIMA)
-      // Se o colaborador tiver férias aprovadas para hoje, ele está AUSENTE, independente da escala.
       const approvedVacation = vacationRequests.find(v => {
         if (v.collaboratorId !== c.id || v.status !== 'aprovado') return false;
         const start = new Date(v.startDate + 'T00:00:00');
@@ -68,15 +67,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
         return check >= start && check <= end;
       });
 
-      // 1. Checar Eventos (Legado)
-      const todayEvent = events.find(e => {
-        const start = new Date(e.startDate + 'T00:00:00');
-        const end = new Date(e.endDate + 'T00:00:00');
-        const check = new Date(todayStr + 'T00:00:00');
-        return e.collaboratorId === c.id && check >= start && check <= end;
-      });
-
-      // 2. Checar Plantões
+      // 1. Checar Plantões (PRIORIDADE SOBRE EVENTOS DE FOLGA)
       const todayOnCall = onCalls.find(oc => {
         const start = new Date(oc.startDate + 'T00:00:00');
         const end = new Date(oc.endDate + 'T00:00:00');
@@ -95,6 +86,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
            }
         }
         return false;
+      });
+
+      // 2. Checar Eventos (Legado)
+      const todayEvent = events.find(e => {
+        const start = new Date(e.startDate + 'T00:00:00');
+        const end = new Date(e.endDate + 'T00:00:00');
+        const check = new Date(todayStr + 'T00:00:00');
+        return e.collaboratorId === c.id && check >= start && check <= end;
       });
 
       // 3. Checar Escala
@@ -136,12 +135,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
       let statusColor = 'bg-blue-100 text-blue-800';
       let isActive = false;
 
-      // Lógica de Prioridade
+      // Lógica de Prioridade Ajustada:
+      // 1. Férias Aprovadas (Ausente)
+      // 2. Plantão (Ativo - SOBREPOE FOLGAS)
+      // 3. Outros Eventos (Folga, Férias Pendentes, etc)
+      // 4. Escala Normal
+
       if (approvedVacation) {
         status = 'Férias (Aprovadas)';
         statusColor = 'bg-purple-100 text-purple-800';
         inactiveCount++;
         isActive = false;
+      } else if (todayOnCall) {
+        status = 'Plantão (Ativo)';
+        statusColor = 'bg-orange-100 text-orange-800';
+        activeCount++;
+        isActive = true;
       } else if (todayEvent) {
         const evtType = settings.eventTypes.find(t => t.id === todayEvent.type);
         const isHolidayLike = todayEvent.type === 'ferias' || (evtType && evtType.behavior === 'neutral');
@@ -162,11 +171,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
           if (isWorkingShift) { activeCount++; isActive = true; }
           else inactiveCount++;
         }
-      } else if (todayOnCall) {
-        status = 'Plantão';
-        statusColor = 'bg-orange-100 text-orange-800';
-        activeCount++;
-        isActive = true;
       } else {
         if (isWorkingShift) {
           status = 'Trabalhando';
@@ -197,10 +201,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
 
     setDetails(tempDetails.sort((a, b) => (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1)));
 
-    // Upcoming: Filter based on the selected collaborators too
+    // Upcoming Logic
     const filteredIds = filteredCollaborators.map(c => c.id);
     
-    // Combinar Eventos, Plantões e agora Férias Aprovadas
     const vacationEvents = vacationRequests
       .filter(v => v.status === 'aprovado')
       .map(v => ({

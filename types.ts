@@ -17,7 +17,8 @@ export interface Schedule {
   domingo: DaySchedule;
 }
 
-export type UserProfile = 'admin' | 'colaborador' | 'noc';
+// Changed to string to allow dynamic profiles from settings
+export type UserProfile = string;
 
 export interface Collaborator {
   id: string;
@@ -45,6 +46,7 @@ export interface EventTypeConfig {
 export interface SystemSettings {
   branches: string[];
   roles: string[];
+  accessProfiles: string[]; // New field for dynamic profiles
   eventTypes: EventTypeConfig[];
   spreadsheetUrl?: string; // Novo campo para link da planilha
 }

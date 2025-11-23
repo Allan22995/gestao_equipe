@@ -19,6 +19,7 @@ import { generateUUID } from './utils/helpers';
 const DEFAULT_SETTINGS: SystemSettings = {
   branches: ['Matriz', 'Filial Norte'],
   roles: ['Gerente', 'Vendedor'],
+  accessProfiles: ['admin', 'colaborador', 'noc'],
   eventTypes: [
     { id: 'ferias', label: 'Férias', behavior: 'neutral' },
     { id: 'folga', label: 'Folga', behavior: 'debit' },
@@ -218,12 +219,12 @@ function App() {
       return allTabs.filter(t => ['calendario', 'dashboard'].includes(t.id));
     }
 
-    if (userProfile === 'colaborador') {
-      // Colaborador: Tudo MENOS Configurações
-      return allTabs.filter(t => t.id !== 'configuracoes');
-    }
-
-    return [];
+    // If userProfile is 'colaborador' OR any other custom profile created in Settings,
+    // they get the default view (everything except Config).
+    // Security is handled by "deny by default" on the sensitive tabs if we were strict,
+    // but here the requirement is "Admin has all", "Collaborator has specific tabs".
+    // We treat unknown profiles as Collaborators for safety.
+    return allTabs.filter(t => t.id !== 'configuracoes');
   };
 
   const visibleTabs = getVisibleTabs();

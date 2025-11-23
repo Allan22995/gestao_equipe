@@ -14,6 +14,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // States para inputs
   const [newBranch, setNewBranch] = useState('');
   const [newRole, setNewRole] = useState('');
+  const [newProfile, setNewProfile] = useState('');
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
@@ -21,6 +22,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // Loading states
   const [savingBranch, setSavingBranch] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingRole, setSavingRole] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [savingProfile, setSavingProfile] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingEvent, setSavingEvent] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingIntegration, setSavingIntegration] = useState<'idle' | 'saving' | 'success'>('idle');
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -34,9 +36,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   useEffect(() => {
     if (savingBranch === 'success') setTimeout(() => setSavingBranch('idle'), 2000);
     if (savingRole === 'success') setTimeout(() => setSavingRole('idle'), 2000);
+    if (savingProfile === 'success') setTimeout(() => setSavingProfile('idle'), 2000);
     if (savingEvent === 'success') setTimeout(() => setSavingEvent('idle'), 2000);
     if (savingIntegration === 'success') setTimeout(() => setSavingIntegration('idle'), 2000);
-  }, [savingBranch, savingRole, savingEvent, savingIntegration]);
+  }, [savingBranch, savingRole, savingProfile, savingEvent, savingIntegration]);
 
   // Wrapper auxiliar
   const performSave = async (
@@ -98,6 +101,34 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     }
   };
 
+  // --- Handlers Perfis de Acesso ---
+  const addProfile = async () => {
+    const val = newProfile.trim().toLowerCase();
+    if (!val) return;
+    const currentProfiles = settings.accessProfiles || ['admin', 'colaborador', 'noc'];
+    if (currentProfiles.includes(val)) {
+      showToast('Perfil já existe', true);
+      return;
+    }
+    const updated = { ...settings, accessProfiles: [...currentProfiles, val] };
+    performSave(updated, setSavingProfile, () => setNewProfile(''));
+  };
+
+  const removeProfile = async (profile: string) => {
+    if (['admin', 'colaborador', 'noc'].includes(profile)) {
+      showToast('Não é possível remover perfis padrão do sistema.', true);
+      return;
+    }
+    if (window.confirm(`Remover perfil "${profile}"? Usuários com este perfil podem perder acesso.`)) {
+      setRemovingId(profile);
+      const currentProfiles = settings.accessProfiles || ['admin', 'colaborador', 'noc'];
+      const updated = { ...settings, accessProfiles: currentProfiles.filter(p => p !== profile) };
+      try { await setSettings(updated); } 
+      catch(e) { console.error(e); } 
+      finally { setRemovingId(null); }
+    }
+  };
+
   // --- Handlers Eventos ---
   const addEventType = async () => {
     if (!newEventLabel.trim()) return;
@@ -151,6 +182,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     return 'bg-indigo-600 text-white hover:bg-indigo-700';
   };
 
+  // Default profiles for fallback display
+  const currentProfiles = settings.accessProfiles || ['admin', 'colaborador', 'noc'];
+
   return (
     <div className="space-y-8">
 
@@ -184,81 +218,130 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         </div>
       </div>
       
-      {/* FILIAIS */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          Gerenciar Filiais
-        </h2>
-        <div className="flex gap-2 mb-4">
-          <input 
-            type="text" 
-            className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Nova Filial..."
-            value={newBranch}
-            onChange={e => setNewBranch(e.target.value)}
-            disabled={savingBranch === 'saving'}
-          />
-          <button 
-            onClick={addBranch} 
-            disabled={savingBranch === 'saving' || !newBranch.trim()}
-            className={`${getButtonClass(savingBranch)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
-          >
-            {getButtonLabel(savingBranch, 'Adicionar')}
-          </button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* FILIAIS */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            Gerenciar Filiais
+          </h2>
+          <div className="flex gap-2 mb-4">
+            <input 
+              type="text" 
+              className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Nova Filial..."
+              value={newBranch}
+              onChange={e => setNewBranch(e.target.value)}
+              disabled={savingBranch === 'saving'}
+            />
+            <button 
+              onClick={addBranch} 
+              disabled={savingBranch === 'saving' || !newBranch.trim()}
+              className={`${getButtonClass(savingBranch)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
+            >
+              {getButtonLabel(savingBranch, 'Add')}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {settings.branches.map((branch) => (
+              <div key={branch} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
+                <span>{branch}</span>
+                <button 
+                  onClick={() => removeBranch(branch)} 
+                  disabled={removingId === branch}
+                  className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
+                >
+                  {removingId === branch ? '...' : '×'}
+                </button>
+              </div>
+            ))}
+            {settings.branches.length === 0 && <span className="text-gray-400 text-sm">Nenhuma filial cadastrada.</span>}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {settings.branches.map((branch) => (
-            <div key={branch} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
-              <span>{branch}</span>
-              <button 
-                onClick={() => removeBranch(branch)} 
-                disabled={removingId === branch}
-                className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
-              >
-                {removingId === branch ? '...' : '×'}
-              </button>
-            </div>
-          ))}
-          {settings.branches.length === 0 && <span className="text-gray-400 text-sm">Nenhuma filial cadastrada.</span>}
+
+        {/* FUNÇÕES */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            Gerenciar Funções (Cargos)
+          </h2>
+          <div className="flex gap-2 mb-4">
+            <input 
+              type="text" 
+              className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Nova Função..."
+              value={newRole}
+              onChange={e => setNewRole(e.target.value)}
+              disabled={savingRole === 'saving'}
+            />
+            <button 
+              onClick={addRole} 
+              disabled={savingRole === 'saving' || !newRole.trim()}
+              className={`${getButtonClass(savingRole)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
+            >
+              {getButtonLabel(savingRole, 'Add')}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {settings.roles.map((role) => (
+              <div key={role} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
+                <span>{role}</span>
+                <button 
+                  onClick={() => removeRole(role)} 
+                  disabled={removingId === role}
+                  className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
+                >
+                  {removingId === role ? '...' : '×'}
+                </button>
+              </div>
+            ))}
+            {settings.roles.length === 0 && <span className="text-gray-400 text-sm">Nenhuma função cadastrada.</span>}
+          </div>
         </div>
       </div>
 
-      {/* FUNÇÕES */}
+      {/* PERFIS DE ACESSO */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          Gerenciar Funções (Cargos)
+          Gerenciar Perfis de Acesso
         </h2>
+        <p className="text-sm text-gray-500 mb-3">
+          Nota: Perfis diferentes de 'admin' ou 'noc' terão permissões básicas de visualização (padrão Colaborador).
+        </p>
         <div className="flex gap-2 mb-4">
           <input 
             type="text" 
             className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Nova Função..."
-            value={newRole}
-            onChange={e => setNewRole(e.target.value)}
-            disabled={savingRole === 'saving'}
+            placeholder="Novo Perfil (ex: supervisor)..."
+            value={newProfile}
+            onChange={e => setNewProfile(e.target.value)}
+            disabled={savingProfile === 'saving'}
           />
           <button 
-            onClick={addRole} 
-            disabled={savingRole === 'saving' || !newRole.trim()}
-            className={`${getButtonClass(savingRole)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
+            onClick={addProfile} 
+            disabled={savingProfile === 'saving' || !newProfile.trim()}
+            className={`${getButtonClass(savingProfile)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
           >
-            {getButtonLabel(savingRole, 'Adicionar')}
+            {getButtonLabel(savingProfile, 'Add')}
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
-          {settings.roles.map((role) => (
-            <div key={role} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
-              <span>{role}</span>
-              <button 
-                onClick={() => removeRole(role)} 
-                disabled={removingId === role}
-                className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
-              >
-                 {removingId === role ? '...' : '×'}
-              </button>
-            </div>
-          ))}
-          {settings.roles.length === 0 && <span className="text-gray-400 text-sm">Nenhuma função cadastrada.</span>}
+          {currentProfiles.map((prof) => {
+            const isSystem = ['admin', 'colaborador', 'noc'].includes(prof);
+            return (
+              <div key={prof} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
+                <span className="capitalize">{prof}</span>
+                {!isSystem && (
+                  <button 
+                    onClick={() => removeProfile(prof)} 
+                    disabled={removingId === prof}
+                    className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
+                  >
+                    {removingId === prof ? '...' : '×'}
+                  </button>
+                )}
+                {isSystem && <span className="text-gray-400 text-[10px] uppercase">Sistema</span>}
+              </div>
+            );
+          })}
         </div>
       </div>
 
