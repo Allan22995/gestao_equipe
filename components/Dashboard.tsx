@@ -1,6 +1,6 @@
 
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap } from '../utils/helpers';
 import { Modal } from './ui/Modal';
@@ -12,13 +12,12 @@ interface DashboardProps {
   vacationRequests: VacationRequest[];
   settings: SystemSettings;
   currentUserProfile: UserProfile;
-  currentUserSector?: string;
-  currentUserRestricted?: boolean;
+  currentUserAllowedSectors: string[];
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
-  currentUserSector, currentUserRestricted
+  currentUserAllowedSectors
 }) => {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [details, setDetails] = useState<any[]>([]);
@@ -33,12 +32,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const canViewContact = currentUserProfile === 'admin' || currentUserProfile === 'noc';
 
-  // Force Sector Filter if Restricted
+  // Force Sector Filter if Restricted (single sector)
   useEffect(() => {
-    if (currentUserRestricted && currentUserSector) {
-      setFilterSector(currentUserSector);
+    if (currentUserAllowedSectors.length === 1) {
+      setFilterSector(currentUserAllowedSectors[0]);
     }
-  }, [currentUserRestricted, currentUserSector]);
+  }, [currentUserAllowedSectors]);
+
+  // Available sectors for filter dropdown
+  const availableSectors = useMemo(() => {
+    if (!settings?.sectors) return [];
+    if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
+    return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
+  }, [settings?.sectors, currentUserAllowedSectors]);
 
   // Helpers para navegação de dias
   const getPrevDayKey = (dayIndex: number): keyof Schedule => {
@@ -74,6 +80,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     // Apply filters to collaborators first
     const filteredCollaborators = collaborators.filter(c => {
+      // Security Filter (Allowed Sectors)
+      if (currentUserAllowedSectors.length > 0) {
+        if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
+      }
+
       const matchesName = filterName ? c.name.toLowerCase().includes(filterName.toLowerCase()) : true;
       const matchesBranch = filterBranch ? c.branch === filterBranch : true;
       const matchesRole = filterRole ? c.role === filterRole : true;
@@ -278,7 +289,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     
     setUpcoming(nextEvents);
 
-  }, [collaborators, events, onCalls, vacationRequests, settings, filterName, filterBranch, filterRole, filterSector]);
+  }, [collaborators, events, onCalls, vacationRequests, settings, filterName, filterBranch, filterRole, filterSector, currentUserAllowedSectors]);
 
   return (
     <div className="space-y-6">
@@ -305,10 +316,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
                value={filterSector}
                onChange={e => setFilterSector(e.target.value)}
-               disabled={currentUserRestricted}
+               disabled={currentUserAllowedSectors.length === 1}
              >
-               {!currentUserRestricted && <option value="">Todos os Setores</option>}
-               {settings.sectors?.map(s => <option key={s} value={s}>{s}</option>)}
+               <option value="">{currentUserAllowedSectors.length > 0 ? 'Todos Permitidos' : 'Todos os Setores'}</option>
+               {availableSectors.map(s => <option key={s} value={s}>{s}</option>)}
              </select>
              <select 
                className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
@@ -316,7 +327,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                onChange={e => setFilterRole(e.target.value)}
              >
                <option value="">Todas as Funções</option>
-               {settings.roles.map(r => <option key={r} value={r}>{r}</option>)}
+               {settings.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
              </select>
           </div>
        </div>

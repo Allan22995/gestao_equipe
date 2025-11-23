@@ -12,13 +12,12 @@ interface CalendarProps {
   vacationRequests: VacationRequest[];
   settings?: SystemSettings; // Opcional para compatibilidade, mas idealmente obrigatório
   currentUserProfile: UserProfile;
-  currentUserSector?: string;
-  currentUserRestricted?: boolean;
+  currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
 }
 
 export const Calendar: React.FC<CalendarProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
-  currentUserSector, currentUserRestricted
+  currentUserAllowedSectors
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<{ date: string, dayEvents: any[], holiday?: string } | null>(null);
@@ -31,12 +30,19 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [filterRole, setFilterRole] = useState('');
   const [filterSector, setFilterSector] = useState('');
 
-  // Force Sector Filter if Restricted
+  // If user is restricted to only 1 sector, force filter. If multiple, allow selection but limit options.
   useEffect(() => {
-    if (currentUserRestricted && currentUserSector) {
-      setFilterSector(currentUserSector);
+    if (currentUserAllowedSectors.length === 1) {
+      setFilterSector(currentUserAllowedSectors[0]);
     }
-  }, [currentUserRestricted, currentUserSector]);
+  }, [currentUserAllowedSectors]);
+
+  // Available sectors for filter dropdown
+  const availableSectors = useMemo(() => {
+    if (!settings?.sectors) return [];
+    if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
+    return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
+  }, [settings?.sectors, currentUserAllowedSectors]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -56,6 +62,14 @@ export const Calendar: React.FC<CalendarProps> = ({
   const matchesFilters = (colabId: string) => {
     const colab = collaborators.find(c => c.id === colabId);
     if (!colab) return false;
+
+    // First check restriction permission
+    if (currentUserAllowedSectors.length > 0) {
+      // If user has allowed sectors, the colab MUST belong to one of them
+      if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) {
+        return false;
+      }
+    }
 
     const matchesName = filterName ? colab.name.toLowerCase().includes(filterName.toLowerCase()) : true;
     const matchesBranch = filterBranch ? colab.branch === filterBranch : true;
@@ -238,10 +252,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
                value={filterSector}
                onChange={e => setFilterSector(e.target.value)}
-               disabled={currentUserRestricted}
+               disabled={currentUserAllowedSectors.length === 1}
              >
-               {!currentUserRestricted && <option value="">Todos</option>}
-               {settings?.sectors?.map(s => <option key={s} value={s}>{s}</option>)}
+               <option value="">{currentUserAllowedSectors.length > 0 ? 'Todos Permitidos' : 'Todos'}</option>
+               {availableSectors.map(s => <option key={s} value={s}>{s}</option>)}
              </select>
            </div>
            <div>
@@ -252,7 +266,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                onChange={e => setFilterRole(e.target.value)}
              >
                <option value="">Todas</option>
-               {settings?.roles.map(r => <option key={r} value={r}>{r}</option>)}
+               {settings?.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
              </select>
            </div>
         </div>

@@ -19,7 +19,11 @@ import { generateUUID } from './utils/helpers';
 
 const DEFAULT_SETTINGS: SystemSettings = {
   branches: ['Matriz', 'Filial Norte'],
-  roles: ['Gerente', 'Vendedor'],
+  roles: [
+    { name: 'Gerente', canViewAllSectors: true },
+    { name: 'Coordenador', canViewAllSectors: false },
+    { name: 'Vendedor', canViewAllSectors: false }
+  ],
   sectors: ['Logística', 'TI', 'Vendas', 'RH'],
   accessProfiles: ['admin', 'colaborador', 'noc'],
   eventTypes: [
@@ -27,7 +31,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
     { id: 'folga', label: 'Folga', behavior: 'debit' },
     { id: 'trabalhado', label: 'Trabalhado', behavior: 'credit_2x' }
   ],
-  scheduleTemplates: [], // Inicializa lista vazia de modelos
+  scheduleTemplates: [], 
   spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781'
 };
 
@@ -39,8 +43,7 @@ function App() {
   // Current User Context
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userColabId, setUserColabId] = useState<string | null>(null);
-  const [currentUserSector, setCurrentUserSector] = useState<string | undefined>(undefined);
-  const [currentUserRestricted, setCurrentUserRestricted] = useState<boolean>(false);
+  const [currentUserAllowedSectors, setCurrentUserAllowedSectors] = useState<string[]>([]); // Empty = All, populated = restricted
 
   const [activeTab, setActiveTab] = useState<TabType>('calendario');
   
@@ -75,16 +78,31 @@ function App() {
       if (foundColab) {
         setUserProfile(foundColab.profile || 'colaborador');
         setUserColabId(foundColab.id);
-        setCurrentUserSector(foundColab.sector);
-        setCurrentUserRestricted(foundColab.isRestrictedSector || false);
+        
+        // Determinar setores permitidos com base na Role e no cadastro
+        // Primeiro achamos a Role na configuração
+        const roleConfig = settings.roles.find(r => r.name === foundColab.role);
+        
+        // Se a Role diz que vê tudo, ou se é admin, ou se não achou a role (fallback) -> Vê tudo (Array vazio)
+        if (foundColab.profile === 'admin' || (roleConfig && roleConfig.canViewAllSectors)) {
+          setCurrentUserAllowedSectors([]); 
+        } else {
+          // Se a role é restrita, pega os setores permitidos do cadastro do user
+          // Se não tiver nada cadastrado, fallback para o próprio setor
+          const allowed = foundColab.allowedSectors && foundColab.allowedSectors.length > 0 
+            ? foundColab.allowedSectors 
+            : (foundColab.sector ? [foundColab.sector] : []);
+            
+          setCurrentUserAllowedSectors(allowed);
+        }
+
       } else {
         // Email autenticado no Google mas não cadastrado na base
         setUserProfile(null); 
-        setCurrentUserSector(undefined);
-        setCurrentUserRestricted(false);
+        setCurrentUserAllowedSectors([]);
       }
     }
-  }, [user, collaborators]);
+  }, [user, collaborators, settings.roles]);
 
   // Initial Data Loading (Subscribing to Firestore)
   useEffect(() => {
@@ -101,8 +119,16 @@ function App() {
     const unsubSettings = dbService.subscribeToSettings(
       (data) => {
         if (data) {
-          // Merge com default para garantir que novos campos (como scheduleTemplates) existam
-          setSettings({ ...DEFAULT_SETTINGS, ...data });
+          // Backward compatibility check for roles
+          let loadedSettings = { ...DEFAULT_SETTINGS, ...data };
+          
+          // Se roles vier como string[] (banco antigo), converte para RoleConfig[]
+          if (loadedSettings.roles.length > 0 && typeof loadedSettings.roles[0] === 'string') {
+             const legacyRoles = loadedSettings.roles as unknown as string[];
+             loadedSettings.roles = legacyRoles.map(r => ({ name: r, canViewAllSectors: true }));
+          }
+
+          setSettings(loadedSettings);
         } else {
           console.log('⚠️ Sem configurações no banco. Usando Padrão Local e salvando...');
           dbService.saveSettings(DEFAULT_SETTINGS).catch(err => {
@@ -270,8 +296,7 @@ function App() {
             vacationRequests={vacationRequests} 
             settings={settings} 
             currentUserProfile={userProfile} 
-            currentUserSector={currentUserSector}
-            currentUserRestricted={currentUserRestricted}
+            currentUserAllowedSectors={currentUserAllowedSectors}
           />
         );
       case 'dashboard':
@@ -283,8 +308,7 @@ function App() {
             vacationRequests={vacationRequests} 
             settings={settings} 
             currentUserProfile={userProfile}
-            currentUserSector={currentUserSector}
-            currentUserRestricted={currentUserRestricted} 
+            currentUserAllowedSectors={currentUserAllowedSectors}
           />
         );
       case 'colaboradores':
@@ -412,7 +436,11 @@ function App() {
                 <p className="text-white/80 text-xs md:text-sm mt-1 flex items-center gap-2">
                   <span className="bg-white/20 px-2 py-0.5 rounded text-white font-mono">{userProfile?.toUpperCase()}</span>
                   {user.email}
-                  {currentUserSector && <span className="bg-indigo-600 px-2 py-0.5 rounded text-white text-xs">{currentUserSector}</span>}
+                  {currentUserAllowedSectors && currentUserAllowedSectors.length > 0 && (
+                    <span className="bg-indigo-600 px-2 py-0.5 rounded text-white text-xs" title="Setores Permitidos">
+                      {currentUserAllowedSectors.length} Setor(es)
+                    </span>
+                  )}
                 </p>
               </div>
               <button 

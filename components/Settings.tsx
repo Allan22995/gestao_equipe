@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate } from '../types';
+import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig } from '../types';
 import { generateUUID } from '../utils/helpers';
 
 interface SettingsProps {
@@ -20,7 +21,7 @@ const initialSchedule: Schedule = {
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
 };
 
-// Componente Interno para Gerenciar Listas (Filiais, Funções, Setores, Perfis)
+// Componente Interno para Gerenciar Listas Simples (Filiais, Setores, Perfis)
 const ManageList = ({ 
   title, 
   items, 
@@ -161,6 +162,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [templateSchedule, setTemplateSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   const [isTemplateListExpanded, setIsTemplateListExpanded] = useState(false);
 
+  // States para Funções (Roles)
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleRestricted, setNewRoleRestricted] = useState(false); // checkbox state: restricted = true -> canViewAllSectors = false
+  const [isRoleListExpanded, setIsRoleListExpanded] = useState(false);
+
   // Atualiza o estado local se as configs mudarem
   useEffect(() => {
      if (settings.spreadsheetUrl) setSpreadsheetUrl(settings.spreadsheetUrl);
@@ -211,16 +217,28 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     }
   };
 
-  // --- Handlers Funções ---
-  const addRole = async (val: string) => {
-    if (settings.roles.includes(val.trim())) { showToast('Função já existe', true); return; }
-    const updated = { ...settings, roles: [...settings.roles, val.trim()] };
-    performSave(updated, setSavingRole);
+  // --- Handlers Funções (Roles) ---
+  const addRole = async () => {
+    if (!newRoleName.trim()) return;
+    const exists = settings.roles.some(r => r.name.toLowerCase() === newRoleName.trim().toLowerCase());
+    if (exists) { showToast('Função já existe', true); return; }
+
+    const newRole: RoleConfig = {
+      name: newRoleName.trim(),
+      canViewAllSectors: !newRoleRestricted // Se restricted is true, canViewAll is false
+    };
+
+    const updated = { ...settings, roles: [...settings.roles, newRole] };
+    performSave(updated, setSavingRole, () => {
+      setNewRoleName('');
+      setNewRoleRestricted(false);
+    });
   };
-  const removeRole = async (val: string) => {
-    if (window.confirm(`Remover função "${val}"?`)) {
-      setRemovingId(val);
-      const updated = { ...settings, roles: settings.roles.filter(r => r !== val) };
+
+  const removeRole = async (roleName: string) => {
+    if (window.confirm(`Remover função "${roleName}"?`)) {
+      setRemovingId(roleName);
+      const updated = { ...settings, roles: settings.roles.filter(r => r.name !== roleName) };
       try { await setSettings(updated); } catch(e) { console.error(e); } finally { setRemovingId(null); }
     }
   };
@@ -380,15 +398,79 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            placeholder="Nova Filial..."
         />
 
-        <ManageList 
-           title="Gerenciar Funções" 
-           items={settings.roles} 
-           onAdd={addRole} 
-           onRemove={removeRole} 
-           saving={savingRole} 
-           removingId={removingId}
-           placeholder="Nova Função..."
-        />
+        {/* GERENCIAR FUNÇÕES (ROLES) - PERSONALIZADO */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+             Gerenciar Funções
+           </h2>
+           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
+              <label className="text-xs font-bold text-gray-600 uppercase mb-1">Nome da Função</label>
+              <input 
+                type="text" 
+                className="w-full border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm mb-3 bg-white"
+                placeholder="Ex: Supervisor"
+                value={newRoleName}
+                onChange={e => setNewRoleName(e.target.value)}
+                disabled={savingRole === 'saving'}
+              />
+              
+              <div className="flex items-center gap-2 mb-3">
+                 <input 
+                   type="checkbox" 
+                   id="roleRestricted"
+                   checked={newRoleRestricted}
+                   onChange={e => setNewRoleRestricted(e.target.checked)}
+                   className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                 />
+                 <label htmlFor="roleRestricted" className="text-sm text-gray-700 select-none cursor-pointer">
+                    Restringir visualização a setores específicos?
+                 </label>
+              </div>
+              <p className="text-[10px] text-gray-500 mb-3 ml-6">
+                Se marcado, o usuário com esta função precisará ter os setores que ele pode ver definidos no cadastro dele.
+              </p>
+
+              <button 
+                onClick={addRole} 
+                disabled={savingRole === 'saving' || !newRoleName.trim()}
+                className={`w-full ${savingRole === 'success' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg transition-all font-semibold`}
+              >
+                {savingRole === 'saving' ? '...' : savingRole === 'success' ? 'Salvo!' : 'Adicionar Função'}
+              </button>
+           </div>
+
+           <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <button 
+                onClick={() => setIsRoleListExpanded(!isRoleListExpanded)}
+                className="w-full bg-gray-50 p-3 text-left text-sm font-semibold text-gray-700 flex justify-between items-center hover:bg-gray-100 transition-colors"
+              >
+                <span>Ver Funções Cadastradas ({settings.roles.length})</span>
+                <span className={`transition-transform transform ${isRoleListExpanded ? 'rotate-180' : 'rotate-0'}`}>▼</span>
+              </button>
+
+              {isRoleListExpanded && (
+                <div className="bg-white p-3 border-t border-gray-200 animate-fadeIn max-h-48 overflow-y-auto">
+                   {settings.roles.map((role, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded group border-b border-gray-50 last:border-0">
+                         <div>
+                            <span className="text-sm font-bold text-gray-700 block">{role.name}</span>
+                            <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                               {role.canViewAllSectors ? 'Vê Todos os Setores' : 'Restrito (Define no Usuário)'}
+                            </span>
+                         </div>
+                         <button 
+                           onClick={() => removeRole(role.name)}
+                           disabled={removingId === role.name}
+                           className="text-red-400 hover:text-red-600 text-xs font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                         >
+                           {removingId === role.name ? '...' : 'Excluir'}
+                         </button>
+                      </div>
+                   ))}
+                </div>
+              )}
+           </div>
+        </div>
 
         <ManageList 
            title="Gerenciar Setores / Squads" 

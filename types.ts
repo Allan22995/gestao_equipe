@@ -24,6 +24,12 @@ export interface ScheduleTemplate {
   schedule: Schedule;
 }
 
+// Configuração de Função (Role)
+export interface RoleConfig {
+  name: string;
+  canViewAllSectors: boolean; // Se true, vê tudo. Se false, precisa definir quais setores vê.
+}
+
 // Changed to string to allow dynamic profiles from settings
 export type UserProfile = string;
 
@@ -36,8 +42,8 @@ export interface Collaborator {
   profile: UserProfile; // Perfil de acesso
   branch: string;
   role: string;
-  sector?: string; // Novo: Setor/Squad
-  isRestrictedSector?: boolean; // Novo: Se true, vê apenas dados do próprio setor
+  sector?: string; // Setor onde trabalha
+  allowedSectors?: string[]; // Novos: Setores que pode visualizar (se a função for restrita)
   login: string;
   shiftType: string;
   schedule: Schedule;
@@ -54,7 +60,7 @@ export interface EventTypeConfig {
 
 export interface SystemSettings {
   branches: string[];
-  roles: string[];
+  roles: RoleConfig[]; // Alterado de string[] para RoleConfig[]
   sectors: string[]; 
   accessProfiles: string[]; 
   eventTypes: EventTypeConfig[];

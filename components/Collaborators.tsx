@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
 
@@ -35,7 +36,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
     branch: '',
     role: '',
     sector: '',
-    isRestrictedSector: false,
+    allowedSectors: [] as string[],
     login: '',
     shiftType: '',
   });
@@ -63,6 +64,22 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
     }
   };
 
+  // Toggle sector in allowed list
+  const toggleAllowedSector = (sector: string) => {
+    setFormData(prev => {
+      const current = prev.allowedSectors || [];
+      if (current.includes(sector)) {
+        return { ...prev, allowedSectors: current.filter(s => s !== sector) };
+      } else {
+        return { ...prev, allowedSectors: [...current, sector] };
+      }
+    });
+  };
+
+  // Determine if the currently selected role requires sector restriction
+  const selectedRoleConfig = settings.roles.find(r => r.name === formData.role);
+  const isRoleRestricted = selectedRoleConfig ? !selectedRoleConfig.canViewAllSectors : false;
+
   const handleEdit = (colab: Collaborator) => {
     setEditingId(colab.id);
     setFormData({
@@ -74,7 +91,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       branch: colab.branch,
       role: colab.role,
       sector: colab.sector || '',
-      isRestrictedSector: colab.isRestrictedSector || false,
+      allowedSectors: colab.allowedSectors || [],
       login: colab.login,
       shiftType: colab.shiftType,
     });
@@ -92,7 +109,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setFormData({ colabId: '', name: '', email: '', phone: '', profile: 'colaborador', branch: '', role: '', sector: '', isRestrictedSector: false, login: '', shiftType: '' });
+    setFormData({ colabId: '', name: '', email: '', phone: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '' });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
   };
@@ -134,10 +151,20 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       return;
     }
 
+    // Validation for Restricted Role
+    if (isRoleRestricted && (!formData.allowedSectors || formData.allowedSectors.length === 0)) {
+       showToast('Esta função exige que pelo menos um setor de visualização seja selecionado.', true);
+       return;
+    }
+
+    // Clean up allowedSectors if role is not restricted (optional but good for data hygiene)
+    const finalAllowedSectors = isRoleRestricted ? formData.allowedSectors : [];
+
     if (editingId) {
       onUpdate({
         id: editingId,
         ...formData,
+        allowedSectors: finalAllowedSectors,
         schedule,
         createdAt: new Date().toISOString(),
       });
@@ -147,6 +174,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       const newColab: Collaborator = {
         id: generateUUID(),
         ...formData,
+        allowedSectors: finalAllowedSectors,
         schedule,
         createdAt: new Date().toISOString(),
       };
@@ -255,32 +283,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
               <label className="text-xs font-semibold text-gray-600 mb-1">Função *</label>
               <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                  <option value="">Selecione...</option>
-                 {settings.roles.map(r => <option key={r} value={r}>{r}</option>)}
+                 {settings.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
               </select>
             </div>
 
-            {/* Setor Select */}
+            {/* Setor Select (Onde trabalha) */}
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Setor/Squad</label>
+              <label className="text-xs font-semibold text-gray-600 mb-1">Setor Principal (Lotação)</label>
               <select className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.sector} onChange={e => setFormData({...formData, sector: e.target.value})}>
                  <option value="">Nenhum</option>
                  {sectorOptions.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-            </div>
-
-            {/* Setor Restrito */}
-            <div className="flex flex-col justify-center">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Restrição de Acesso</label>
-              <div className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
-                <input 
-                  type="checkbox" 
-                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                  checked={formData.isRestrictedSector}
-                  onChange={e => setFormData({...formData, isRestrictedSector: e.target.checked})}
-                />
-                <span className="text-sm text-gray-700">Setor Restrito?</span>
-              </div>
-              <span className="text-[10px] text-gray-400 mt-1">Se marcado, o usuário verá apenas dados do seu setor.</span>
             </div>
 
             {/* Login (Legado/Display) */}
@@ -306,6 +319,45 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                   <option value="personalizado">Personalizado</option>
                 </select>
             </div>
+          </div>
+
+          {/* ÁREA DE PERMISSÃO DE SETOR (SÓ APARECE SE A ROLE FOR RESTRITA) */}
+          <div className={`p-4 rounded-xl border mb-6 transition-all ${isRoleRestricted ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200 opacity-60'}`}>
+            <h3 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
+              Permissões de Visualização
+              {!isRoleRestricted && <span className="text-[10px] bg-green-200 text-green-800 px-2 py-0.5 rounded">Global</span>}
+              {isRoleRestricted && <span className="text-[10px] bg-amber-200 text-amber-800 px-2 py-0.5 rounded">Restrito</span>}
+            </h3>
+            
+            {!isRoleRestricted ? (
+               <p className="text-sm text-gray-500">
+                 A função selecionada <b>({formData.role || 'Nenhuma'})</b> tem permissão de visualização global. O usuário verá todos os setores.
+               </p>
+            ) : (
+               <div>
+                 <p className="text-sm text-gray-600 mb-3">
+                   A função <b>{formData.role}</b> é restrita. Selecione abaixo quais setores este usuário poderá visualizar e gerenciar:
+                 </p>
+                 <div className="max-h-40 overflow-y-auto bg-white border border-gray-300 rounded-lg p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {sectorOptions.length === 0 ? <span className="text-xs text-gray-400">Nenhum setor cadastrado nas configurações.</span> : 
+                       sectorOptions.map(sector => (
+                         <label key={sector} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                           <input 
+                             type="checkbox" 
+                             checked={formData.allowedSectors?.includes(sector) || false}
+                             onChange={() => toggleAllowedSector(sector)}
+                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                           />
+                           <span className="text-sm text-gray-700">{sector}</span>
+                         </label>
+                       ))
+                    }
+                 </div>
+                 {(!formData.allowedSectors || formData.allowedSectors.length === 0) && (
+                   <p className="text-xs text-red-500 mt-1 font-bold">Selecione pelo menos um setor.</p>
+                 )}
+               </div>
+            )}
           </div>
 
           <div className={`bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 ${formData.profile === 'noc' ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -435,15 +487,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                       <span className={`text-xs px-2 py-0.5 rounded border uppercase ${colab.profile === 'admin' ? 'bg-red-50 text-red-600 border-red-200' : colab.profile === 'noc' ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-600'}`}>
                         {colab.profile}
                       </span>
-                      {colab.isRestrictedSector && (
-                         <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 border border-yellow-200" title="Visualização restrita ao setor">🔒 Restrito</span>
-                      )}
                     </div>
                     <div className="text-sm text-gray-600 grid grid-cols-1 sm:grid-cols-3 gap-2">
                        <span>🏢 {colab.branch}</span>
                        <span>🔧 {colab.role}</span>
                        <span>🛡️ {colab.sector || 'Sem Setor'}</span>
                     </div>
+                    {colab.allowedSectors && colab.allowedSectors.length > 0 && (
+                      <div className="text-xs text-indigo-600 mt-1">
+                         👁️ Vê: {colab.allowedSectors.join(', ')}
+                      </div>
+                    )}
                     <div className="text-sm text-gray-600 mt-1">
                        📧 {colab.email || 'Sem e-mail'} | 📞 {canEdit ? (colab.phone || 'Sem telefone') : '***********'}
                     </div>
