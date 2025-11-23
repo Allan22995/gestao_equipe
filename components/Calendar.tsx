@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings, UserProfile } from '../types';
 import { getFeriados } from '../utils/helpers';
 import { Modal } from './ui/Modal';
@@ -11,9 +12,14 @@ interface CalendarProps {
   vacationRequests: VacationRequest[];
   settings?: SystemSettings; // Opcional para compatibilidade, mas idealmente obrigatório
   currentUserProfile: UserProfile;
+  currentUserSector?: string;
+  currentUserRestricted?: boolean;
 }
 
-export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCalls, vacationRequests, settings, currentUserProfile }) => {
+export const Calendar: React.FC<CalendarProps> = ({ 
+  collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
+  currentUserSector, currentUserRestricted
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<{ date: string, dayEvents: any[], holiday?: string } | null>(null);
   
@@ -23,6 +29,14 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
   const [filterName, setFilterName] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
   const [filterRole, setFilterRole] = useState('');
+  const [filterSector, setFilterSector] = useState('');
+
+  // Force Sector Filter if Restricted
+  useEffect(() => {
+    if (currentUserRestricted && currentUserSector) {
+      setFilterSector(currentUserSector);
+    }
+  }, [currentUserRestricted, currentUserSector]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -46,8 +60,9 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
     const matchesName = filterName ? colab.name.toLowerCase().includes(filterName.toLowerCase()) : true;
     const matchesBranch = filterBranch ? colab.branch === filterBranch : true;
     const matchesRole = filterRole ? colab.role === filterRole : true;
+    const matchesSector = filterSector ? colab.sector === filterSector : true;
 
-    return matchesName && matchesBranch && matchesRole;
+    return matchesName && matchesBranch && matchesRole && matchesSector;
   };
 
   const getEventsForDay = (day: number) => {
@@ -195,7 +210,7 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-lg border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-lg border border-gray-100">
            <div>
              <label className="text-xs font-semibold text-gray-500 block mb-1">Nome do Colaborador</label>
              <input 
@@ -215,6 +230,18 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
              >
                <option value="">Todas</option>
                {settings?.branches.map(b => <option key={b} value={b}>{b}</option>)}
+             </select>
+           </div>
+           <div>
+             <label className="text-xs font-semibold text-gray-500 block mb-1">Setor / Squad</label>
+             <select 
+               className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
+               value={filterSector}
+               onChange={e => setFilterSector(e.target.value)}
+               disabled={currentUserRestricted}
+             >
+               {!currentUserRestricted && <option value="">Todos</option>}
+               {settings?.sectors?.map(s => <option key={s} value={s}>{s}</option>)}
              </select>
            </div>
            <div>

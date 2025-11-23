@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap } from '../utils/helpers';
@@ -11,9 +12,14 @@ interface DashboardProps {
   vacationRequests: VacationRequest[];
   settings: SystemSettings;
   currentUserProfile: UserProfile;
+  currentUserSector?: string;
+  currentUserRestricted?: boolean;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onCalls, vacationRequests, settings, currentUserProfile }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ 
+  collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
+  currentUserSector, currentUserRestricted
+}) => {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [details, setDetails] = useState<any[]>([]);
   const [upcoming, setUpcoming] = useState<any[]>([]);
@@ -23,8 +29,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
   const [filterName, setFilterName] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
   const [filterRole, setFilterRole] = useState('');
+  const [filterSector, setFilterSector] = useState('');
 
   const canViewContact = currentUserProfile === 'admin' || currentUserProfile === 'noc';
+
+  // Force Sector Filter if Restricted
+  useEffect(() => {
+    if (currentUserRestricted && currentUserSector) {
+      setFilterSector(currentUserSector);
+    }
+  }, [currentUserRestricted, currentUserSector]);
 
   // Helpers para navegação de dias
   const getPrevDayKey = (dayIndex: number): keyof Schedule => {
@@ -63,7 +77,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
       const matchesName = filterName ? c.name.toLowerCase().includes(filterName.toLowerCase()) : true;
       const matchesBranch = filterBranch ? c.branch === filterBranch : true;
       const matchesRole = filterRole ? c.role === filterRole : true;
-      return matchesName && matchesBranch && matchesRole;
+      const matchesSector = filterSector ? c.sector === filterSector : true;
+      return matchesName && matchesBranch && matchesRole && matchesSector;
     });
 
     filteredCollaborators.forEach(c => {
@@ -219,6 +234,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
         name: c.name,
         phone: c.phone,
         role: c.role,
+        sector: c.sector,
         shift: c.shiftType,
         branch: c.branch,
         status,
@@ -262,14 +278,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
     
     setUpcoming(nextEvents);
 
-  }, [collaborators, events, onCalls, vacationRequests, settings, filterName, filterBranch, filterRole]);
+  }, [collaborators, events, onCalls, vacationRequests, settings, filterName, filterBranch, filterRole, filterSector]);
 
   return (
     <div className="space-y-6">
        {/* Filter Bar */}
        <div className="bg-white rounded-xl shadow p-4 border border-gray-100">
           <div className="text-xs font-bold text-gray-500 mb-2 uppercase">Filtros do Dashboard</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
              <input 
                type="text" 
                placeholder="Buscar por nome..." 
@@ -284,6 +300,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
              >
                <option value="">Todas as Filiais</option>
                {settings.branches.map(b => <option key={b} value={b}>{b}</option>)}
+             </select>
+             <select 
+               className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
+               value={filterSector}
+               onChange={e => setFilterSector(e.target.value)}
+               disabled={currentUserRestricted}
+             >
+               {!currentUserRestricted && <option value="">Todos os Setores</option>}
+               {settings.sectors?.map(s => <option key={s} value={s}>{s}</option>)}
              </select>
              <select 
                className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
@@ -327,7 +352,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
                >
                  <div>
                    <div className="font-bold text-gray-800 text-sm">{d.name}</div>
-                   <div className="text-xs text-gray-500">{d.role} • {d.branch}</div>
+                   <div className="text-xs text-gray-500">
+                      {d.role} • {d.branch}
+                      {d.sector && <span className="ml-1 text-indigo-600">• {d.sector}</span>}
+                   </div>
                  </div>
                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${d.statusColor}`}>
                    {d.status}
@@ -384,6 +412,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
              <div>
                <h3 className="font-bold text-lg text-gray-800">{selectedColab?.name}</h3>
                <p className="text-sm text-gray-500">{selectedColab?.role} • {selectedColab?.branch}</p>
+               {selectedColab?.sector && <p className="text-sm text-indigo-600 font-medium">Setor: {selectedColab.sector}</p>}
              </div>
            </div>
 

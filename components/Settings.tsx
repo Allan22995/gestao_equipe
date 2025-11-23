@@ -14,6 +14,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // States para inputs
   const [newBranch, setNewBranch] = useState('');
   const [newRole, setNewRole] = useState('');
+  const [newSector, setNewSector] = useState(''); // Novo State
   const [newProfile, setNewProfile] = useState('');
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
@@ -22,6 +23,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // Loading states
   const [savingBranch, setSavingBranch] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingRole, setSavingRole] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [savingSector, setSavingSector] = useState<'idle' | 'saving' | 'success'>('idle'); // Novo State
   const [savingProfile, setSavingProfile] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingEvent, setSavingEvent] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingIntegration, setSavingIntegration] = useState<'idle' | 'saving' | 'success'>('idle');
@@ -36,10 +38,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   useEffect(() => {
     if (savingBranch === 'success') setTimeout(() => setSavingBranch('idle'), 2000);
     if (savingRole === 'success') setTimeout(() => setSavingRole('idle'), 2000);
+    if (savingSector === 'success') setTimeout(() => setSavingSector('idle'), 2000);
     if (savingProfile === 'success') setTimeout(() => setSavingProfile('idle'), 2000);
     if (savingEvent === 'success') setTimeout(() => setSavingEvent('idle'), 2000);
     if (savingIntegration === 'success') setTimeout(() => setSavingIntegration('idle'), 2000);
-  }, [savingBranch, savingRole, savingProfile, savingEvent, savingIntegration]);
+  }, [savingBranch, savingRole, savingSector, savingProfile, savingEvent, savingIntegration]);
 
   // Wrapper auxiliar
   const performSave = async (
@@ -95,6 +98,29 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     if (window.confirm(`Remover função "${role}"?`)) {
       setRemovingId(role);
       const updated = { ...settings, roles: settings.roles.filter(r => r !== role) };
+      try { await setSettings(updated); } 
+      catch(e) { console.error(e); } 
+      finally { setRemovingId(null); }
+    }
+  };
+
+  // --- Handlers Setores (Novo) ---
+  const addSector = async () => {
+    if (!newSector.trim()) return;
+    const currentSectors = settings.sectors || [];
+    if (currentSectors.includes(newSector.trim())) {
+      showToast('Setor já existe', true);
+      return;
+    }
+    const updated = { ...settings, sectors: [...currentSectors, newSector.trim()] };
+    performSave(updated, setSavingSector, () => setNewSector(''));
+  };
+
+  const removeSector = async (sector: string) => {
+    if (window.confirm(`Remover setor "${sector}"?`)) {
+      setRemovingId(sector);
+      const currentSectors = settings.sectors || [];
+      const updated = { ...settings, sectors: currentSectors.filter(s => s !== sector) };
       try { await setSettings(updated); } 
       catch(e) { console.error(e); } 
       finally { setRemovingId(null); }
@@ -184,6 +210,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   // Default profiles for fallback display
   const currentProfiles = settings.accessProfiles || ['admin', 'colaborador', 'noc'];
+  const currentSectors = settings.sectors || [];
 
   return (
     <div className="space-y-8">
@@ -296,52 +323,91 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
             {settings.roles.length === 0 && <span className="text-gray-400 text-sm">Nenhuma função cadastrada.</span>}
           </div>
         </div>
-      </div>
 
-      {/* PERFIS DE ACESSO */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          Gerenciar Perfis de Acesso
-        </h2>
-        <p className="text-sm text-gray-500 mb-3">
-          Nota: Perfis diferentes de 'admin' ou 'noc' terão permissões básicas de visualização (padrão Colaborador).
-        </p>
-        <div className="flex gap-2 mb-4">
-          <input 
-            type="text" 
-            className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Novo Perfil (ex: supervisor)..."
-            value={newProfile}
-            onChange={e => setNewProfile(e.target.value)}
-            disabled={savingProfile === 'saving'}
-          />
-          <button 
-            onClick={addProfile} 
-            disabled={savingProfile === 'saving' || !newProfile.trim()}
-            className={`${getButtonClass(savingProfile)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
-          >
-            {getButtonLabel(savingProfile, 'Add')}
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {currentProfiles.map((prof) => {
-            const isSystem = ['admin', 'colaborador', 'noc'].includes(prof);
-            return (
-              <div key={prof} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
-                <span className="capitalize">{prof}</span>
-                {!isSystem && (
-                  <button 
-                    onClick={() => removeProfile(prof)} 
-                    disabled={removingId === prof}
-                    className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
-                  >
-                    {removingId === prof ? '...' : '×'}
-                  </button>
-                )}
-                {isSystem && <span className="text-gray-400 text-[10px] uppercase">Sistema</span>}
+        {/* SETORES / SQUADS (NOVO) */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            Gerenciar Setores / Squads
+          </h2>
+          <div className="flex gap-2 mb-4">
+            <input 
+              type="text" 
+              className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Novo Setor (ex: Squad Logística)..."
+              value={newSector}
+              onChange={e => setNewSector(e.target.value)}
+              disabled={savingSector === 'saving'}
+            />
+            <button 
+              onClick={addSector} 
+              disabled={savingSector === 'saving' || !newSector.trim()}
+              className={`${getButtonClass(savingSector)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
+            >
+              {getButtonLabel(savingSector, 'Add')}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {currentSectors.map((sector) => (
+              <div key={sector} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
+                <span>{sector}</span>
+                <button 
+                  onClick={() => removeSector(sector)} 
+                  disabled={removingId === sector}
+                  className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
+                >
+                  {removingId === sector ? '...' : '×'}
+                </button>
               </div>
-            );
-          })}
+            ))}
+            {currentSectors.length === 0 && <span className="text-gray-400 text-sm">Nenhum setor cadastrado.</span>}
+          </div>
+        </div>
+
+        {/* PERFIS DE ACESSO */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            Gerenciar Perfis de Acesso
+          </h2>
+          <p className="text-sm text-gray-500 mb-3">
+            Nota: Perfis diferentes de 'admin' ou 'noc' terão permissões básicas de visualização (padrão Colaborador).
+          </p>
+          <div className="flex gap-2 mb-4">
+            <input 
+              type="text" 
+              className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Novo Perfil (ex: supervisor)..."
+              value={newProfile}
+              onChange={e => setNewProfile(e.target.value)}
+              disabled={savingProfile === 'saving'}
+            />
+            <button 
+              onClick={addProfile} 
+              disabled={savingProfile === 'saving' || !newProfile.trim()}
+              className={`${getButtonClass(savingProfile)} px-4 py-2 rounded-lg transition-all font-semibold min-w-[100px]`}
+            >
+              {getButtonLabel(savingProfile, 'Add')}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {currentProfiles.map((prof) => {
+              const isSystem = ['admin', 'colaborador', 'noc'].includes(prof);
+              return (
+                <div key={prof} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 border border-gray-200">
+                  <span className="capitalize">{prof}</span>
+                  {!isSystem && (
+                    <button 
+                      onClick={() => removeProfile(prof)} 
+                      disabled={removingId === prof}
+                      className="text-red-400 hover:text-red-600 font-bold disabled:opacity-50"
+                    >
+                      {removingId === prof ? '...' : '×'}
+                    </button>
+                  )}
+                  {isSystem && <span className="text-gray-400 text-[10px] uppercase">Sistema</span>}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

@@ -29,6 +29,8 @@ export interface Collaborator {
   profile: UserProfile; // Perfil de acesso
   branch: string;
   role: string;
+  sector?: string; // Novo: Setor/Squad
+  isRestrictedSector?: boolean; // Novo: Se true, vê apenas dados do próprio setor
   login: string;
   shiftType: string;
   schedule: Schedule;
@@ -46,6 +48,7 @@ export interface EventTypeConfig {
 export interface SystemSettings {
   branches: string[];
   roles: string[];
+  sectors: string[]; // Novo: Lista de Setores
   accessProfiles: string[]; // New field for dynamic profiles
   eventTypes: EventTypeConfig[];
   spreadsheetUrl?: string; // Novo campo para link da planilha

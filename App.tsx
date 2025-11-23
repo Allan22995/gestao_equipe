@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile } from './types';
 import { dbService } from './services/storage'; 
@@ -19,6 +20,7 @@ import { generateUUID } from './utils/helpers';
 const DEFAULT_SETTINGS: SystemSettings = {
   branches: ['Matriz', 'Filial Norte'],
   roles: ['Gerente', 'Vendedor'],
+  sectors: ['Logística', 'TI', 'Vendas', 'RH'],
   accessProfiles: ['admin', 'colaborador', 'noc'],
   eventTypes: [
     { id: 'ferias', label: 'Férias', behavior: 'neutral' },
@@ -32,8 +34,12 @@ function App() {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  
+  // Current User Context
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userColabId, setUserColabId] = useState<string | null>(null);
+  const [currentUserSector, setCurrentUserSector] = useState<string | undefined>(undefined);
+  const [currentUserRestricted, setCurrentUserRestricted] = useState<boolean>(false);
 
   const [activeTab, setActiveTab] = useState<TabType>('calendario');
   
@@ -61,16 +67,20 @@ function App() {
     return unsubscribe;
   }, []);
 
-  // Match Authenticated User with Collaborator Data to determine Role
+  // Match Authenticated User with Collaborator Data to determine Role and Restrictions
   useEffect(() => {
     if (user && collaborators.length > 0) {
       const foundColab = collaborators.find(c => c.email === user.email);
       if (foundColab) {
         setUserProfile(foundColab.profile || 'colaborador');
         setUserColabId(foundColab.id);
+        setCurrentUserSector(foundColab.sector);
+        setCurrentUserRestricted(foundColab.isRestrictedSector || false);
       } else {
         // Email autenticado no Google mas não cadastrado na base
         setUserProfile(null); 
+        setCurrentUserSector(undefined);
+        setCurrentUserRestricted(false);
       }
     }
   }, [user, collaborators]);
@@ -250,9 +260,31 @@ function App() {
 
     switch (activeTab) {
       case 'calendario':
-        return <Calendar collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} settings={settings} currentUserProfile={userProfile} />;
+        return (
+          <Calendar 
+            collaborators={collaborators} 
+            events={events} 
+            onCalls={onCalls} 
+            vacationRequests={vacationRequests} 
+            settings={settings} 
+            currentUserProfile={userProfile} 
+            currentUserSector={currentUserSector}
+            currentUserRestricted={currentUserRestricted}
+          />
+        );
       case 'dashboard':
-        return <Dashboard collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} settings={settings} currentUserProfile={userProfile} />;
+        return (
+          <Dashboard 
+            collaborators={collaborators} 
+            events={events} 
+            onCalls={onCalls} 
+            vacationRequests={vacationRequests} 
+            settings={settings} 
+            currentUserProfile={userProfile}
+            currentUserSector={currentUserSector}
+            currentUserRestricted={currentUserRestricted} 
+          />
+        );
       case 'colaboradores':
         return <Collaborators 
           collaborators={collaborators} 
@@ -378,6 +410,7 @@ function App() {
                 <p className="text-white/80 text-xs md:text-sm mt-1 flex items-center gap-2">
                   <span className="bg-white/20 px-2 py-0.5 rounded text-white font-mono">{userProfile?.toUpperCase()}</span>
                   {user.email}
+                  {currentUserSector && <span className="bg-indigo-600 px-2 py-0.5 rounded text-white text-xs">{currentUserSector}</span>}
                 </p>
               </div>
               <button 

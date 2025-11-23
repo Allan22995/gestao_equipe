@@ -34,6 +34,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
     profile: 'colaborador' as UserProfile,
     branch: '',
     role: '',
+    sector: '',
+    isRestrictedSector: false,
     login: '',
     shiftType: '',
   });
@@ -60,6 +62,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       profile: colab.profile || 'colaborador',
       branch: colab.branch,
       role: colab.role,
+      sector: colab.sector || '',
+      isRestrictedSector: colab.isRestrictedSector || false,
       login: colab.login,
       shiftType: colab.shiftType,
     });
@@ -76,7 +80,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setFormData({ colabId: '', name: '', email: '', phone: '', profile: 'colaborador', branch: '', role: '', login: '', shiftType: '' });
+    setFormData({ colabId: '', name: '', email: '', phone: '', profile: 'colaborador', branch: '', role: '', sector: '', isRestrictedSector: false, login: '', shiftType: '' });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
   };
 
@@ -153,6 +157,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   const profileOptions = settings.accessProfiles && settings.accessProfiles.length > 0 
     ? settings.accessProfiles 
     : ['admin', 'colaborador', 'noc'];
+
+  const sectorOptions = settings.sectors || [];
 
   return (
     <div className="space-y-8">
@@ -231,6 +237,30 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                  <option value="">Selecione...</option>
                  {settings.roles.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
+            </div>
+
+            {/* Setor Select */}
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Setor/Squad</label>
+              <select className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.sector} onChange={e => setFormData({...formData, sector: e.target.value})}>
+                 <option value="">Nenhum</option>
+                 {sectorOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            {/* Setor Restrito */}
+            <div className="flex flex-col justify-center">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Restrição de Acesso</label>
+              <div className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                  checked={formData.isRestrictedSector}
+                  onChange={e => setFormData({...formData, isRestrictedSector: e.target.checked})}
+                />
+                <span className="text-sm text-gray-700">Setor Restrito?</span>
+              </div>
+              <span className="text-[10px] text-gray-400 mt-1">Se marcado, o usuário verá apenas dados do seu setor.</span>
             </div>
 
             {/* Login (Legado/Display) */}
@@ -359,14 +389,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                       <span className={`text-xs px-2 py-0.5 rounded border uppercase ${colab.profile === 'admin' ? 'bg-red-50 text-red-600 border-red-200' : colab.profile === 'noc' ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-600'}`}>
                         {colab.profile}
                       </span>
+                      {colab.isRestrictedSector && (
+                         <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 border border-yellow-200" title="Visualização restrita ao setor">🔒 Restrito</span>
+                      )}
                     </div>
                     <div className="text-sm text-gray-600 grid grid-cols-1 sm:grid-cols-3 gap-2">
                        <span>🏢 {colab.branch}</span>
                        <span>🔧 {colab.role}</span>
-                       <span>📧 {colab.email || 'Sem e-mail'}</span>
+                       <span>🛡️ {colab.sector || 'Sem Setor'}</span>
                     </div>
                     <div className="text-sm text-gray-600 mt-1">
-                      📞 Tel: {canEdit ? (colab.phone || 'Sem telefone') : '***********'}
+                       📧 {colab.email || 'Sem e-mail'} | 📞 {canEdit ? (colab.phone || 'Sem telefone') : '***********'}
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
                       📅 {workDays || 'Sem escala definida'}
