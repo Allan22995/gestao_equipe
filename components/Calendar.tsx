@@ -141,7 +141,7 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
               if (item.kind === 'plantao') {
                 colorClass = 'bg-orange-100 text-orange-800';
               } else if (item.kind === 'vacation_req') {
-                 if(item.status === 'aprovado') colorClass = 'bg-green-100 text-green-800 border border-green-300';
+                 if(item.status === 'aprovado') colorClass = 'bg-blue-100 text-blue-800 border border-blue-300';
                  else if (item.status === 'nova_opcao') colorClass = 'bg-blue-100 text-blue-800 border border-blue-300';
                  else colorClass = 'bg-gray-100 text-gray-600 border border-dashed border-gray-400';
               } else if (item.kind === 'event') {
