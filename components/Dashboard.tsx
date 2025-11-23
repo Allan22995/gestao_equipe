@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useState } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest } from '../types';
 import { weekDayMap } from '../utils/helpers';
@@ -35,7 +34,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
 
   useEffect(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    
+    // CORREÇÃO: Usar data local para evitar problemas de fuso horário (UTC vs Local)
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
     
     // Converter hora atual para minutos para comparações
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -69,20 +73,43 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
 
       // 1. Checar Plantões (PRIORIDADE SOBRE EVENTOS DE FOLGA)
       const todayOnCall = onCalls.find(oc => {
+        if (oc.collaboratorId !== c.id) return false;
+
         const start = new Date(oc.startDate + 'T00:00:00');
         const end = new Date(oc.endDate + 'T00:00:00');
         const check = new Date(todayStr + 'T00:00:00');
-        
-        if (oc.collaboratorId === c.id && check >= start && check <= end) {
+
+        // Verifica se a data de hoje está dentro do intervalo do plantão
+        if (check >= start && check <= end) {
            const [sh, sm] = oc.startTime.split(':').map(Number);
            const [eh, em] = oc.endTime.split(':').map(Number);
            const startMins = sh * 60 + sm;
            const endMins = eh * 60 + em;
            
+           // Turno no mesmo dia (ex: 08:00 as 18:00)
            if (startMins < endMins) {
-               if (currentMinutes >= startMins && currentMinutes <= endMins) return true;
-           } else {
-               if (currentMinutes >= startMins || currentMinutes <= endMins) return true;
+               return currentMinutes >= startMins && currentMinutes <= endMins;
+           } 
+           // Turno que vira a noite (ex: 22:00 as 06:00)
+           else {
+               const isStartDay = check.getTime() === start.getTime();
+               const isEndDay = check.getTime() === end.getTime();
+
+               if (isStartDay && isEndDay) {
+                   // Caso raro de iniciar e terminar no mesmo dia com hora invertida (normalmente erro de cadastro ou cobre 24h)
+                   return currentMinutes >= startMins || currentMinutes <= endMins;
+               }
+
+               if (isStartDay) {
+                   // Se for o dia de início, tem que ser DEPOIS do horário de início
+                   return currentMinutes >= startMins;
+               }
+               if (isEndDay) {
+                   // Se for o dia do fim, tem que ser ANTES do horário de fim
+                   return currentMinutes <= endMins;
+               }
+               // Se for um dia no meio (nem inicio nem fim), está de plantão o dia todo
+               return true;
            }
         }
         return false;
