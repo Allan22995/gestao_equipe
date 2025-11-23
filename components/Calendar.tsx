@@ -292,7 +292,7 @@ export const Calendar: React.FC<CalendarProps> = ({ collaborators, events, onCal
                 bgClass = 'bg-orange-50';
                 title = 'Plantão';
               } else if (e.kind === 'vacation_req') {
-                 if(e.status === 'aprovado') { borderClass = 'border-green-500'; bgClass = 'bg-green-50'; title = 'Férias Aprovadas'; }
+                 if(e.status === 'aprovado') { borderClass = 'border-blue-500'; bgClass = 'bg-blue-50'; title = 'Férias Aprovadas'; }
                  else if(e.status === 'nova_opcao') { borderClass = 'border-blue-500'; bgClass = 'bg-blue-50'; title = 'Nova Opção de Férias'; }
                  else { borderClass = 'border-gray-400 border-dashed'; bgClass = 'bg-gray-50'; title = `Previsão (${e.status === 'negociacao' ? 'Em Negociação' : e.status})`; }
               } else if (e.kind === 'event') {
