@@ -8,7 +8,9 @@ import {
   doc, 
   onSnapshot,
   query,
-  setDoc
+  setDoc,
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings } from '../types';
 
@@ -27,6 +29,18 @@ const COLLECTIONS = {
 const SETTINGS_DOC_ID = 'general_settings';
 
 export const dbService = {
+  // --- VALIDATION HELPERS ---
+  checkEmailRegistered: async (email: string): Promise<boolean> => {
+    try {
+      const q = query(collection(db, COLLECTIONS.COLLABORATORS), where("email", "==", email));
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
+    } catch (error) {
+      console.error("Erro ao verificar email:", error);
+      return false;
+    }
+  },
+
   // --- GENERIC LISTENERS (TEMPO REAL) ---
   
   subscribeToCollaborators: (callback: (data: Collaborator[]) => void) => {
