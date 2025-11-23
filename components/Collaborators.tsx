@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -26,6 +24,7 @@ const initialSchedule: Schedule = {
 
 export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     colabId: '',
     name: '',
@@ -160,9 +159,15 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
 
   const sectorOptions = settings.sectors || [];
 
+  const filteredCollaborators = collaborators.filter(c => 
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    c.colabId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.role.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="space-y-8">
-      {/* Formulário visível apenas para Admin, ou apenas leitura para outros se desejado. Mas "Cadastrar" implica ação. */}
+      {/* Formulário visível apenas para Admin */}
       {canEdit ? (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
@@ -363,13 +368,24 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       )}
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Colaboradores Cadastrados ({collaborators.length})</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+          <h2 className="text-xl font-bold text-gray-800">Colaboradores Cadastrados ({collaborators.length})</h2>
+          <input 
+            type="text" 
+            placeholder="Pesquisar por Nome, ID ou Função..."
+            className="border border-gray-300 rounded-lg p-2 text-sm w-full sm:w-64 focus:ring-2 focus:ring-indigo-500 outline-none"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+        </div>
         
-        {collaborators.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">Nenhum colaborador cadastrado.</div>
+        {filteredCollaborators.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            {collaborators.length === 0 ? 'Nenhum colaborador cadastrado.' : 'Nenhum colaborador encontrado para a busca.'}
+          </div>
         ) : (
           <div className="space-y-3">
-            {collaborators.map(colab => {
+            {filteredCollaborators.map(colab => {
                const workDays = daysOrder
                 .filter(d => colab.schedule[d].enabled)
                 .map(d => {
