@@ -17,6 +17,13 @@ export interface Schedule {
   domingo: DaySchedule;
 }
 
+// Novo: Modelo de Jornada para Configurações
+export interface ScheduleTemplate {
+  id: string;
+  name: string;
+  schedule: Schedule;
+}
+
 // Changed to string to allow dynamic profiles from settings
 export type UserProfile = string;
 
@@ -48,10 +55,11 @@ export interface EventTypeConfig {
 export interface SystemSettings {
   branches: string[];
   roles: string[];
-  sectors: string[]; // Novo: Lista de Setores
-  accessProfiles: string[]; // New field for dynamic profiles
+  sectors: string[]; 
+  accessProfiles: string[]; 
   eventTypes: EventTypeConfig[];
-  spreadsheetUrl?: string; // Novo campo para link da planilha
+  scheduleTemplates: ScheduleTemplate[]; // Novo: Lista de Modelos de Jornada
+  spreadsheetUrl?: string; 
 }
 
 // Mantemos compatibilidade com string, mas o valor virá do config

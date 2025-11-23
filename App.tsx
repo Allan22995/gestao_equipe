@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
     { id: 'folga', label: 'Folga', behavior: 'debit' },
     { id: 'trabalhado', label: 'Trabalhado', behavior: 'credit_2x' }
   ],
+  scheduleTemplates: [], // Inicializa lista vazia de modelos
   spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781'
 };
 
@@ -100,6 +101,7 @@ function App() {
     const unsubSettings = dbService.subscribeToSettings(
       (data) => {
         if (data) {
+          // Merge com default para garantir que novos campos (como scheduleTemplates) existam
           setSettings({ ...DEFAULT_SETTINGS, ...data });
         } else {
           console.log('⚠️ Sem configurações no banco. Usando Padrão Local e salvando...');

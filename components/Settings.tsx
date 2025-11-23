@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { SystemSettings, EventTypeConfig, EventBehavior } from '../types';
+import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate } from '../types';
 import { generateUUID } from '../utils/helpers';
 
 interface SettingsProps {
@@ -7,6 +8,17 @@ interface SettingsProps {
   setSettings: (s: SystemSettings) => Promise<void>;
   showToast: (msg: string, isError?: boolean) => void;
 }
+
+// Initial state for schedule logic
+const initialSchedule: Schedule = {
+  segunda: { enabled: false, start: '', end: '', startsPreviousDay: false },
+  terca: { enabled: false, start: '', end: '', startsPreviousDay: false },
+  quarta: { enabled: false, start: '', end: '', startsPreviousDay: false },
+  quinta: { enabled: false, start: '', end: '', startsPreviousDay: false },
+  sexta: { enabled: false, start: '', end: '', startsPreviousDay: false },
+  sabado: { enabled: false, start: '', end: '', startsPreviousDay: false },
+  domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
+};
 
 // Componente Interno para Gerenciar Listas (Filiais, Funções, Setores, Perfis)
 const ManageList = ({ 
@@ -141,7 +153,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [savingProfile, setSavingProfile] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingEvent, setSavingEvent] = useState<'idle' | 'saving' | 'success'>('idle');
   const [savingIntegration, setSavingIntegration] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [savingTemplate, setSavingTemplate] = useState<'idle' | 'saving' | 'success'>('idle');
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // States para Modelos de Jornada
+  const [templateName, setTemplateName] = useState('');
+  const [templateSchedule, setTemplateSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
+  const [isTemplateListExpanded, setIsTemplateListExpanded] = useState(false);
 
   // Atualiza o estado local se as configs mudarem
   useEffect(() => {
@@ -156,10 +174,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       savingSector === 'success' && setTimeout(() => setSavingSector('idle'), 2000),
       savingProfile === 'success' && setTimeout(() => setSavingProfile('idle'), 2000),
       savingEvent === 'success' && setTimeout(() => setSavingEvent('idle'), 2000),
-      savingIntegration === 'success' && setTimeout(() => setSavingIntegration('idle'), 2000)
+      savingIntegration === 'success' && setTimeout(() => setSavingIntegration('idle'), 2000),
+      savingTemplate === 'success' && setTimeout(() => setSavingTemplate('idle'), 2000),
     ].filter(Boolean);
     return () => timers.forEach(t => t && clearTimeout(t));
-  }, [savingBranch, savingRole, savingSector, savingProfile, savingEvent, savingIntegration]);
+  }, [savingBranch, savingRole, savingSector, savingProfile, savingEvent, savingIntegration, savingTemplate]);
 
   // Wrapper auxiliar
   const performSave = async (
@@ -267,6 +286,50 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     performSave(updated, setSavingIntegration);
   };
 
+  // --- Handlers Modelos de Jornada ---
+  const handleTemplateScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, value: any) => {
+    setTemplateSchedule(prev => ({
+      ...prev,
+      [day]: { ...prev[day], [field]: value }
+    }));
+  };
+
+  const saveTemplate = async () => {
+    if (!templateName.trim()) {
+      showToast('Nome do modelo é obrigatório', true);
+      return;
+    }
+    const hasWorkDays = (Object.values(templateSchedule) as DaySchedule[]).some(day => day.enabled && day.start && day.end);
+    if (!hasWorkDays) {
+      showToast('Defina pelo menos um dia de trabalho', true);
+      return;
+    }
+
+    const newTemplate: ScheduleTemplate = {
+      id: generateUUID(),
+      name: templateName.trim(),
+      schedule: templateSchedule
+    };
+
+    const currentTemplates = settings.scheduleTemplates || [];
+    const updated = { ...settings, scheduleTemplates: [...currentTemplates, newTemplate] };
+    
+    performSave(updated, setSavingTemplate, () => {
+      setTemplateName('');
+      setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+      showToast('Modelo de jornada salvo!');
+    });
+  };
+
+  const removeTemplate = async (id: string) => {
+    if (window.confirm('Remover este modelo de jornada?')) {
+      setRemovingId(id);
+      const currentTemplates = settings.scheduleTemplates || [];
+      const updated = { ...settings, scheduleTemplates: currentTemplates.filter(t => t.id !== id) };
+      try { await setSettings(updated); } catch(e) { console.error(e); } finally { setRemovingId(null); }
+    }
+  };
+
   const getBehaviorLabel = (b: EventBehavior) => {
     switch (b) {
       case 'neutral': return 'Neutro (Apenas Registro)';
@@ -276,6 +339,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       default: return b;
     }
   };
+
+  const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
   return (
     <div className="space-y-8">
@@ -346,7 +411,133 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         />
       </div>
 
-      {/* TIPOS DE EVENTO (Manter layout original ou refatorar também? Mantendo original pois é mais complexo) */}
+      {/* MODELOS DE JORNADA */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+          Modelos de Jornada de Trabalho
+        </h2>
+        
+        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
+           <div className="mb-4">
+             <label className="text-xs font-bold text-gray-600 uppercase mb-1">Nome do Modelo</label>
+             <div className="flex gap-2">
+               <input 
+                 type="text" 
+                 className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                 placeholder="Ex: Escala 12x36, Administrativo, etc."
+                 value={templateName}
+                 onChange={e => setTemplateName(e.target.value)}
+                 disabled={savingTemplate === 'saving'}
+               />
+               <button 
+                 onClick={saveTemplate} 
+                 disabled={savingTemplate === 'saving' || !templateName.trim()}
+                 className={`${savingTemplate === 'success' ? 'bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg transition-all font-bold min-w-[120px] disabled:opacity-50`}
+               >
+                 {savingTemplate === 'saving' ? 'Salvando...' : savingTemplate === 'success' ? 'Salvo!' : 'Salvar Modelo'}
+               </button>
+             </div>
+           </div>
+
+           <div className="space-y-2">
+              {daysOrder.map(day => (
+                <div key={day} className="flex flex-wrap items-center gap-4 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                  <label className="flex items-center gap-2 w-28 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={templateSchedule[day].enabled}
+                      onChange={e => handleTemplateScheduleChange(day, 'enabled', e.target.checked)}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium capitalize text-gray-700">{day.replace('terca', 'terça').replace('sabado', 'sábado')}</span>
+                  </label>
+                  
+                  <div className="flex items-center gap-2 flex-1">
+                     <div className="flex flex-col">
+                       <span className="text-[10px] text-gray-400 mb-0.5">Início</span>
+                       <div className="flex items-center gap-2">
+                         <input
+                          type="time"
+                          disabled={!templateSchedule[day].enabled}
+                          value={templateSchedule[day].start}
+                          onChange={e => handleTemplateScheduleChange(day, 'start', e.target.value)}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-400 bg-white text-gray-700"
+                        />
+                         <label className="flex items-center gap-1 cursor-pointer" title="Marque se este horário de início pertence, na verdade, ao dia anterior (ex: 22:00 de ontem)">
+                            <input 
+                              type="checkbox"
+                              disabled={!templateSchedule[day].enabled}
+                              checked={templateSchedule[day].startsPreviousDay || false}
+                              onChange={e => handleTemplateScheduleChange(day, 'startsPreviousDay', e.target.checked)}
+                              className="w-3.5 h-3.5 text-red-500 rounded focus:ring-red-400"
+                            />
+                            <span className={`text-[10px] font-semibold ${templateSchedule[day].startsPreviousDay ? 'text-red-600' : 'text-gray-400'}`}>Inicia -1d</span>
+                         </label>
+                       </div>
+                     </div>
+
+                     <div className="flex flex-col ml-4">
+                       <span className="text-[10px] text-gray-400 mb-0.5">Fim</span>
+                       <input
+                        type="time"
+                        disabled={!templateSchedule[day].enabled}
+                        value={templateSchedule[day].end}
+                        onChange={e => handleTemplateScheduleChange(day, 'end', e.target.value)}
+                        className="border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-400 bg-white text-gray-700"
+                      />
+                     </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+        </div>
+
+        {/* Lista de Modelos Salvos */}
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <button 
+            onClick={() => setIsTemplateListExpanded(!isTemplateListExpanded)}
+            className="w-full bg-gray-50 p-3 text-left text-sm font-semibold text-gray-700 flex justify-between items-center hover:bg-gray-100 transition-colors"
+          >
+            <span>Ver Modelos Cadastrados ({(settings.scheduleTemplates || []).length})</span>
+            <span className={`transition-transform transform ${isTemplateListExpanded ? 'rotate-180' : 'rotate-0'}`}>
+              ▼
+            </span>
+          </button>
+
+          {isTemplateListExpanded && (
+            <div className="bg-white p-3 border-t border-gray-200 animate-fadeIn">
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-gray-300">
+                {(!settings.scheduleTemplates || settings.scheduleTemplates.length === 0) ? (
+                  <p className="text-xs text-gray-400 italic text-center py-2">
+                    Nenhum modelo cadastrado.
+                  </p>
+                ) : (
+                  settings.scheduleTemplates.map(t => (
+                    <div key={t.id} className="flex justify-between items-center p-3 border border-gray-200 rounded hover:bg-gray-50">
+                      <div>
+                        <span className="font-bold text-sm text-gray-700 block">{t.name}</span>
+                        <span className="text-[10px] text-gray-500">
+                          {daysOrder.filter(d => t.schedule[d].enabled).length} dias de trabalho
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => removeTemplate(t.id)}
+                        disabled={removingId === t.id}
+                        className="text-red-500 hover:text-red-700 text-xs font-bold px-3 py-1.5 bg-red-50 rounded disabled:opacity-50"
+                      >
+                        {removingId === t.id ? '...' : 'Excluir'}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* TIPOS DE EVENTO */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
           Gerenciar Tipos de Evento

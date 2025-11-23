@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -40,6 +41,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   // Only Admin can edit
   const canEdit = currentUserProfile === 'admin';
@@ -49,6 +51,16 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       ...prev,
       [day]: { ...prev[day], [field]: value }
     }));
+  };
+
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (!templateId) return;
+
+    const template = settings.scheduleTemplates?.find(t => t.id === templateId);
+    if (template) {
+      setSchedule(JSON.parse(JSON.stringify(template.schedule)));
+    }
   };
 
   const handleEdit = (colab: Collaborator) => {
@@ -74,6 +86,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
         }
     });
     setSchedule(safeSchedule);
+    setSelectedTemplateId(''); // Reset selection on edit
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -81,6 +94,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
     setEditingId(null);
     setFormData({ colabId: '', name: '', email: '', phone: '', profile: 'colaborador', branch: '', role: '', sector: '', isRestrictedSector: false, login: '', shiftType: '' });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+    setSelectedTemplateId('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -158,6 +172,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
     : ['admin', 'colaborador', 'noc'];
 
   const sectorOptions = settings.sectors || [];
+  const scheduleTemplates = settings.scheduleTemplates || [];
 
   const filteredCollaborators = collaborators.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -298,6 +313,21 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
               <h3 className="font-bold text-gray-700">Jornada Semanal</h3>
               {formData.profile === 'noc' && <span className="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded">Desabilitado para NOC</span>}
             </div>
+            
+            <div className="flex items-center gap-4 mb-4">
+               <label className="text-xs font-semibold text-gray-600">Carregar Modelo:</label>
+               <select 
+                 className="flex-1 border border-indigo-300 bg-indigo-50 text-indigo-900 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                 value={selectedTemplateId}
+                 onChange={e => handleTemplateSelect(e.target.value)}
+               >
+                 <option value="">-- Selecione para preencher automaticamente --</option>
+                 {scheduleTemplates.map(t => (
+                   <option key={t.id} value={t.id}>{t.name}</option>
+                 ))}
+               </select>
+            </div>
+
             <p className="text-xs text-gray-500 mb-4">
               Configure os dias trabalhados. Se o turno inicia no dia anterior (Ex: A escala de Segunda começa Domingo às 22:00), marque a caixa <b>"Inicia dia anterior"</b>.
             </p>
@@ -334,7 +364,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                               onChange={e => handleScheduleChange(day, 'startsPreviousDay', e.target.checked)}
                               className="w-3.5 h-3.5 text-red-500 rounded focus:ring-red-400"
                             />
-                            <span className={`text-[10px] font-semibold ${schedule[day].startsPreviousDay ? 'text-red-600' : 'text-gray-400'}`}>Inicia dia anterior</span>
+                            <span className={`text-[10px] font-semibold ${schedule[day].startsPreviousDay ? 'text-red-600' : 'text-gray-400'}`}>Inicia -1d</span>
                          </label>
                        </div>
                      </div>
