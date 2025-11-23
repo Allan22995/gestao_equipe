@@ -10,18 +10,18 @@ interface BalanceProps {
   onAddAdjustment: (adj: BalanceAdjustment) => void;
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
+  currentUserName: string;
 }
 
 export const Balance: React.FC<BalanceProps> = ({ 
-  collaborators, events, adjustments, onAddAdjustment, showToast, logAction 
+  collaborators, events, adjustments, onAddAdjustment, showToast, logAction, currentUserName
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [adjForm, setAdjForm] = useState({
     collaboratorId: '',
     type: 'credit' as 'credit' | 'debit',
     days: '',
-    reason: '',
-    responsible: ''
+    reason: ''
   });
 
   const handleAdjustmentSubmit = (e: React.FormEvent) => {
@@ -44,13 +44,8 @@ export const Balance: React.FC<BalanceProps> = ({
         return;
     }
 
-    if (!adjForm.responsible.trim()) {
-        showToast('Erro: Informe o nome do responsável pelo lançamento (para auditoria).', true);
-        return;
-    }
-
     const amount = daysVal * (adjForm.type === 'debit' ? -1 : 1);
-    const user = adjForm.responsible.trim();
+    const user = currentUserName;
     
     const newAdj: BalanceAdjustment = {
       id: generateUUID(),
@@ -71,7 +66,7 @@ export const Balance: React.FC<BalanceProps> = ({
     );
     
     showToast('Ajuste lançado com sucesso!');
-    setAdjForm(prev => ({ ...prev, days: '', reason: '', responsible: '' }));
+    setAdjForm(prev => ({ ...prev, days: '', reason: '' }));
   };
 
   const balances = collaborators.map(c => {
@@ -202,17 +197,9 @@ export const Balance: React.FC<BalanceProps> = ({
                 />
              </div>
 
-             <div>
-                <label className="text-xs font-semibold text-gray-600 mb-1">Responsável pelo Ajuste (Seu Nome) *</label>
-                <input
-                  required
-                  type="text"
-                  className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700"
-                  placeholder="Quem está realizando esta ação?"
-                  value={adjForm.responsible}
-                  onChange={e => setAdjForm({...adjForm, responsible: e.target.value})}
-                />
-                <p className="text-[10px] text-gray-400 mt-1">Nome utilizado apenas para registro no log de auditoria.</p>
+             <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-600 flex justify-between items-center">
+                <span>Responsável pelo ajuste:</span>
+                <span className="font-bold text-indigo-600">{currentUserName}</span>
              </div>
 
              <button type="submit" className="w-full bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-4 rounded-lg transition-transform active:scale-95 shadow-md">

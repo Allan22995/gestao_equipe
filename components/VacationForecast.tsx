@@ -12,6 +12,7 @@ interface VacationForecastProps {
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
   currentUserProfile: UserProfile;
+  currentUserName: string;
 }
 
 const CalendarIcon = () => (
@@ -21,7 +22,7 @@ const CalendarIcon = () => (
 );
 
 export const VacationForecast: React.FC<VacationForecastProps> = ({ 
-  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile 
+  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -29,8 +30,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     startDate: '',
     endDate: '',
     status: 'pendente' as VacationStatus,
-    notes: '',
-    responsible: ''
+    notes: ''
   });
 
   const isAdmin = currentUserProfile === 'admin';
@@ -42,8 +42,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       startDate: '',
       endDate: '',
       status: 'pendente',
-      notes: '',
-      responsible: ''
+      notes: ''
     });
   };
 
@@ -54,8 +53,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       startDate: req.startDate,
       endDate: req.endDate,
       status: req.status,
-      notes: req.notes,
-      responsible: '' 
+      notes: req.notes
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -67,7 +65,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     }
     if (window.confirm('Tem certeza que deseja excluir esta previsão de férias?')) {
       onDelete(id);
-      logAction('delete', 'previsao_ferias', `Previsão ID ${id} excluída`, 'Admin/Usuario');
+      logAction('delete', 'previsao_ferias', `Previsão ID ${id} excluída`, currentUserName);
       showToast('Previsão removida com sucesso.');
     }
   };
@@ -83,12 +81,8 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       showToast('Defina as datas de início e fim.', true);
       return;
     }
-    if (!formData.responsible.trim()) {
-      showToast('Por favor, informe seu nome no campo Responsável.', true);
-      return;
-    }
 
-    const user = formData.responsible.trim();
+    const user = currentUserName;
 
     if (!editingId) {
       // Se não for admin, forçar status pendente na criação
@@ -217,18 +211,6 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
             {!isAdmin && <p className="text-[10px] text-gray-400 mt-1">Apenas Administradores podem alterar o status de aprovação.</p>}
           </div>
 
-          <div className="flex flex-col">
-             <label className="text-xs font-semibold text-gray-600 mb-1">Responsável (Seu Nome) *</label>
-             <input
-               required
-               type="text"
-               className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700"
-               placeholder="Quem está registrando?"
-               value={formData.responsible}
-               onChange={e => setFormData({...formData, responsible: e.target.value})}
-             />
-          </div>
-
           <div className="flex flex-col md:col-span-2">
             <label className="text-xs font-semibold text-gray-600 mb-1">Observações / Detalhes</label>
             <input
@@ -239,6 +221,11 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
               onChange={e => setFormData({...formData, notes: e.target.value})}
             />
           </div>
+
+          <div className="md:col-span-2 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-600 flex justify-between items-center">
+              <span>Responsável pelo registro:</span>
+              <span className="font-bold text-indigo-600">{currentUserName}</span>
+           </div>
 
           <button type="submit" className="md:col-span-2 bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-transform active:scale-95">
             {editingId ? 'Salvar Alterações' : 'Registrar Previsão'}

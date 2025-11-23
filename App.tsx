@@ -196,6 +196,17 @@ function App() {
     }
   };
 
+  // Helper to get the display name of current user
+  const getCurrentUserName = () => {
+    if (userColabId) {
+      const colab = collaborators.find(c => c.id === userColabId);
+      if (colab) return colab.name;
+    }
+    return user?.displayName || user?.email || 'Sistema';
+  };
+
+  const currentUserName = getCurrentUserName();
+
   // --- ACCESS CONTROL LOGIC ---
   const getVisibleTabs = (): {id: TabType, label: string, icon: string}[] => {
     if (!userProfile) return [];
@@ -221,9 +232,6 @@ function App() {
 
     // If userProfile is 'colaborador' OR any other custom profile created in Settings,
     // they get the default view (everything except Config).
-    // Security is handled by "deny by default" on the sensitive tabs if we were strict,
-    // but here the requirement is "Admin has all", "Collaborator has specific tabs".
-    // We treat unknown profiles as Collaborators for safety.
     return allTabs.filter(t => t.id !== 'configuracoes');
   };
 
@@ -284,7 +292,8 @@ function App() {
           adjustments={adjustments} 
           onAddAdjustment={handleAddAdjustment}
           showToast={showToast} 
-          logAction={logAction} 
+          logAction={logAction}
+          currentUserName={currentUserName}
         />;
       case 'previsao_ferias':
         return <VacationForecast 
@@ -296,6 +305,7 @@ function App() {
           showToast={showToast} 
           logAction={logAction}
           currentUserProfile={userProfile}
+          currentUserName={currentUserName}
         />;
       case 'comunicados':
         return <CommunicationGenerator />;
@@ -321,8 +331,7 @@ function App() {
   }
 
   // LOGGED IN BUT NO PROFILE (Not in DB)
-  if (!userProfile && collaborators.length > 0) { // Only show "Denied" if we have data loaded but no match. If DB is empty, we might want to allow first register logic? 
-    // To be safe, if DB has collaborators and current user is not one of them:
+  if (!userProfile && collaborators.length > 0) { 
      return (
       <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6 text-center">
         <div className="bg-white p-8 rounded-xl shadow-xl max-w-md">
@@ -346,12 +355,8 @@ function App() {
      );
   }
 
-  // Fallback if DB is empty (First Run) -> Let's assume first user is Admin for setup or just show Empty state
-  // If collaborators.length === 0 and we are logged in, we might be the first user.
-  // For safety in this specific requested app flow, I will allow the view but Profile will be null in state initially.
-  // However, logic above handles "Access Denied" if colabs exist. If length is 0, we probably need to let them in to setup.
+  // Fallback if DB is empty (First Run)
   if (collaborators.length === 0 && !userProfile) {
-      // Temporary Setup Mode
       return (
         <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center p-6">
            <div className="bg-white p-8 rounded-xl shadow-lg max-w-lg text-center">
@@ -410,11 +415,21 @@ function App() {
       <footer className="py-6 text-center text-white/80 text-sm">
         <p>
           Desenvolvido por{' '}
-          <a href="#" className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all">
+          <a 
+            href="https://app.humand.co/profile/4970892" 
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all"
+          >
             Fabio de Moraes
           </a>{' '}
           e{' '}
-          <a href="#" className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all">
+          <a 
+            href="https://app.humand.co/profile/4968748" 
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all"
+          >
             Alan Matheus
           </a>
         </p>
