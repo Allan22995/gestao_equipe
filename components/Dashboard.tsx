@@ -1,7 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
-import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest } from '../types';
+import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap } from '../utils/helpers';
+import { Modal } from './ui/Modal';
 
 interface DashboardProps {
   collaborators: Collaborator[];
@@ -9,17 +10,21 @@ interface DashboardProps {
   onCalls: OnCallRecord[];
   vacationRequests: VacationRequest[];
   settings: SystemSettings;
+  currentUserProfile: UserProfile;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onCalls, vacationRequests, settings }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onCalls, vacationRequests, settings, currentUserProfile }) => {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [details, setDetails] = useState<any[]>([]);
   const [upcoming, setUpcoming] = useState<any[]>([]);
+  const [selectedColab, setSelectedColab] = useState<any | null>(null);
 
   // Filters
   const [filterName, setFilterName] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
   const [filterRole, setFilterRole] = useState('');
+
+  const canViewContact = currentUserProfile === 'admin' || currentUserProfile === 'noc';
 
   // Helpers para navegação de dias
   const getPrevDayKey = (dayIndex: number): keyof Schedule => {
@@ -210,7 +215,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
       }
 
       tempDetails.push({
+        id: c.id,
         name: c.name,
+        phone: c.phone,
         role: c.role,
         shift: c.shiftType,
         branch: c.branch,
@@ -307,10 +314,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
            <h3 className="text-lg font-bold text-gray-800 mb-4">Status em Tempo Real</h3>
+           <p className="text-xs text-gray-500 mb-3">
+             {canViewContact ? 'Clique no colaborador para ver detalhes de contato.' : 'Lista de presença em tempo real.'}
+           </p>
            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
              {details.length === 0 && <p className="text-gray-400 text-sm">Nenhum colaborador encontrado com os filtros atuais.</p>}
              {details.map((d, i) => (
-               <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+               <div 
+                 key={i} 
+                 onClick={() => canViewContact && setSelectedColab(d)}
+                 className={`flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 transition-colors ${canViewContact ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200' : ''}`}
+               >
                  <div>
                    <div className="font-bold text-gray-800 text-sm">{d.name}</div>
                    <div className="text-xs text-gray-500">{d.role} • {d.branch}</div>
@@ -356,6 +370,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ collaborators, events, onC
            </div>
         </div>
       </div>
+
+      <Modal 
+        isOpen={!!selectedColab} 
+        onClose={() => setSelectedColab(null)} 
+        title="Detalhes do Colaborador"
+      >
+        <div className="space-y-4">
+           <div className="flex items-center gap-3">
+             <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xl">
+               {selectedColab?.name.charAt(0)}
+             </div>
+             <div>
+               <h3 className="font-bold text-lg text-gray-800">{selectedColab?.name}</h3>
+               <p className="text-sm text-gray-500">{selectedColab?.role} • {selectedColab?.branch}</p>
+             </div>
+           </div>
+
+           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+             <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Status Atual</label>
+             <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${selectedColab?.statusColor}`}>
+               {selectedColab?.status}
+             </span>
+           </div>
+
+           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Contato</label>
+              {selectedColab?.phone ? (
+                 <a href={`tel:${selectedColab.phone}`} className="flex items-center gap-2 text-lg font-bold text-indigo-600 hover:underline">
+                   📞 {selectedColab.phone}
+                 </a>
+              ) : (
+                 <p className="text-gray-500 italic">Telefone não cadastrado.</p>
+              )}
+           </div>
+
+           <div className="flex justify-end">
+             <button 
+               onClick={() => setSelectedColab(null)}
+               className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+             >
+               Fechar
+             </button>
+           </div>
+        </div>
+      </Modal>
     </div>
   );
 };
