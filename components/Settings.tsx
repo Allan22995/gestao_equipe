@@ -63,7 +63,7 @@ const ManageList = ({
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast }) => {
   // Tabs Internas
-  const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'jornada'>('geral');
+  const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'jornada' | 'sistema'>('geral');
 
   // States
   const [newEventLabel, setNewEventLabel] = useState('');
@@ -74,11 +74,26 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newRoleName, setNewRoleName] = useState('');
   const [selectedRoleForACL, setSelectedRoleForACL] = useState<string>('');
   
+  // System Message State
+  const [sysMsgActive, setSysMsgActive] = useState(settings.systemMessage?.active || false);
+  const [sysMsgLevel, setSysMsgLevel] = useState<'info' | 'warning' | 'error'>(settings.systemMessage?.level || 'info');
+  const [sysMsgContent, setSysMsgContent] = useState(settings.systemMessage?.message || '');
+
   // Loading States
   const [savingState, setSavingState] = useState<Record<string, 'idle' | 'saving' | 'success'>>({});
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => { if (settings.spreadsheetUrl) setSpreadsheetUrl(settings.spreadsheetUrl); }, [settings.spreadsheetUrl]);
+  
+  // Sync System Message state when settings change remotely
+  useEffect(() => {
+    if (settings.systemMessage) {
+      setSysMsgActive(settings.systemMessage.active);
+      setSysMsgLevel(settings.systemMessage.level);
+      setSysMsgContent(settings.systemMessage.message);
+    }
+  }, [settings.systemMessage]);
+
 
   const setSaving = (key: string, state: 'idle' | 'saving' | 'success') => {
     setSavingState(prev => ({ ...prev, [key]: state }));
@@ -149,6 +164,18 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   };
   const removeTemplate = (id: string) => { if (window.confirm('Excluir modelo?')) saveSettings({ ...settings, scheduleTemplates: (settings.scheduleTemplates || []).filter(t => t.id !== id) }, 'template'); };
 
+  // --- LOGIC: SYSTEM MESSAGE ---
+  const saveSystemMessage = () => {
+    saveSettings({
+      ...settings,
+      systemMessage: {
+        active: sysMsgActive,
+        level: sysMsgLevel,
+        message: sysMsgContent
+      }
+    }, 'system_msg');
+  };
+
   // --- UI HELPERS ---
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
   
@@ -169,10 +196,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
           Geral & Cadastros
         </button>
         <button onClick={() => setActiveSubTab('acesso')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'acesso' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Controle de Acesso (Funções)
+          Controle de Acesso
         </button>
         <button onClick={() => setActiveSubTab('jornada')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'jornada' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
           Jornada de Trabalho
+        </button>
+        <button onClick={() => setActiveSubTab('sistema')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'sistema' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+          Avisos do Sistema
         </button>
       </div>
 
@@ -360,6 +390,74 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   ))}
                </div>
             </div>
+        </div>
+      )}
+      
+      {/* --- TAB: AVISOS DO SISTEMA --- */}
+      {activeSubTab === 'sistema' && (
+        <div className="animate-fadeIn">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex justify-between items-start mb-4">
+               <div>
+                  <h2 className="text-lg font-bold text-gray-800">Comunicado em Tempo Real (Banner)</h2>
+                  <p className="text-sm text-gray-500">Exiba uma mensagem no topo da tela para todos os usuários logados. Ideal para avisos de manutenção ou deploy.</p>
+               </div>
+               <div className={`px-3 py-1 rounded text-xs font-bold uppercase ${sysMsgActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {sysMsgActive ? 'Ativo' : 'Inativo'}
+               </div>
+            </div>
+            
+            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-6">
+              
+              <div className="flex items-center gap-4">
+                 <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={sysMsgActive} onChange={e => setSysMsgActive(e.target.checked)} />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    <span className="ml-3 text-sm font-medium text-gray-900">Exibir Banner para Usuários</span>
+                 </label>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Nível de Urgência</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border bg-white hover:bg-gray-50 transition-colors flex-1">
+                    <input type="radio" name="level" value="info" checked={sysMsgLevel === 'info'} onChange={() => setSysMsgLevel('info')} className="text-blue-600" />
+                    <span className="text-blue-600 font-bold">Informação (Azul)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border bg-white hover:bg-gray-50 transition-colors flex-1">
+                    <input type="radio" name="level" value="warning" checked={sysMsgLevel === 'warning'} onChange={() => setSysMsgLevel('warning')} className="text-amber-600" />
+                    <span className="text-amber-600 font-bold">Atenção (Amarelo)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border bg-white hover:bg-gray-50 transition-colors flex-1">
+                    <input type="radio" name="level" value="error" checked={sysMsgLevel === 'error'} onChange={() => setSysMsgLevel('error')} className="text-red-600" />
+                    <span className="text-red-600 font-bold">Manutenção (Vermelho)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Mensagem</label>
+                <textarea 
+                  rows={3} 
+                  className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" 
+                  placeholder="Ex: O sistema passará por manutenção às 18:00. Salvem seus dados."
+                  value={sysMsgContent}
+                  onChange={e => setSysMsgContent(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button 
+                  onClick={saveSystemMessage} 
+                  disabled={savingState['system_msg'] === 'saving'}
+                  className={`px-6 py-2 rounded-lg font-bold text-white transition-all ${savingState['system_msg'] === 'success' ? 'bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                >
+                  {savingState['system_msg'] === 'saving' ? 'Salvando...' : savingState['system_msg'] === 'success' ? 'Atualizado!' : 'Salvar Aviso'}
+                </button>
+              </div>
+
+            </div>
+          </div>
         </div>
       )}
     </div>

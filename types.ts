@@ -60,6 +60,13 @@ export interface EventTypeConfig {
   behavior: EventBehavior;
 }
 
+// Novo: Mensagem do Sistema (Banner Global)
+export interface SystemMessage {
+  active: boolean;
+  level: 'info' | 'warning' | 'error';
+  message: string;
+}
+
 export interface SystemSettings {
   branches: string[];
   roles: RoleConfig[]; // Alterado de string[] para RoleConfig[]
@@ -67,7 +74,8 @@ export interface SystemSettings {
   accessProfiles: string[]; 
   eventTypes: EventTypeConfig[];
   scheduleTemplates: ScheduleTemplate[]; // Novo: Lista de Modelos de Jornada
-  spreadsheetUrl?: string; 
+  spreadsheetUrl?: string;
+  systemMessage?: SystemMessage; // Novo: Mensagem global do sistema
 }
 
 // Mantemos compatibilidade com string, mas o valor virá do config

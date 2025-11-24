@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS } from './types';
 import { dbService } from './services/storage'; 
@@ -31,7 +32,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
     { id: 'trabalhado', label: 'Trabalhado', behavior: 'credit_2x' }
   ],
   scheduleTemplates: [], 
-  spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781'
+  spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781',
+  systemMessage: { active: false, level: 'info', message: '' }
 };
 
 function App() {
@@ -312,6 +314,18 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#1E90FF] font-sans flex flex-col">
+      {/* SYSTEM BANNER - MENSAGEM GLOBAL */}
+      {settings.systemMessage?.active && (
+        <div className={`w-full px-4 py-3 text-center font-bold text-sm md:text-base flex items-center justify-center gap-3 shadow-md animate-slideIn transition-colors relative z-50 ${
+          settings.systemMessage.level === 'error' ? 'bg-red-600 text-white' :
+          settings.systemMessage.level === 'warning' ? 'bg-amber-400 text-gray-900' :
+          'bg-white text-blue-700'
+        }`}>
+          <span className="text-xl">{settings.systemMessage.level === 'error' ? '🚨' : settings.systemMessage.level === 'warning' ? '⚠️' : 'ℹ️'}</span>
+          <span>{settings.systemMessage.message}</span>
+        </div>
+      )}
+
       <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-4">
            <div className="flex justify-between items-center">
