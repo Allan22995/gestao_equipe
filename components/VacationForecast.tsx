@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Collaborator, VacationRequest, VacationStatus, UserProfile } from '../types';
 import { generateUUID, formatDate } from '../utils/helpers';
@@ -13,6 +14,7 @@ interface VacationForecastProps {
   logAction: (action: string, entity: string, details: string, user: string) => void;
   currentUserProfile: UserProfile;
   currentUserName: string;
+  canEdit: boolean; // Permissão ACL
 }
 
 const CalendarIcon = () => (
@@ -22,7 +24,7 @@ const CalendarIcon = () => (
 );
 
 export const VacationForecast: React.FC<VacationForecastProps> = ({ 
-  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName
+  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, canEdit
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -47,6 +49,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
   };
 
   const handleEdit = (req: VacationRequest) => {
+    if (!canEdit) return;
     setEditingId(req.id);
     setFormData({
       collaboratorId: req.collaboratorId,
@@ -72,6 +75,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEdit) return;
     
     if (!formData.collaboratorId) {
       showToast('Selecione um colaborador.', true);
@@ -142,6 +146,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
           )}
         </div>
 
+        {canEdit ? (
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col md:col-span-2">
             <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador *</label>
@@ -231,6 +236,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
             {editingId ? 'Salvar Alterações' : 'Registrar Previsão'}
           </button>
         </form>
+        ) : <p className="text-center text-gray-500 italic">Modo Leitura: Você não tem permissão para gerenciar férias.</p>}
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
@@ -259,6 +265,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
                   {r.notes && <div className="text-xs text-gray-500 italic mt-1">Obs: {r.notes}</div>}
                   {r.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Atualizado por: {r.updatedBy}</div>}
                 </div>
+                {canEdit && (
                 <div className="flex gap-2 mt-3 md:mt-0">
                   <button 
                     onClick={() => handleEdit(r)} 
@@ -275,6 +282,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
                     </button>
                   )}
                 </div>
+                )}
               </div>
             );
           })}

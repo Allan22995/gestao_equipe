@@ -13,6 +13,7 @@ interface OnCallProps {
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
   settings: SystemSettings;
+  canEdit: boolean; // Permissão ACL
 }
 
 const CalendarIcon = () => (
@@ -21,7 +22,7 @@ const CalendarIcon = () => (
   </svg>
 );
 
-export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, onUpdate, onDelete, showToast, logAction, settings }) => {
+export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     collaboratorId: '',
@@ -45,6 +46,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
   };
 
   const handleEdit = (record: OnCallRecord) => {
+    if (!canEdit) return;
     setEditingId(record.id);
     setFormData({
       collaboratorId: record.collaboratorId,
@@ -87,6 +89,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
   };
 
   const handleDelete = (id: string) => {
+    if (!canEdit) return;
     const user = promptForUser('Excluir Plantão');
     if (!user) return;
 
@@ -131,6 +134,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
           </div>
         </div>
 
+        {canEdit ? (
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
            <div className="flex flex-col md:col-span-2">
             <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador *</label>
@@ -219,6 +223,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
             {editingId ? 'Salvar Alterações' : 'Registrar Plantão'}
           </button>
         </form>
+        ) : <p className="text-center text-gray-500 italic">Modo Leitura: Você não tem permissão para editar plantões.</p>}
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
@@ -239,10 +244,12 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
                   {o.observation && <div className="text-xs text-gray-400 italic mt-1">{o.observation}</div>}
                   {o.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Modificado por: {o.updatedBy}</div>}
                </div>
+               {canEdit && (
                <div className="flex gap-2 mt-3 md:mt-0">
                   <button onClick={() => handleEdit(o)} className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors">Editar</button>
                   <button onClick={() => handleDelete(o.id)} className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors">Excluir</button>
                </div>
+               )}
              </div>
            ))}
         </div>

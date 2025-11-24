@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -11,10 +12,11 @@ interface BalanceProps {
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
   currentUserName: string;
+  canEdit: boolean; // Permissão ACL
 }
 
 export const Balance: React.FC<BalanceProps> = ({ 
-  collaborators, events, adjustments, onAddAdjustment, showToast, logAction, currentUserName
+  collaborators, events, adjustments, onAddAdjustment, showToast, logAction, currentUserName, canEdit
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [adjForm, setAdjForm] = useState({
@@ -26,6 +28,7 @@ export const Balance: React.FC<BalanceProps> = ({
 
   const handleAdjustmentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEdit) return;
     
     if (!adjForm.collaboratorId) {
         showToast('Erro: Selecione um colaborador.', true);
@@ -138,6 +141,7 @@ export const Balance: React.FC<BalanceProps> = ({
         {/* Card Lançamento Manual */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
            <h2 className="text-xl font-bold text-gray-800 mb-6">Lançamento Manual</h2>
+           {canEdit ? (
            <form onSubmit={handleAdjustmentSubmit} className="space-y-4">
              <div>
                <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador (Beneficiário) *</label>
@@ -206,6 +210,7 @@ export const Balance: React.FC<BalanceProps> = ({
                 Lançar Ajuste
              </button>
            </form>
+           ) : <p className="text-gray-500 text-center italic">Você não tem permissão para realizar ajustes manuais.</p>}
         </div>
       </div>
 

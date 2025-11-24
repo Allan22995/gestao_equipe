@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Collaborator, EventRecord, SystemSettings } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
@@ -12,6 +13,7 @@ interface EventsProps {
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
   settings: SystemSettings;
+  canEdit: boolean; // Permissão ACL
 }
 
 const CalendarIcon = () => (
@@ -20,7 +22,7 @@ const CalendarIcon = () => (
   </svg>
 );
 
-export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings }) => {
+export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     collaboratorId: '',
@@ -42,6 +44,7 @@ export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, on
   };
 
   const handleEdit = (evt: EventRecord) => {
+    if (!canEdit) return;
     setEditingId(evt.id);
     setFormData({
       collaboratorId: evt.collaboratorId,
@@ -122,6 +125,7 @@ export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, on
   };
 
   const handleDelete = (id: string) => {
+    if (!canEdit) return;
     const user = promptForUser('Excluir Evento');
     if (!user) return;
 
@@ -146,6 +150,7 @@ export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, on
 
   return (
     <div className="space-y-8">
+      {canEdit ? (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">
@@ -240,6 +245,11 @@ export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, on
           </button>
         </form>
       </div>
+      ) : (
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-center text-blue-800">
+          <p className="font-bold">Modo Leitura</p>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4">Histórico de Eventos</h2>
@@ -261,10 +271,12 @@ export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, on
                  {e.observation && <div className="text-xs text-gray-400 italic mt-1">{e.observation}</div>}
                  {e.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Modificado por: {e.updatedBy}</div>}
               </div>
+              {canEdit && (
               <div className="flex gap-2 mt-3 md:mt-0">
                   <button onClick={() => handleEdit(e)} className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors">Editar</button>
                   <button onClick={() => handleDelete(e.id)} className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors">Excluir</button>
               </div>
+              )}
             </div>
           ))}
         </div>

@@ -28,6 +28,7 @@ export interface ScheduleTemplate {
 export interface RoleConfig {
   name: string;
   canViewAllSectors: boolean; // Se true, vê tudo. Se false, precisa definir quais setores vê.
+  permissions: string[]; // Lista de IDs de permissão (ex: 'tab:dashboard', 'action:edit_events')
 }
 
 // Changed to string to allow dynamic profiles from settings
@@ -135,3 +136,25 @@ export interface AuditLog {
 }
 
 export type TabType = 'calendario' | 'dashboard' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados';
+
+// --- DEFINIÇÃO DE PERMISSÕES DO SISTEMA ---
+export const SYSTEM_PERMISSIONS = [
+  // Acesso as Abas
+  { id: 'tab:calendario', label: 'Aba: Calendário', category: 'Navegação' },
+  { id: 'tab:dashboard', label: 'Aba: Dashboard', category: 'Navegação' },
+  { id: 'tab:colaboradores', label: 'Aba: Colaboradores', category: 'Navegação' },
+  { id: 'tab:eventos', label: 'Aba: Eventos', category: 'Navegação' },
+  { id: 'tab:plantoes', label: 'Aba: Plantões', category: 'Navegação' },
+  { id: 'tab:saldo', label: 'Aba: Saldo', category: 'Navegação' },
+  { id: 'tab:previsao_ferias', label: 'Aba: Prev. Férias', category: 'Navegação' },
+  { id: 'tab:comunicados', label: 'Aba: Comunicados', category: 'Navegação' },
+  { id: 'tab:configuracoes', label: 'Aba: Configurações', category: 'Navegação' },
+  
+  // Ações Específicas
+  { id: 'view:phones', label: 'Visualizar Telefones', category: 'Privacidade' },
+  { id: 'write:collaborators', label: 'Editar/Excluir Colaboradores', category: 'Edição' },
+  { id: 'write:events', label: 'Editar/Excluir Eventos', category: 'Edição' },
+  { id: 'write:on_calls', label: 'Editar/Excluir Plantões', category: 'Edição' },
+  { id: 'write:vacation', label: 'Gerenciar Férias', category: 'Edição' },
+  { id: 'write:balance', label: 'Ajuste Manual de Saldo', category: 'Edição' },
+];

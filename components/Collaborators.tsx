@@ -12,6 +12,7 @@ interface CollaboratorsProps {
   showToast: (msg: string, isError?: boolean) => void;
   settings: SystemSettings;
   currentUserProfile: UserProfile;
+  canEdit: boolean; // Permissão ACL
 }
 
 const initialSchedule: Schedule = {
@@ -24,7 +25,7 @@ const initialSchedule: Schedule = {
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
 };
 
-export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile }) => {
+export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canEdit }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
@@ -43,9 +44,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-
-  // Only Admin can edit
-  const canEdit = currentUserProfile === 'admin';
 
   const handleScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, value: any) => {
     setSchedule(prev => ({
@@ -81,6 +79,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   const isRoleRestricted = selectedRoleConfig ? !selectedRoleConfig.canViewAllSectors : false;
 
   const handleEdit = (colab: Collaborator) => {
+    if (!canEdit) return;
     setEditingId(colab.id);
     setFormData({
       colabId: colab.colabId,
@@ -186,6 +185,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   };
 
   const handleDelete = (id: string) => {
+    if (!canEdit) return;
     if (window.confirm('Tem certeza que deseja excluir?')) {
       onDelete(id);
       showToast('Colaborador removido.');
@@ -210,7 +210,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
 
   return (
     <div className="space-y-8">
-      {/* Formulário visível apenas para Admin */}
+      {/* Formulário visível apenas se canEdit */}
       {canEdit ? (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
@@ -445,7 +445,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       ) : (
         <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-center text-blue-800">
           <p className="font-bold">Modo Leitura</p>
-          <p className="text-sm">Seu perfil permite apenas visualizar a lista de colaboradores. Entre em contato com um Administrador para alterações.</p>
+          <p className="text-sm">Seu perfil não permite editar colaboradores.</p>
         </div>
       )}
 

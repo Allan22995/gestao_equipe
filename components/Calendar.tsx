@@ -13,17 +13,16 @@ interface CalendarProps {
   settings?: SystemSettings; // Opcional para compatibilidade, mas idealmente obrigatório
   currentUserProfile: UserProfile;
   currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
+  canViewPhones: boolean; // Permissão ACL
 }
 
 export const Calendar: React.FC<CalendarProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
-  currentUserAllowedSectors
+  currentUserAllowedSectors, canViewPhones
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<{ date: string, dayEvents: any[], holiday?: string } | null>(null);
   
-  const canViewPhone = currentUserProfile === 'admin' || currentUserProfile === 'noc';
-
   // Filters
   const [filterName, setFilterName] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
@@ -350,7 +349,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                     <span>{name}</span>
                     <span className="text-xs font-normal opacity-75 uppercase tracking-wider">{title}</span>
                   </div>
-                  {canViewPhone && phone && (
+                  {canViewPhones && phone && (
                     <div className="text-xs text-gray-600 font-semibold flex items-center gap-1 mt-0.5">
                       📞 {phone}
                     </div>

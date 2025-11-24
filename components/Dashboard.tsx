@@ -13,11 +13,12 @@ interface DashboardProps {
   settings: SystemSettings;
   currentUserProfile: UserProfile;
   currentUserAllowedSectors: string[];
+  canViewPhones: boolean; // Permissão ACL
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
-  currentUserAllowedSectors
+  currentUserAllowedSectors, canViewPhones
 }) => {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [details, setDetails] = useState<any[]>([]);
@@ -29,8 +30,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [filterBranch, setFilterBranch] = useState('');
   const [filterRole, setFilterRole] = useState('');
   const [filterSector, setFilterSector] = useState('');
-
-  const canViewContact = currentUserProfile === 'admin' || currentUserProfile === 'noc';
 
   // Force Sector Filter if Restricted (single sector)
   useEffect(() => {
@@ -351,15 +350,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
            <h3 className="text-lg font-bold text-gray-800 mb-4">Status em Tempo Real</h3>
            <p className="text-xs text-gray-500 mb-3">
-             {canViewContact ? 'Clique no colaborador para ver detalhes de contato.' : 'Lista de presença em tempo real.'}
+             {canViewPhones ? 'Clique no colaborador para ver detalhes de contato.' : 'Lista de presença em tempo real.'}
            </p>
            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
              {details.length === 0 && <p className="text-gray-400 text-sm">Nenhum colaborador encontrado com os filtros atuais.</p>}
              {details.map((d, i) => (
                <div 
                  key={i} 
-                 onClick={() => canViewContact && setSelectedColab(d)}
-                 className={`flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 transition-colors ${canViewContact ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200' : ''}`}
+                 onClick={() => canViewPhones && setSelectedColab(d)}
+                 className={`flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 transition-colors ${canViewPhones ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200' : ''}`}
                >
                  <div>
                    <div className="font-bold text-gray-800 text-sm">{d.name}</div>
