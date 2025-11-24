@@ -243,6 +243,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         id: c.id,
         name: c.name,
         phone: c.phone,
+        otherContact: c.otherContact, // Added
         role: c.role,
         sector: c.sector,
         shift: c.shiftType,
@@ -434,14 +435,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
            </div>
 
            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Contato</label>
-              {selectedColab?.phone ? (
-                 <a href={`tel:${selectedColab.phone}`} className="flex items-center gap-2 text-lg font-bold text-indigo-600 hover:underline">
-                   📞 {selectedColab.phone}
-                 </a>
-              ) : (
-                 <p className="text-gray-500 italic">Telefone não cadastrado.</p>
-              )}
+              <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Contato</label>
+              <div className="space-y-2">
+                 {selectedColab?.phone ? (
+                    <a href={`tel:${selectedColab.phone}`} className="flex items-center gap-2 text-lg font-bold text-indigo-600 hover:underline">
+                      📞 {selectedColab.phone}
+                    </a>
+                 ) : (
+                    <p className="text-gray-500 italic text-sm">Telefone não cadastrado.</p>
+                 )}
+                 {selectedColab?.otherContact && (
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700 bg-white p-2 rounded border border-gray-200">
+                      💬 <span className="text-gray-500">Outro:</span> {selectedColab.otherContact}
+                    </div>
+                 )}
+              </div>
            </div>
 
            <div className="flex justify-end">

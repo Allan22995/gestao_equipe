@@ -123,6 +123,10 @@ export const Calendar: React.FC<CalendarProps> = ({
     return collaborators.find(c => c.id === id)?.phone || null;
   };
 
+  const getCollaboratorOtherContact = (id: string) => {
+    return collaborators.find(c => c.id === id)?.otherContact || null;
+  };
+
   const getEventTypeLabel = (evt: EventRecord) => {
     if (evt.typeLabel) return evt.typeLabel;
     // Fallback for legacy
@@ -323,6 +327,7 @@ export const Calendar: React.FC<CalendarProps> = ({
            {selectedDay?.dayEvents.map((e: any, idx) => {
               const name = getCollaboratorName(e.collaboratorId);
               const phone = getCollaboratorPhone(e.collaboratorId);
+              const otherContact = getCollaboratorOtherContact(e.collaboratorId);
               let borderClass = '';
               let bgClass = '';
               let title = '';
@@ -349,9 +354,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                     <span>{name}</span>
                     <span className="text-xs font-normal opacity-75 uppercase tracking-wider">{title}</span>
                   </div>
-                  {canViewPhones && phone && (
-                    <div className="text-xs text-gray-600 font-semibold flex items-center gap-1 mt-0.5">
-                      📞 {phone}
+                  {canViewPhones && (
+                    <div className="mt-1 flex flex-col gap-0.5">
+                       {phone && <div className="text-xs text-gray-600 font-semibold flex items-center gap-1">📞 {phone}</div>}
+                       {otherContact && <div className="text-xs text-indigo-600 font-semibold flex items-center gap-1">💬 {otherContact}</div>}
                     </div>
                   )}
                   <div className="text-sm text-gray-600 mt-1">

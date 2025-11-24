@@ -40,6 +40,7 @@ export interface Collaborator {
   name: string;
   email: string; // Vinculo com Firebase Auth
   phone: string; // Contato para NOC/Admin
+  otherContact?: string; // Novo: Outro contato (Humand, Gchat, etc)
   profile: UserProfile; // Perfil de acesso
   branch: string;
   role: string;
@@ -151,7 +152,7 @@ export const SYSTEM_PERMISSIONS = [
   { id: 'tab:configuracoes', label: 'Aba: Configurações', category: 'Navegação' },
   
   // Ações Específicas
-  { id: 'view:phones', label: 'Visualizar Telefones', category: 'Privacidade' },
+  { id: 'view:phones', label: 'Visualizar Contatos (Tel/Outros)', category: 'Privacidade' },
   { id: 'write:collaborators', label: 'Editar/Excluir Colaboradores', category: 'Edição' },
   { id: 'write:events', label: 'Editar/Excluir Eventos', category: 'Edição' },
   { id: 'write:on_calls', label: 'Editar/Excluir Plantões', category: 'Edição' },

@@ -33,6 +33,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
     name: '',
     email: '',
     phone: '',
+    otherContact: '',
     profile: 'colaborador' as UserProfile,
     branch: '',
     role: '',
@@ -86,6 +87,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
       name: colab.name,
       email: colab.email || '',
       phone: colab.phone || '',
+      otherContact: colab.otherContact || '',
       profile: colab.profile || 'colaborador',
       branch: colab.branch,
       role: colab.role,
@@ -108,7 +110,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setFormData({ colabId: '', name: '', email: '', phone: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '' });
+    setFormData({ colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '' });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
   };
@@ -266,7 +268,18 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                 value={formData.phone} 
                 onChange={e => setFormData({...formData, phone: e.target.value})} 
               />
-              {formData.profile === 'noc' && <span className="text-[10px] text-gray-400">Opcional para perfil NOC</span>}
+            </div>
+
+            {/* Outro Contato (Novo) */}
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Outro Contato</label>
+              <input 
+                type="text" 
+                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
+                placeholder="Humand, Gchat ou outro..." 
+                value={formData.otherContact} 
+                onChange={e => setFormData({...formData, otherContact: e.target.value})} 
+              />
             </div>
 
             {/* Branch Select */}
@@ -500,6 +513,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
                     )}
                     <div className="text-sm text-gray-600 mt-1">
                        📧 {colab.email || 'Sem e-mail'} | 📞 {canEdit ? (colab.phone || 'Sem telefone') : '***********'}
+                       {colab.otherContact && canEdit && <span className="ml-2">| 💬 {colab.otherContact}</span>}
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
                       📅 {workDays || 'Sem escala definida'}
