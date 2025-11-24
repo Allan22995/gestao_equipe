@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS } from './types';
 import { dbService } from './services/storage'; 
@@ -333,7 +331,11 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 mt-4">
            <div className="flex space-x-1 overflow-x-auto pb-0 scrollbar-hide">
              {visibleTabs.map(tab => (
-               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-3 rounded-t-lg text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'bg-white text-[#1E90FF] shadow-lg transform translate-y-0.5' : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'}`}>
+               <button 
+                key={tab.id} 
+                onClick={() => setActiveTab(tab.id)} 
+                className={`px-4 py-3 rounded-t-lg text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'bg-white text-[#1E90FF] shadow-lg transform translate-y-0.5' : 'bg-white/10 text-white hover:bg-white/20 hover:text-white text-outline-black'}`}
+               >
                  <span>{tab.icon}</span> {tab.label}
                </button>
              ))}

@@ -22,3 +22,12 @@ body {
 /* Hide Scrollbar but keep functionality */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Contorno Preto para texto branco (Melhora contraste) */
+.text-outline-black {
+  text-shadow: 
+   -1px -1px 0 #000,  
+    1px -1px 0 #000,
+   -1px  1px 0 #000,
+    1px  1px 0 #000;
+}
