@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -89,6 +88,21 @@ export const Balance: React.FC<BalanceProps> = ({
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.colabId.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Filter Log Items based on Search Term
+  const filteredLogItems = [
+     ...events.map(e => ({ ...e, logType: 'event', date: e.createdAt })),
+     ...adjustments.map(a => ({ ...a, logType: 'adj', date: a.createdAt }))
+   ]
+   .filter(item => {
+      if (!searchTerm) return true;
+      const colab = collaborators.find(c => c.id === item.collaboratorId);
+      if (!colab) return false;
+      const term = searchTerm.toLowerCase();
+      return colab.name.toLowerCase().includes(term) || colab.colabId.toLowerCase().includes(term);
+   })
+   .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+   .slice(0, 50);
 
   return (
     <div className="space-y-8">
@@ -215,15 +229,9 @@ export const Balance: React.FC<BalanceProps> = ({
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-6">Log Geral de Movimentações</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-6">Log Geral de Movimentações {searchTerm && <span className="text-sm font-normal text-gray-500">(Filtrado)</span>}</h2>
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
-          {[
-             ...events.map(e => ({ ...e, logType: 'event', date: e.createdAt })),
-             ...adjustments.map(a => ({ ...a, logType: 'adj', date: a.createdAt }))
-           ]
-           .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-           .slice(0, 50)
-           .map((item: any) => {
+          {filteredLogItems.map((item: any) => {
              const colab = collaborators.find(c => c.id === item.collaboratorId);
              let text = '';
              let borderClass = 'border-gray-400';
@@ -245,7 +253,7 @@ export const Balance: React.FC<BalanceProps> = ({
              );
            })
           }
-          {[...events, ...adjustments].length === 0 && <p className="text-center text-gray-400">Nenhum registro.</p>}
+          {filteredLogItems.length === 0 && <p className="text-center text-gray-400">Nenhum registro encontrado.</p>}
         </div>
       </div>
     </div>
