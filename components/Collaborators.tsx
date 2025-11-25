@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -13,6 +11,7 @@ interface CollaboratorsProps {
   settings: SystemSettings;
   currentUserProfile: UserProfile;
   canEdit: boolean; // Permissão ACL
+  currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
 }
 
 const initialSchedule: Schedule = {
@@ -25,7 +24,10 @@ const initialSchedule: Schedule = {
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
 };
 
-export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canEdit }) => {
+export const Collaborators: React.FC<CollaboratorsProps> = ({ 
+  collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canEdit,
+  currentUserAllowedSectors 
+}) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
@@ -204,11 +206,21 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ collaborators, onA
   const sectorOptions = settings.sectors || [];
   const scheduleTemplates = settings.scheduleTemplates || [];
 
-  const filteredCollaborators = collaborators.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.colabId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCollaborators = collaborators.filter(c => {
+    // Security Filter (Respect Restricted View)
+    if (currentUserAllowedSectors.length > 0) {
+      // If user has allowed sectors, the colab MUST belong to one of them
+      if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) {
+        return false;
+      }
+    }
+    
+    return (
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      c.colabId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.role.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   return (
     <div className="space-y-8">

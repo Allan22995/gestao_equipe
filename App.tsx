@@ -253,6 +253,7 @@ function App() {
           collaborators={collaborators} onAdd={handleAddCollaborator} onUpdate={handleUpdateCollaborator} onDelete={handleDeleteCollaborator}
           showToast={showToast} settings={settings} currentUserProfile={userProfile}
           canEdit={hasPermission('write:collaborators')}
+          currentUserAllowedSectors={currentUserAllowedSectors}
         />;
       case 'eventos':
         return <Events 
