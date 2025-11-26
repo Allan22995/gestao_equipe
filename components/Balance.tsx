@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment } from '../types';
 import { generateUUID } from '../utils/helpers';
 
@@ -12,10 +12,11 @@ interface BalanceProps {
   logAction: (action: string, entity: string, details: string, user: string) => void;
   currentUserName: string;
   canEdit: boolean; // Permissão ACL
+  currentUserAllowedSectors: string[]; // Novo: Filtro de setor
 }
 
 export const Balance: React.FC<BalanceProps> = ({ 
-  collaborators, events, adjustments, onAddAdjustment, showToast, logAction, currentUserName, canEdit
+  collaborators, events, adjustments, onAddAdjustment, showToast, logAction, currentUserName, canEdit, currentUserAllowedSectors
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [adjForm, setAdjForm] = useState({
@@ -71,7 +72,14 @@ export const Balance: React.FC<BalanceProps> = ({
     setAdjForm(prev => ({ ...prev, days: '', reason: '' }));
   };
 
-  const balances = collaborators.map(c => {
+  // Filter Collaborators First based on Sector Restrictions
+  const allowedCollaborators = useMemo(() => {
+     if (currentUserAllowedSectors.length === 0) return collaborators;
+     return collaborators.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+  }, [collaborators, currentUserAllowedSectors]);
+
+  // Then calculate balances for allowed collaborators
+  const balances = allowedCollaborators.map(c => {
     const userEvents = events.filter(e => e.collaboratorId === c.id);
     const userAdjustments = adjustments.filter(a => a.collaboratorId === c.id);
     
@@ -89,27 +97,42 @@ export const Balance: React.FC<BalanceProps> = ({
     c.colabId.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filter Log Items based on Search Term
-  const filteredLogItems = [
-     ...events.map(e => ({ ...e, logType: 'event', date: e.createdAt })),
-     ...adjustments.map(a => ({ ...a, logType: 'adj', date: a.createdAt }))
-   ]
-   .filter(item => {
-      if (!searchTerm) return true;
-      const colab = collaborators.find(c => c.id === item.collaboratorId);
-      if (!colab) return false;
-      const term = searchTerm.toLowerCase();
-      return colab.name.toLowerCase().includes(term) || colab.colabId.toLowerCase().includes(term);
-   })
-   .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-   .slice(0, 50);
+  // Filter Log Items based on Sector and Search Term
+  const filteredLogItems = useMemo(() => {
+     const allLogs = [
+        ...events.map(e => ({ ...e, logType: 'event', date: e.createdAt })),
+        ...adjustments.map(a => ({ ...a, logType: 'adj', date: a.createdAt }))
+     ];
+
+     return allLogs
+      .filter(item => {
+          const colab = collaborators.find(c => c.id === item.collaboratorId);
+          if (!colab) return false;
+          
+          // 1. Sector Check
+          if (currentUserAllowedSectors.length > 0) {
+             if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) return false;
+          }
+
+          // 2. Search Term Check
+          if (searchTerm) {
+             const term = searchTerm.toLowerCase();
+             return colab.name.toLowerCase().includes(term) || colab.colabId.toLowerCase().includes(term);
+          }
+          
+          return true;
+      })
+      .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 50);
+
+  }, [events, adjustments, collaborators, currentUserAllowedSectors, searchTerm]);
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Card Saldo */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Saldo de Folgas</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Saldo de Folgas {currentUserAllowedSectors.length > 0 && <span className="text-sm font-normal text-gray-500">(Filtrado por setor)</span>}</h2>
           
           {/* Search Input */}
           <div className="mb-4 relative">
@@ -125,7 +148,7 @@ export const Balance: React.FC<BalanceProps> = ({
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
             {filteredBalances.length === 0 ? (
               <p className="text-gray-400 text-center text-sm py-4">
-                {balances.length === 0 ? 'Nenhum colaborador cadastrado.' : 'Nenhum colaborador encontrado.'}
+                {balances.length === 0 ? 'Nenhum colaborador na área de atuação.' : 'Nenhum colaborador encontrado.'}
               </p>
             ) : filteredBalances.map(c => {
               let badgeColor = 'bg-blue-100 text-blue-800';
@@ -166,7 +189,7 @@ export const Balance: React.FC<BalanceProps> = ({
                   onChange={e => setAdjForm({...adjForm, collaboratorId: e.target.value})}
                >
                   <option value="">Selecione...</option>
-                  {collaborators.map(c => (
+                  {allowedCollaborators.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                </select>
@@ -229,7 +252,7 @@ export const Balance: React.FC<BalanceProps> = ({
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-6">Log Geral de Movimentações {searchTerm && <span className="text-sm font-normal text-gray-500">(Filtrado)</span>}</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-6">Log Geral de Movimentações {(searchTerm || currentUserAllowedSectors.length > 0) && <span className="text-sm font-normal text-gray-500">(Filtrado)</span>}</h2>
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
           {filteredLogItems.map((item: any) => {
              const colab = collaborators.find(c => c.id === item.collaboratorId);

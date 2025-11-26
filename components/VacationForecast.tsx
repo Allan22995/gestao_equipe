@@ -1,6 +1,5 @@
 
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Collaborator, VacationRequest, VacationStatus, UserProfile } from '../types';
 import { generateUUID, formatDate } from '../utils/helpers';
 
@@ -15,6 +14,7 @@ interface VacationForecastProps {
   currentUserProfile: UserProfile;
   currentUserName: string;
   canEdit: boolean; // Permissão ACL
+  currentUserAllowedSectors: string[]; // Novo: Filtro de setor
 }
 
 const CalendarIcon = () => (
@@ -24,7 +24,7 @@ const CalendarIcon = () => (
 );
 
 export const VacationForecast: React.FC<VacationForecastProps> = ({ 
-  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, canEdit
+  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, canEdit, currentUserAllowedSectors
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -36,6 +36,21 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
   });
 
   const isAdmin = currentUserProfile === 'admin';
+
+  // Filter Collaborators for Dropdown
+  const allowedCollaborators = useMemo(() => {
+     if (currentUserAllowedSectors.length === 0) return collaborators;
+     return collaborators.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+  }, [collaborators, currentUserAllowedSectors]);
+
+  // Filter Requests History
+  const allowedRequests = useMemo(() => {
+     if (currentUserAllowedSectors.length === 0) return requests;
+     return requests.filter(r => {
+        const colab = collaborators.find(c => c.id === r.collaboratorId);
+        return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
+     });
+  }, [requests, collaborators, currentUserAllowedSectors]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -158,7 +173,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
               disabled={!!editingId} 
             >
               <option value="">Selecione...</option>
-              {collaborators.map(c => (
+              {allowedCollaborators.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -240,9 +255,9 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Previsões Registradas</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Previsões Registradas {currentUserAllowedSectors.length > 0 && <span className="text-sm font-normal text-gray-500">(Filtrado por setor)</span>}</h2>
         <div className="space-y-3">
-          {requests.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhuma previsão registrada.</p> : requests.map(r => {
+          {allowedRequests.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhuma previsão registrada.</p> : allowedRequests.map(r => {
             let statusColor = 'bg-gray-100 text-gray-600';
             let statusLabel = 'Pendente';
             

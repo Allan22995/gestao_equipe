@@ -1,6 +1,5 @@
 
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Collaborator, EventRecord, SystemSettings } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
 
@@ -14,6 +13,7 @@ interface EventsProps {
   logAction: (action: string, entity: string, details: string, user: string) => void;
   settings: SystemSettings;
   canEdit: boolean; // Permissão ACL
+  currentUserAllowedSectors: string[]; // Novo: Filtro de setor
 }
 
 const CalendarIcon = () => (
@@ -22,7 +22,9 @@ const CalendarIcon = () => (
   </svg>
 );
 
-export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit }) => {
+export const Events: React.FC<EventsProps> = ({ 
+  collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit, currentUserAllowedSectors 
+}) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     collaboratorId: '',
@@ -31,6 +33,22 @@ export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, on
     endDate: '',
     observation: ''
   });
+
+  // Filter Collaborators for Dropdown
+  const allowedCollaborators = useMemo(() => {
+     if (currentUserAllowedSectors.length === 0) return collaborators;
+     return collaborators.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+  }, [collaborators, currentUserAllowedSectors]);
+
+  // Filter Events History
+  const allowedEvents = useMemo(() => {
+     if (currentUserAllowedSectors.length === 0) return events;
+     return events.filter(e => {
+        const colab = collaborators.find(c => c.id === e.collaboratorId);
+        return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
+     });
+  }, [events, collaborators, currentUserAllowedSectors]);
+
 
   const resetForm = () => {
     setEditingId(null);
@@ -174,7 +192,7 @@ export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, on
               disabled={!!editingId}
             >
               <option value="">Selecione...</option>
-              {collaborators.map(c => (
+              {allowedCollaborators.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -252,9 +270,9 @@ export const Events: React.FC<EventsProps> = ({ collaborators, events, onAdd, on
       )}
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Histórico de Eventos</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Histórico de Eventos {currentUserAllowedSectors.length > 0 && <span className="text-sm font-normal text-gray-500">(Filtrado por setor)</span>}</h2>
         <div className="space-y-3">
-          {events.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhum evento registrado.</p> : events.map(e => (
+          {allowedEvents.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhum evento registrado.</p> : allowedEvents.map(e => (
             <div key={e.id} className="flex flex-col md:flex-row justify-between items-center p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-all">
               <div className="flex-1">
                  <div className="flex items-center gap-2 mb-1">

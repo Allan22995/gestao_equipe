@@ -260,6 +260,7 @@ function App() {
           collaborators={collaborators} events={events} onAdd={handleAddEvent} onUpdate={handleUpdateEvent} onDelete={handleDeleteEvent}
           showToast={showToast} logAction={logAction} settings={settings} 
           canEdit={hasPermission('write:events')}
+          currentUserAllowedSectors={currentUserAllowedSectors}
         />;
       case 'plantoes':
         return <OnCall 
@@ -272,12 +273,14 @@ function App() {
           collaborators={collaborators} events={events} adjustments={adjustments} onAddAdjustment={handleAddAdjustment}
           showToast={showToast} logAction={logAction} currentUserName={currentUserName as string}
           canEdit={hasPermission('write:balance')}
+          currentUserAllowedSectors={currentUserAllowedSectors}
         />;
       case 'previsao_ferias':
         return <VacationForecast 
           collaborators={collaborators} requests={vacationRequests} onAdd={handleAddVacation} onUpdate={handleUpdateVacation} onDelete={handleDeleteVacation}
           showToast={showToast} logAction={logAction} currentUserProfile={userProfile} currentUserName={currentUserName as string}
           canEdit={hasPermission('write:vacation')}
+          currentUserAllowedSectors={currentUserAllowedSectors}
         />;
       case 'comunicados': return <CommunicationGenerator />;
       case 'configuracoes': return <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} />;
