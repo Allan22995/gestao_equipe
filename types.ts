@@ -67,6 +67,12 @@ export interface SystemMessage {
   message: string;
 }
 
+// Novo: Regra de Cobertura
+export interface CoverageRule {
+  roleName: string; // Vinculado ao RoleConfig.name
+  minPeople: number;
+}
+
 export interface SystemSettings {
   branches: string[];
   roles: RoleConfig[]; // Alterado de string[] para RoleConfig[]
@@ -76,6 +82,7 @@ export interface SystemSettings {
   scheduleTemplates: ScheduleTemplate[]; // Novo: Lista de Modelos de Jornada
   spreadsheetUrl?: string;
   systemMessage?: SystemMessage; // Novo: Mensagem global do sistema
+  coverageRules?: CoverageRule[]; // Novo: Regras de cobertura mínima
 }
 
 // Mantemos compatibilidade com string, mas o valor virá do config
@@ -144,13 +151,14 @@ export interface AuditLog {
   timestamp: string;
 }
 
-export type TabType = 'calendario' | 'dashboard' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados';
+export type TabType = 'calendario' | 'dashboard' | 'simulador' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados';
 
 // --- DEFINIÇÃO DE PERMISSÕES DO SISTEMA ---
 export const SYSTEM_PERMISSIONS = [
   // Acesso as Abas
   { id: 'tab:calendario', label: 'Aba: Calendário', category: 'Navegação' },
   { id: 'tab:dashboard', label: 'Aba: Dashboard', category: 'Navegação' },
+  { id: 'tab:simulador', label: 'Aba: Simulador', category: 'Navegação' },
   { id: 'tab:colaboradores', label: 'Aba: Colaboradores', category: 'Navegação' },
   { id: 'tab:eventos', label: 'Aba: Eventos', category: 'Navegação' },
   { id: 'tab:plantoes', label: 'Aba: Plantões', category: 'Navegação' },
@@ -166,4 +174,5 @@ export const SYSTEM_PERMISSIONS = [
   { id: 'write:on_calls', label: 'Editar/Excluir Plantões', category: 'Edição' },
   { id: 'write:vacation', label: 'Gerenciar Férias', category: 'Edição' },
   { id: 'write:balance', label: 'Ajuste Manual de Saldo', category: 'Edição' },
+  { id: 'write:coverage_rules', label: 'Configurar Regras de Cobertura', category: 'Configuração' },
 ];

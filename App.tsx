@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS } from './types';
 import { dbService } from './services/storage'; 
@@ -13,6 +14,7 @@ import { Balance } from './components/Balance';
 import { VacationForecast } from './components/VacationForecast';
 import { Settings } from './components/Settings';
 import { CommunicationGenerator } from './components/CommunicationGenerator';
+import { Simulator } from './components/Simulator';
 import { Login } from './components/Login';
 import { generateUUID } from './utils/helpers';
 
@@ -33,7 +35,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
   ],
   scheduleTemplates: [], 
   spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781',
-  systemMessage: { active: false, level: 'info', message: '' }
+  systemMessage: { active: false, level: 'info', message: '' },
+  coverageRules: []
 };
 
 function App() {
@@ -212,6 +215,7 @@ function App() {
   const allTabs: {id: TabType, label: string, icon: string}[] = [
     { id: 'calendario', label: 'Calendário', icon: '📆' },
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'simulador', label: 'Simulador', icon: '🧪' },
     { id: 'colaboradores', label: 'Colaboradores', icon: '👥' },
     { id: 'eventos', label: 'Eventos', icon: '📅' },
     { id: 'plantoes', label: 'Plantões', icon: '🌙' },
@@ -247,6 +251,11 @@ function App() {
             collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} 
             settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={currentUserAllowedSectors}
             canViewPhones={hasPermission('view:phones')}
+          />;
+      case 'simulador':
+        return <Simulator 
+            collaborators={collaborators} events={events} settings={settings} onSaveSettings={handleSaveSettings}
+            currentUserAllowedSectors={currentUserAllowedSectors} canEditRules={hasPermission('write:coverage_rules')}
           />;
       case 'colaboradores':
         return <Collaborators 
