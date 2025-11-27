@@ -75,6 +75,37 @@ export const Simulator: React.FC<SimulatorProps> = ({
     return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
   }, [settings?.sectors, currentUserAllowedSectors]);
 
+  // --- NEW: Calculate Available Roles based on Sector ---
+  const availableRolesOptions = useMemo(() => {
+    // 1. Base list of collaborators allowed for the user
+    let filteredColabs = collaborators;
+    if (currentUserAllowedSectors.length > 0) {
+        filteredColabs = filteredColabs.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+    }
+
+    // 2. If a sector is selected in the simulator, filter further
+    if (filterSector) {
+        filteredColabs = filteredColabs.filter(c => c.sector === filterSector);
+        
+        // Extract unique roles from these collaborators
+        const uniqueRoles = new Set(filteredColabs.map(c => c.role));
+        return Array.from(uniqueRoles).sort();
+    } 
+
+    // 3. If no sector selected, show all configured roles
+    return settings.roles.map(r => r.name).sort();
+  }, [filterSector, collaborators, settings.roles, currentUserAllowedSectors]);
+
+  // --- NEW: Reset filterRole if it's not valid for the new sector ---
+  useEffect(() => {
+     if (filterRole !== 'Todas as Funções') {
+        if (!availableRolesOptions.includes(filterRole)) {
+           setFilterRole('Todas as Funções');
+        }
+     }
+  }, [filterSector, availableRolesOptions, filterRole]);
+
+
   // --- HELPERS ---
 
   const getRuleForRole = (role: string) => {
@@ -328,7 +359,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               <label className="text-xs font-bold text-gray-500 uppercase">Filtrar por Função</label>
                               <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="w-full border rounded p-2 text-sm bg-white">
                                   <option value="Todas as Funções">Todas as Funções</option>
-                                  {settings.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
+                                  {availableRolesOptions.map(r => <option key={r} value={r}>{r}</option>)}
                               </select>
                           </div>
                       </div>
