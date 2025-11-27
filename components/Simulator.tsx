@@ -42,6 +42,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   });
   
   const [filterRole, setFilterRole] = useState('Todas as Funções');
+  const [filterSector, setFilterSector] = useState(''); // New Sector Filter
   const [proposedEvents, setProposedEvents] = useState<ProposedEvent[]>([]);
 
   // Draft Form State
@@ -58,6 +59,20 @@ export const Simulator: React.FC<SimulatorProps> = ({
   useEffect(() => {
       setLocalRules(settings.coverageRules || []);
   }, [settings.coverageRules]);
+
+  // Force Sector Filter if Restricted (single sector)
+  useEffect(() => {
+    if (currentUserAllowedSectors.length === 1) {
+      setFilterSector(currentUserAllowedSectors[0]);
+    }
+  }, [currentUserAllowedSectors]);
+
+  // Available sectors for filter dropdown
+  const availableSectors = useMemo(() => {
+    if (!settings?.sectors) return [];
+    if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
+    return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
+  }, [settings?.sectors, currentUserAllowedSectors]);
 
   // --- HELPERS ---
 
@@ -99,14 +114,17 @@ export const Simulator: React.FC<SimulatorProps> = ({
         });
     }
 
-    // 2. Filter Collaborators (Security + Role Filter)
+    // 2. Filter Collaborators (Security + Role Filter + Sector Filter)
     const activeCollaborators = collaborators.filter(c => {
-        // Sector Permission
+        // Sector Permission (Security)
         if (currentUserAllowedSectors.length > 0) {
             if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
         }
-        // Role Filter (Visual)
+        
+        // Visual Filters
         if (filterRole !== 'Todas as Funções' && c.role !== filterRole) return false;
+        if (filterSector && c.sector !== filterSector) return false; // Apply Sector Filter
+
         return true;
     });
 
@@ -177,7 +195,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     });
 
     return { days, results };
-  }, [simStartDate, simEndDate, filterRole, collaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors]);
+  }, [simStartDate, simEndDate, filterRole, filterSector, collaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors]);
 
 
   // --- HANDLERS ---
@@ -285,8 +303,21 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               <label className="text-xs font-bold text-gray-500 uppercase">Fim</label>
                               <input type="date" value={simEndDate} onChange={e => setSimEndDate(e.target.value)} className="w-full border rounded p-2 text-sm" />
                           </div>
+                          {/* New Sector Filter */}
                           <div>
-                              <label className="text-xs font-bold text-gray-500 uppercase">Filtrar Visualização</label>
+                              <label className="text-xs font-bold text-gray-500 uppercase">Filtrar por Setor</label>
+                              <select 
+                                value={filterSector} 
+                                onChange={e => setFilterSector(e.target.value)} 
+                                className="w-full border rounded p-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                                disabled={currentUserAllowedSectors.length === 1}
+                              >
+                                  <option value="">Todos os Setores</option>
+                                  {availableSectors.map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="text-xs font-bold text-gray-500 uppercase">Filtrar por Função</label>
                               <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="w-full border rounded p-2 text-sm bg-white">
                                   <option value="Todas as Funções">Todas as Funções</option>
                                   {settings.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
@@ -302,7 +333,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                       
                       <form onSubmit={addDraft} className="flex flex-col md:flex-row gap-3 items-end">
                           <div className="flex-1 w-full">
-                              <label className="text-xs font-bold text-gray-500 uppercase">Colaborador</label>
+                              <label className="text-xs font-bold text-gray-500 uppercase">Colaborador {filterSector && <span className="font-normal text-indigo-500">({filterSector})</span>}</label>
                               <select 
                                 required 
                                 value={draftForm.collaboratorId} 
@@ -311,7 +342,13 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               >
                                   <option value="">Selecione...</option>
                                   {collaborators
-                                    .filter(c => currentUserAllowedSectors.length === 0 || (c.sector && currentUserAllowedSectors.includes(c.sector)))
+                                    .filter(c => {
+                                      // 1. Restriction Check
+                                      if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return false;
+                                      // 2. Simulator Sector Filter Check
+                                      if (filterSector && c.sector !== filterSector) return false;
+                                      return true;
+                                    })
                                     .sort((a,b) => a.name.localeCompare(b.name))
                                     .map(c => <option key={c.id} value={c.id}>{c.name}</option>)
                                   }
