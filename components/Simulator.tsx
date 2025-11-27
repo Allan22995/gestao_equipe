@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, SystemSettings, Schedule, CoverageRule } from '../types';
 import { getFeriados, weekDayMap } from '../utils/helpers';
@@ -129,9 +130,16 @@ export const Simulator: React.FC<SimulatorProps> = ({
     });
 
     // 3. Process Coverage Per Day Per Role
-    const rolesToSimulate = filterRole === 'Todas as Funções' 
+    let rolesToSimulate = filterRole === 'Todas as Funções' 
         ? settings.roles.map(r => r.name) 
         : [filterRole];
+
+    // Filter Optimization: If a specific sector is selected, only show roles present in that sector
+    // This avoids showing irrelevant roles (with 0 data) in the matrix
+    if (filterRole === 'Todas as Funções' && filterSector) {
+        const rolesInSector = new Set(activeCollaborators.map(c => c.role));
+        rolesToSimulate = rolesToSimulate.filter(r => rolesInSector.has(r));
+    }
 
     const results: Record<string, Record<string, { available: number, min: number, status: 'ok' | 'alert' | 'violation', missing: number }>> = {};
 
@@ -404,6 +412,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
                   </div>
                   
                   <div className="overflow-x-auto pb-4">
+                      {Object.keys(simulationData.results).length === 0 && (
+                          <p className="text-center text-gray-500 py-8">Nenhum dado para o setor/filtro selecionado.</p>
+                      )}
                       {Object.keys(simulationData.results).map(role => {
                           const min = getRuleForRole(role);
                           return (
