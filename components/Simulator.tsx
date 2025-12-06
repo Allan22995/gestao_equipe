@@ -198,6 +198,12 @@ export const Simulator: React.FC<SimulatorProps> = ({
     }
 
     const results: Record<string, Record<string, { available: number, min: number, status: 'ok' | 'alert' | 'violation', missing: number }>> = {};
+    const grandTotals: Record<string, { available: number, min: number, status: 'ok' | 'alert' | 'violation' }> = {};
+    
+    // Initialize Grand Totals
+    days.forEach(d => {
+        grandTotals[d.date] = { available: 0, min: 0, status: 'ok' };
+    });
 
     rolesToSimulate.forEach(role => {
         results[role] = {};
@@ -221,11 +227,14 @@ export const Simulator: React.FC<SimulatorProps> = ({
                     const eStart = new Date(e.startDate + 'T00:00:00');
                     const eEnd = new Date(e.endDate + 'T00:00:00');
                     
-                    // Consider absence if event type behaves like absence (ferias, folga)
-                    // We assume 'trabalhado' adds, but usually historical events stored are absences or exceptions.
-                    // For simplicity: If event exists and it's NOT 'trabalhado', it's an absence.
+                    // Consider absence if event type behaves like absence (ferias, folga, atestado, falta)
+                    // We assume 'trabalhado' adds (credit_2x), all others subtract or are neutral absences.
                     const evtType = settings.eventTypes.find(t => t.id === e.type);
-                    const isAbsence = e.type === 'ferias' || e.type === 'folga' || (evtType && evtType.behavior !== 'credit_2x');
+                    const isWorking = evtType && evtType.behavior === 'credit_2x'; // Only explicitly worked days count as presence override
+                    
+                    // Logic: If it's NOT a working credit event, it counts as absence for the schedule simulation
+                    // This covers: ferias, folga, atestado, falta, suspensao (assuming they are configured as neutral or debit)
+                    const isAbsence = !isWorking; 
                     
                     return isAbsence && dateObj >= eStart && dateObj <= eEnd;
                 });
@@ -244,7 +253,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                 availableCount++;
             });
 
-            // Determine Status
+            // Determine Status for Role
             let status: 'ok' | 'alert' | 'violation' = 'ok';
             if (availableCount < roleMin) status = 'violation';
             else if (availableCount === roleMin) status = 'alert';
@@ -255,10 +264,26 @@ export const Simulator: React.FC<SimulatorProps> = ({
                 status,
                 missing: roleMin - availableCount
             };
+
+            // Add to Grand Totals
+            if (!day.isHoliday) {
+                grandTotals[day.date].available += availableCount;
+                grandTotals[day.date].min += roleMin;
+            }
         });
     });
 
-    return { days, results };
+    // Calculate Grand Total Status per day
+    days.forEach(d => {
+        if (!d.isHoliday) {
+            const t = grandTotals[d.date];
+            if (t.available < t.min) t.status = 'violation';
+            else if (t.available === t.min) t.status = 'alert';
+            else t.status = 'ok';
+        }
+    });
+
+    return { days, results, grandTotals };
   }, [simStartDate, simEndDate, filterRoles, filterSector, collaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions]);
 
 
@@ -477,6 +502,8 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               <select value={draftForm.type} onChange={e => setDraftForm({...draftForm, type: e.target.value})} className="w-full border rounded p-2 text-sm bg-white">
                                   <option value="ferias">Férias</option>
                                   <option value="folga">Folga</option>
+                                  <option value="atestado">Atestado</option>
+                                  <option value="falta">Falta</option>
                               </select>
                           </div>
                           <div className="w-full md:w-36">
@@ -525,6 +552,42 @@ export const Simulator: React.FC<SimulatorProps> = ({
                       {Object.keys(simulationData.results).length === 0 && (
                           <p className="text-center text-gray-500 py-8">Nenhum dado para o setor/filtro selecionado.</p>
                       )}
+
+                      {/* TOTAL GERAL ROW */}
+                      {Object.keys(simulationData.results).length > 0 && (
+                          <div className="mb-8 px-4 pt-4 bg-indigo-50/50 border-b-2 border-indigo-200 pb-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                  <h3 className="font-bold text-indigo-800 uppercase tracking-wide">TOTAL GERAL <span className="text-xs font-normal normal-case opacity-70">(Agrupado)</span></h3>
+                              </div>
+                              <div className="flex gap-1 min-w-max">
+                                {simulationData.days.map((day, idx) => {
+                                      const data = simulationData.grandTotals[day.date];
+                                      let colorClass = 'bg-gray-50 border-gray-200 text-gray-400'; 
+                                      
+                                      if (!day.isHoliday) {
+                                          if (data.status === 'ok') colorClass = 'bg-emerald-200 border-emerald-400 text-emerald-900 shadow-sm';
+                                          else if (data.status === 'alert') colorClass = 'bg-amber-200 border-amber-400 text-amber-900 shadow-sm';
+                                          else colorClass = 'bg-red-200 border-red-400 text-red-900 shadow-sm';
+                                      } else {
+                                          colorClass = 'bg-gray-200 border-gray-300 opacity-60'; 
+                                      }
+
+                                      return (
+                                          <div key={`total-${idx}`} className={`w-12 h-16 flex flex-col items-center justify-center border-2 rounded-lg transition-all ${colorClass}`} title={`${day.date}: Total Disponível ${data.available} / Meta Global ${data.min}`}>
+                                              <span className="text-[10px] font-bold uppercase">{weekDayMap[new Date(day.date + 'T00:00:00').getDay()].substr(0, 3)}</span>
+                                              <span className="text-[10px] mb-1">{day.label.split('/')[0]}</span>
+                                              {!day.isHoliday ? (
+                                                  <span className="font-bold text-sm">
+                                                      {data.available}<span className="text-[9px] opacity-60">/{data.min}</span>
+                                                  </span>
+                                              ) : <span className="text-xs">-</span>}
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+                      )}
+
                       {Object.keys(simulationData.results).map(role => {
                           const min = getRuleForRole(role);
                           return (
