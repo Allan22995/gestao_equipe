@@ -1,7 +1,7 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, SystemSettings, Schedule, CoverageRule } from '../types';
 import { getFeriados, weekDayMap } from '../utils/helpers';
+import { MultiSelect } from './ui/MultiSelect';
 
 interface SimulatorProps {
   collaborators: Collaborator[];
@@ -42,10 +42,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
     return d.toISOString().split('T')[0];
   });
   
-  const [filterSector, setFilterSector] = useState(''); // Sector Filter
-  const [filterRoles, setFilterRoles] = useState<string[]>([]); // Multi-Select Roles (empty = all)
-  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false); // UI State for Dropdown
-
+  const [filterSectors, setFilterSectors] = useState<string[]>([]); // Sector Filter (Multi)
+  const [filterRoles, setFilterRoles] = useState<string[]>([]); // Role Filter (Multi)
+  
   const [proposedEvents, setProposedEvents] = useState<ProposedEvent[]>([]);
 
   // Draft Form State
@@ -66,7 +65,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   // Force Sector Filter if Restricted (single sector)
   useEffect(() => {
     if (currentUserAllowedSectors.length === 1) {
-      setFilterSector(currentUserAllowedSectors[0]);
+      setFilterSectors([currentUserAllowedSectors[0]]);
     }
   }, [currentUserAllowedSectors]);
 
@@ -85,9 +84,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
         filteredColabs = filteredColabs.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
     }
 
-    // 2. If a sector is selected in the simulator, filter further
-    if (filterSector) {
-        filteredColabs = filteredColabs.filter(c => c.sector === filterSector);
+    // 2. If sectors are selected in the simulator, filter further
+    if (filterSectors.length > 0) {
+        filteredColabs = filteredColabs.filter(c => c.sector && filterSectors.includes(c.sector));
         
         // Extract unique roles from these collaborators
         const uniqueRoles = new Set(filteredColabs.map(c => c.role));
@@ -96,7 +95,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
     // 3. If no sector selected, show all configured roles
     return settings.roles.map(r => r.name).sort();
-  }, [filterSector, collaborators, settings.roles, currentUserAllowedSectors]);
+  }, [filterSectors, collaborators, settings.roles, currentUserAllowedSectors]);
 
   // --- Reset filterRoles if they are not valid for the new sector ---
   useEffect(() => {
@@ -108,7 +107,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
            setFilterRoles(validRoles);
         }
      }
-  }, [filterSector, availableRolesOptions, filterRoles]);
+  }, [filterSectors, availableRolesOptions, filterRoles]);
 
 
   // --- HELPERS ---
@@ -130,21 +129,6 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
   const saveRules = () => {
       onSaveSettings({ ...settings, coverageRules: localRules });
-  };
-
-  const toggleRoleSelection = (role: string) => {
-      if (filterRoles.includes(role)) {
-          setFilterRoles(filterRoles.filter(r => r !== role));
-      } else {
-          setFilterRoles([...filterRoles, role]);
-      }
-  };
-
-  const getSelectedRolesLabel = () => {
-      if (filterRoles.length === 0) return 'Todas as Funções';
-      if (filterRoles.length === 1) return filterRoles[0];
-      if (filterRoles.length <= 2) return filterRoles.join(', ');
-      return `${filterRoles.length} funções selecionadas`;
   };
 
   // --- SIMULATION ENGINE ---
@@ -177,7 +161,8 @@ export const Simulator: React.FC<SimulatorProps> = ({
         // If filterRoles has items, the collaborator's role MUST be in it.
         if (filterRoles.length > 0 && !filterRoles.includes(c.role)) return false;
         
-        if (filterSector && c.sector !== filterSector) return false; // Apply Sector Filter
+        // Apply Sector Filter (Multi)
+        if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
 
         return true;
     });
@@ -189,7 +174,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
     // Filter Optimization: If a specific sector is selected, only show roles present in that sector
     // This avoids showing irrelevant roles (with 0 data) in the matrix
-    if (filterRoles.length === 0 && filterSector) {
+    if (filterRoles.length === 0 && filterSectors.length > 0) {
         const rolesInSector = new Set(activeCollaborators.map(c => c.role));
         rolesToSimulate = rolesToSimulate.filter(r => rolesInSector.has(r));
     } else if (filterRoles.length === 0) {
@@ -284,7 +269,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     });
 
     return { days, results, grandTotals };
-  }, [simStartDate, simEndDate, filterRoles, filterSector, collaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions]);
+  }, [simStartDate, simEndDate, filterRoles, filterSectors, collaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions]);
 
 
   // --- HANDLERS ---
@@ -381,7 +366,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
               {/* Controls */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Period & Filter */}
-                  <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+                  <div className="bg-white rounded-xl shadow p-5 border border-gray-100 z-20 relative">
                       <h3 className="font-bold text-gray-800 mb-3">1. Período de Simulação</h3>
                       <div className="space-y-3">
                           <div>
@@ -392,91 +377,39 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               <label className="text-xs font-bold text-gray-500 uppercase">Fim</label>
                               <input type="date" value={simEndDate} onChange={e => setSimEndDate(e.target.value)} className="w-full border rounded p-2 text-sm" />
                           </div>
-                          {/* Sector Filter */}
+                          {/* Sector Filter (Multi) */}
                           <div>
-                              <label className="text-xs font-bold text-gray-500 uppercase">Filtrar por Setor</label>
-                              <select 
-                                value={filterSector} 
-                                onChange={e => setFilterSector(e.target.value)} 
-                                className="w-full border rounded p-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                              <MultiSelect 
+                                label="FILTRAR POR SETOR"
+                                options={availableSectors}
+                                selected={filterSectors}
+                                onChange={setFilterSectors}
+                                placeholder="Todos os Setores"
                                 disabled={currentUserAllowedSectors.length === 1}
-                              >
-                                  <option value="">Todos os Setores</option>
-                                  {availableSectors.map(s => <option key={s} value={s}>{s}</option>)}
-                              </select>
+                              />
                           </div>
                           
                           {/* Role Multi-Select Filter */}
-                          <div className="relative">
-                              <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Filtrar por Função</label>
-                              {/* Backdrop to close dropdown */}
-                              {isRoleDropdownOpen && (
-                                <div className="fixed inset-0 z-10" onClick={() => setIsRoleDropdownOpen(false)}></div>
-                              )}
-                              
-                              <div className="relative z-20">
-                                  <button
-                                      type="button"
-                                      onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                                      className="w-full border rounded p-2 text-sm bg-white text-left flex justify-between items-center focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                                  >
-                                      <span className="truncate pr-2 text-gray-700">
-                                          {getSelectedRolesLabel()}
-                                      </span>
-                                      <svg className={`w-4 h-4 text-gray-500 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                      </svg>
-                                  </button>
-
-                                  {isRoleDropdownOpen && (
-                                      <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-y-auto animate-fadeIn">
-                                          <div
-                                              className="p-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-2 border-b border-gray-100 sticky top-0 bg-white"
-                                              onClick={() => setFilterRoles([])}
-                                          >
-                                              <input 
-                                                  type="checkbox" 
-                                                  checked={filterRoles.length === 0} 
-                                                  readOnly 
-                                                  className="rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none" 
-                                              />
-                                              <span className="text-sm font-bold text-gray-700">Todas as Funções</span>
-                                          </div>
-                                          {availableRolesOptions.map(r => (
-                                              <div
-                                                  key={r}
-                                                  className="p-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 border-b border-gray-50 last:border-0"
-                                                  onClick={() => toggleRoleSelection(r)}
-                                              >
-                                                  <input 
-                                                      type="checkbox" 
-                                                      checked={filterRoles.includes(r)} 
-                                                      readOnly 
-                                                      className="rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none" 
-                                                  />
-                                                  <span className="text-sm text-gray-700">{r}</span>
-                                              </div>
-                                          ))}
-                                          {availableRolesOptions.length === 0 && (
-                                              <div className="p-3 text-xs text-gray-400 text-center italic">
-                                                  Nenhuma função disponível para o filtro atual.
-                                              </div>
-                                          )}
-                                      </div>
-                                  )}
-                              </div>
+                          <div>
+                              <MultiSelect 
+                                label="FILTRAR POR FUNÇÃO"
+                                options={availableRolesOptions}
+                                selected={filterRoles}
+                                onChange={setFilterRoles}
+                                placeholder="Todas as Funções"
+                              />
                           </div>
                       </div>
                   </div>
 
                   {/* Draft Form */}
-                  <div className="bg-white rounded-xl shadow p-5 border border-gray-100 lg:col-span-2">
+                  <div className="bg-white rounded-xl shadow p-5 border border-gray-100 lg:col-span-2 z-10 relative">
                       <h3 className="font-bold text-gray-800 mb-3">2. Propor Evento (Rascunho)</h3>
                       <p className="text-xs text-gray-500 mb-3">Adicione férias ou folgas hipotéticas para ver como a cobertura é afetada. Estes dados <b>não</b> são salvos no banco.</p>
                       
                       <form onSubmit={addDraft} className="flex flex-col md:flex-row gap-3 items-end">
                           <div className="flex-1 w-full">
-                              <label className="text-xs font-bold text-gray-500 uppercase">Colaborador {filterSector && <span className="font-normal text-indigo-500">({filterSector})</span>}</label>
+                              <label className="text-xs font-bold text-gray-500 uppercase">Colaborador {filterSectors.length > 0 && <span className="font-normal text-indigo-500">(Filtrado)</span>}</label>
                               <select 
                                 required 
                                 value={draftForm.collaboratorId} 
@@ -488,8 +421,8 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                     .filter(c => {
                                       // 1. Restriction Check
                                       if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return false;
-                                      // 2. Simulator Sector Filter Check
-                                      if (filterSector && c.sector !== filterSector) return false;
+                                      // 2. Simulator Sector Filter Check (Multi)
+                                      if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
                                       return true;
                                     })
                                     .sort((a,b) => a.name.localeCompare(b.name))
@@ -538,7 +471,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
               </div>
 
               {/* Matrix Result */}
-              <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-0 relative">
                   <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                       <h2 className="text-lg font-bold text-gray-800">Resultado da Simulação</h2>
                       <div className="flex gap-4 text-xs font-bold">

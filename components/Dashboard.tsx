@@ -1,9 +1,8 @@
-
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap } from '../utils/helpers';
 import { Modal } from './ui/Modal';
+import { MultiSelect } from './ui/MultiSelect';
 
 interface DashboardProps {
   collaborators: Collaborator[];
@@ -25,16 +24,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [upcoming, setUpcoming] = useState<any[]>([]);
   const [selectedColab, setSelectedColab] = useState<any | null>(null);
 
-  // Filters
+  // Filters (Multi-Select)
   const [filterName, setFilterName] = useState('');
-  const [filterBranch, setFilterBranch] = useState('');
-  const [filterRole, setFilterRole] = useState('');
-  const [filterSector, setFilterSector] = useState('');
+  const [filterBranches, setFilterBranches] = useState<string[]>([]);
+  const [filterRoles, setFilterRoles] = useState<string[]>([]);
+  const [filterSectors, setFilterSectors] = useState<string[]>([]);
 
   // Force Sector Filter if Restricted (single sector)
   useEffect(() => {
     if (currentUserAllowedSectors.length === 1) {
-      setFilterSector(currentUserAllowedSectors[0]);
+      setFilterSectors([currentUserAllowedSectors[0]]);
     }
   }, [currentUserAllowedSectors]);
 
@@ -85,9 +84,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
 
       const matchesName = filterName ? c.name.toLowerCase().includes(filterName.toLowerCase()) : true;
-      const matchesBranch = filterBranch ? c.branch === filterBranch : true;
-      const matchesRole = filterRole ? c.role === filterRole : true;
-      const matchesSector = filterSector ? c.sector === filterSector : true;
+      
+      // Multi-Select Logic
+      const matchesBranch = filterBranches.length > 0 ? filterBranches.includes(c.branch) : true;
+      const matchesRole = filterRoles.length > 0 ? filterRoles.includes(c.role) : true;
+      const matchesSector = filterSectors.length > 0 ? (c.sector && filterSectors.includes(c.sector)) : true;
+
       return matchesName && matchesBranch && matchesRole && matchesSector;
     });
 
@@ -289,50 +291,56 @@ export const Dashboard: React.FC<DashboardProps> = ({
     
     setUpcoming(nextEvents);
 
-  }, [collaborators, events, onCalls, vacationRequests, settings, filterName, filterBranch, filterRole, filterSector, currentUserAllowedSectors]);
+  }, [collaborators, events, onCalls, vacationRequests, settings, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors]);
 
   return (
     <div className="space-y-6">
        {/* Filter Bar */}
-       <div className="bg-white rounded-xl shadow p-4 border border-gray-100">
+       <div className="bg-white rounded-xl shadow p-4 border border-gray-100 z-20 relative">
           <div className="text-xs font-bold text-gray-500 mb-2 uppercase">Filtros do Dashboard</div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
              <input 
                type="text" 
                placeholder="Buscar por nome..." 
-               className="w-full border border-gray-300 rounded-md p-2 text-sm"
+               className="w-full border border-gray-300 rounded-md p-1.5 text-sm h-[34px]"
                value={filterName}
                onChange={e => setFilterName(e.target.value)}
              />
-             <select 
-               className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
-               value={filterBranch}
-               onChange={e => setFilterBranch(e.target.value)}
-             >
-               <option value="">Todas as Filiais</option>
-               {settings.branches.map(b => <option key={b} value={b}>{b}</option>)}
-             </select>
-             <select 
-               className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
-               value={filterSector}
-               onChange={e => setFilterSector(e.target.value)}
-               disabled={currentUserAllowedSectors.length === 1}
-             >
-               <option value="">{currentUserAllowedSectors.length > 0 ? 'Todos Permitidos' : 'Todos os Setores'}</option>
-               {availableSectors.map(s => <option key={s} value={s}>{s}</option>)}
-             </select>
-             <select 
-               className="w-full border border-gray-300 rounded-md p-2 text-sm bg-white"
-               value={filterRole}
-               onChange={e => setFilterRole(e.target.value)}
-             >
-               <option value="">Todas as Funções</option>
-               {settings.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
-             </select>
+             
+             <div>
+               <MultiSelect 
+                 label="Filiais"
+                 options={settings.branches}
+                 selected={filterBranches}
+                 onChange={setFilterBranches}
+                 placeholder="Todas as Filiais"
+               />
+             </div>
+
+             <div>
+               <MultiSelect 
+                 label="Setores"
+                 options={availableSectors}
+                 selected={filterSectors}
+                 onChange={setFilterSectors}
+                 placeholder={currentUserAllowedSectors.length > 0 ? 'Todos Permitidos' : 'Todos os Setores'}
+                 disabled={currentUserAllowedSectors.length === 1}
+               />
+             </div>
+
+             <div>
+               <MultiSelect 
+                 label="Funções"
+                 options={settings.roles.map(r => r.name)}
+                 selected={filterRoles}
+                 onChange={setFilterRoles}
+                 placeholder="Todas as Funções"
+               />
+             </div>
           </div>
        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 z-0 relative">
         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-6 text-white shadow-lg">
           <div className="text-sm font-medium opacity-90 uppercase tracking-wide mb-1">Total (Filtrado)</div>
           <div className="text-4xl font-bold">{stats.total}</div>
@@ -347,7 +355,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 z-0 relative">
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
            <h3 className="text-lg font-bold text-gray-800 mb-4">Status em Tempo Real</h3>
            <p className="text-xs text-gray-500 mb-3">

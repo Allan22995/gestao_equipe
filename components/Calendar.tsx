@@ -1,9 +1,8 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings, UserProfile } from '../types';
 import { getFeriados } from '../utils/helpers';
 import { Modal } from './ui/Modal';
+import { MultiSelect } from './ui/MultiSelect';
 
 interface CalendarProps {
   collaborators: Collaborator[];
@@ -23,16 +22,16 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<{ date: string, dayEvents: any[], holiday?: string } | null>(null);
   
-  // Filters
+  // Filters (Multi-Select)
   const [filterName, setFilterName] = useState('');
-  const [filterBranch, setFilterBranch] = useState('');
-  const [filterRole, setFilterRole] = useState('');
-  const [filterSector, setFilterSector] = useState('');
+  const [filterBranches, setFilterBranches] = useState<string[]>([]);
+  const [filterRoles, setFilterRoles] = useState<string[]>([]);
+  const [filterSectors, setFilterSectors] = useState<string[]>([]);
 
   // If user is restricted to only 1 sector, force filter. If multiple, allow selection but limit options.
   useEffect(() => {
     if (currentUserAllowedSectors.length === 1) {
-      setFilterSector(currentUserAllowedSectors[0]);
+      setFilterSectors([currentUserAllowedSectors[0]]);
     }
   }, [currentUserAllowedSectors]);
 
@@ -71,9 +70,11 @@ export const Calendar: React.FC<CalendarProps> = ({
     }
 
     const matchesName = filterName ? colab.name.toLowerCase().includes(filterName.toLowerCase()) : true;
-    const matchesBranch = filterBranch ? colab.branch === filterBranch : true;
-    const matchesRole = filterRole ? colab.role === filterRole : true;
-    const matchesSector = filterSector ? colab.sector === filterSector : true;
+    
+    // Multi-Select Logic: If filter array is empty, it means "All", otherwise check inclusion
+    const matchesBranch = filterBranches.length > 0 ? filterBranches.includes(colab.branch) : true;
+    const matchesRole = filterRoles.length > 0 ? filterRoles.includes(colab.role) : true;
+    const matchesSector = filterSectors.length > 0 ? (colab.sector && filterSectors.includes(colab.sector)) : true;
 
     return matchesName && matchesBranch && matchesRole && matchesSector;
   };
@@ -227,7 +228,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-lg border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-lg border border-gray-100 z-20 relative">
            <div>
              <label className="text-xs font-semibold text-gray-500 block mb-1">Nome do Colaborador</label>
              <input 
@@ -238,44 +239,41 @@ export const Calendar: React.FC<CalendarProps> = ({
                onChange={e => setFilterName(e.target.value)}
              />
            </div>
+           
            <div>
-             <label className="text-xs font-semibold text-gray-500 block mb-1">Filial</label>
-             <select 
-               className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white"
-               value={filterBranch}
-               onChange={e => setFilterBranch(e.target.value)}
-             >
-               <option value="">Todas</option>
-               {settings?.branches.map(b => <option key={b} value={b}>{b}</option>)}
-             </select>
+              <MultiSelect 
+                label="Filiais"
+                options={settings?.branches || []}
+                selected={filterBranches}
+                onChange={setFilterBranches}
+                placeholder="Todas"
+              />
            </div>
+
            <div>
-             <label className="text-xs font-semibold text-gray-500 block mb-1">Setor / Squad</label>
-             <select 
-               className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500"
-               value={filterSector}
-               onChange={e => setFilterSector(e.target.value)}
-               disabled={currentUserAllowedSectors.length === 1}
-             >
-               <option value="">{currentUserAllowedSectors.length > 0 ? 'Todos Permitidos' : 'Todos'}</option>
-               {availableSectors.map(s => <option key={s} value={s}>{s}</option>)}
-             </select>
+              <MultiSelect 
+                label="Setor / Squad"
+                options={availableSectors}
+                selected={filterSectors}
+                onChange={setFilterSectors}
+                placeholder={currentUserAllowedSectors.length > 0 ? 'Todos Permitidos' : 'Todos'}
+                disabled={currentUserAllowedSectors.length === 1}
+              />
            </div>
+
            <div>
-             <label className="text-xs font-semibold text-gray-500 block mb-1">Função</label>
-             <select 
-               className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white"
-               value={filterRole}
-               onChange={e => setFilterRole(e.target.value)}
-             >
-               <option value="">Todas</option>
-               {settings?.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
-             </select>
+              <MultiSelect 
+                label="Função"
+                options={settings?.roles.map(r => r.name) || []}
+                selected={filterRoles}
+                onChange={setFilterRoles}
+                placeholder="Todas"
+              />
            </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 mb-2">
+      <div className="grid grid-cols-7 gap-2 mb-2 z-10 relative">
         {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
           <div key={day} className="text-center font-bold text-gray-500 text-xs uppercase py-2 bg-gray-50 rounded-md">
             {day}
@@ -283,7 +281,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-2 z-0 relative">
         {renderCalendarGrid()}
       </div>
 
