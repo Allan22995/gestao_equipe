@@ -51,11 +51,20 @@ export const Events: React.FC<EventsProps> = ({
         });
      }
 
-     // Sort by startDate descending (newest first)
+     // Sort by startDate descending (newest first), then by creation date
      return [...filtered].sort((a, b) => {
-         const dateA = new Date(a.startDate).getTime();
-         const dateB = new Date(b.startDate).getTime();
-         return dateB - dateA;
+         const dateA = a.startDate || '';
+         const dateB = b.startDate || '';
+         
+         // Comparação primária: Data de Início (Descendente)
+         // Formato ISO YYYY-MM-DD permite ordenação lexicográfica correta
+         const dateComparison = dateB.localeCompare(dateA);
+         if (dateComparison !== 0) return dateComparison;
+
+         // Comparação secundária: Data de Criação (Descendente) para desempate
+         const createdA = a.createdAt || '';
+         const createdB = b.createdAt || '';
+         return createdB.localeCompare(createdA);
      });
   }, [events, collaborators, currentUserAllowedSectors]);
 
