@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap } from '../utils/helpers';
@@ -43,6 +44,49 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
     return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
   }, [settings?.sectors, currentUserAllowedSectors]);
+
+  // --- Lógica de Funções Dinâmicas ---
+  // Calcula as funções disponíveis com base nos filtros de Filial e Setor aplicados
+  const availableRoles = useMemo(() => {
+    // 1. Começa com a lista base de colaboradores
+    let filtered = collaborators;
+
+    // 2. Aplica filtro de Segurança (Setores permitidos ao usuário)
+    if (currentUserAllowedSectors.length > 0) {
+      filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+    }
+
+    // 3. Aplica filtro de Filiais Selecionadas
+    if (filterBranches.length > 0) {
+      filtered = filtered.filter(c => filterBranches.includes(c.branch));
+    }
+
+    // 4. Aplica filtro de Setores Selecionados
+    if (filterSectors.length > 0) {
+      filtered = filtered.filter(c => c.sector && filterSectors.includes(c.sector));
+    }
+
+    // 5. Se houver filtros ativos (Filial ou Setor), retorna apenas as roles presentes nesses dados
+    // Caso contrário (nenhum filtro), retorna todas as roles configuradas no sistema para facilitar a busca
+    if (filterBranches.length > 0 || filterSectors.length > 0) {
+       const rolesInUse = new Set(filtered.map(c => c.role));
+       return Array.from(rolesInUse).sort();
+    }
+
+    // Default: Todas as roles configuradas
+    return settings.roles.map(r => r.name).sort();
+
+  }, [collaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings.roles]);
+
+  // Limpa filtros de Role se eles não forem mais válidos após mudança de Filial/Setor
+  useEffect(() => {
+     if (filterRoles.length > 0) {
+        const validRoles = filterRoles.filter(r => availableRoles.includes(r));
+        if (validRoles.length !== filterRoles.length) {
+           setFilterRoles(validRoles);
+        }
+     }
+  }, [availableRoles, filterRoles]);
 
   // Helpers para navegação de dias
   const getPrevDayKey = (dayIndex: number): keyof Schedule => {
@@ -334,7 +378,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
              <div>
                <MultiSelect 
                  label="Funções"
-                 options={settings.roles.map(r => r.name)}
+                 options={availableRoles}
                  selected={filterRoles}
                  onChange={setFilterRoles}
                  placeholder="Todas as Funções"
