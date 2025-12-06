@@ -370,12 +370,12 @@ export const Simulator: React.FC<SimulatorProps> = ({
                       <h3 className="font-bold text-gray-800 mb-3">1. Período de Simulação</h3>
                       <div className="space-y-3">
                           <div>
-                              <label className="text-xs font-bold text-gray-500 uppercase">Inicio</label>
-                              <input type="date" value={simStartDate} onChange={e => setSimStartDate(e.target.value)} className="w-full border rounded p-2 text-sm" />
+                              <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Inicio</label>
+                              <input type="date" value={simStartDate} onChange={e => setSimStartDate(e.target.value)} className="w-full border border-gray-300 rounded-md p-1.5 text-sm" />
                           </div>
                           <div>
-                              <label className="text-xs font-bold text-gray-500 uppercase">Fim</label>
-                              <input type="date" value={simEndDate} onChange={e => setSimEndDate(e.target.value)} className="w-full border rounded p-2 text-sm" />
+                              <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Fim</label>
+                              <input type="date" value={simEndDate} onChange={e => setSimEndDate(e.target.value)} className="w-full border border-gray-300 rounded-md p-1.5 text-sm" />
                           </div>
                           {/* Sector Filter (Multi) */}
                           <div>
@@ -409,12 +409,12 @@ export const Simulator: React.FC<SimulatorProps> = ({
                       
                       <form onSubmit={addDraft} className="flex flex-col md:flex-row gap-3 items-end">
                           <div className="flex-1 w-full">
-                              <label className="text-xs font-bold text-gray-500 uppercase">Colaborador {filterSectors.length > 0 && <span className="font-normal text-indigo-500">(Filtrado)</span>}</label>
+                              <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Colaborador {filterSectors.length > 0 && <span className="font-normal text-indigo-500">(Filtrado)</span>}</label>
                               <select 
                                 required 
                                 value={draftForm.collaboratorId} 
                                 onChange={e => setDraftForm({...draftForm, collaboratorId: e.target.value})}
-                                className="w-full border rounded p-2 text-sm bg-white"
+                                className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white"
                               >
                                   <option value="">Selecione...</option>
                                   {collaborators
@@ -431,8 +431,8 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               </select>
                           </div>
                           <div className="w-full md:w-32">
-                              <label className="text-xs font-bold text-gray-500 uppercase">Tipo</label>
-                              <select value={draftForm.type} onChange={e => setDraftForm({...draftForm, type: e.target.value})} className="w-full border rounded p-2 text-sm bg-white">
+                              <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Tipo</label>
+                              <select value={draftForm.type} onChange={e => setDraftForm({...draftForm, type: e.target.value})} className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white">
                                   <option value="ferias">Férias</option>
                                   <option value="folga">Folga</option>
                                   <option value="atestado">Atestado</option>
@@ -440,12 +440,12 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               </select>
                           </div>
                           <div className="w-full md:w-36">
-                              <label className="text-xs font-bold text-gray-500 uppercase">De</label>
-                              <input required type="date" value={draftForm.startDate} onChange={e => setDraftForm({...draftForm, startDate: e.target.value})} className="w-full border rounded p-2 text-sm" />
+                              <label className="text-xs font-bold text-gray-500 uppercase block mb-1">De</label>
+                              <input required type="date" value={draftForm.startDate} onChange={e => setDraftForm({...draftForm, startDate: e.target.value})} className="w-full border border-gray-300 rounded-md p-1.5 text-sm" />
                           </div>
                           <div className="w-full md:w-36">
-                              <label className="text-xs font-bold text-gray-500 uppercase">Até</label>
-                              <input required type="date" value={draftForm.endDate} onChange={e => setDraftForm({...draftForm, endDate: e.target.value})} className="w-full border rounded p-2 text-sm" />
+                              <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Até</label>
+                              <input required type="date" value={draftForm.endDate} onChange={e => setDraftForm({...draftForm, endDate: e.target.value})} className="w-full border border-gray-300 rounded-md p-1.5 text-sm" />
                           </div>
                           <button type="submit" className="bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2 px-4 rounded text-sm w-full md:w-auto">
                               Adicionar

@@ -299,13 +299,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
        <div className="bg-white rounded-xl shadow p-4 border border-gray-100 z-20 relative">
           <div className="text-xs font-bold text-gray-500 mb-2 uppercase">Filtros do Dashboard</div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-             <input 
-               type="text" 
-               placeholder="Buscar por nome..." 
-               className="w-full border border-gray-300 rounded-md p-1.5 text-sm h-[34px]"
-               value={filterName}
-               onChange={e => setFilterName(e.target.value)}
-             />
+             <div>
+               <label className="text-xs font-semibold text-gray-500 block mb-1">Buscar por nome</label>
+               <input 
+                 type="text" 
+                 placeholder="Buscar por nome..." 
+                 className="w-full border border-gray-300 rounded-md p-1.5 text-sm"
+                 value={filterName}
+                 onChange={e => setFilterName(e.target.value)}
+               />
+             </div>
              
              <div>
                <MultiSelect 
