@@ -1,6 +1,8 @@
 
 
 
+
+
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -392,8 +394,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            )}
 
+           {/* Filiais e Setores */}
            {hasPermission('settings:lists') && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <ManageList 
                   title="Filiais" 
                   items={settings.branches} 
@@ -414,6 +417,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   removingId={removingId} 
                   placeholder="Novo Setor..." 
                 />
+            </div>
+           )}
+
+           {/* Perfis de Acesso (Separado) */}
+           {hasPermission('settings:profiles') && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <ManageList 
                   title="Perfis de Acesso (Sistema)" 
                   items={settings.accessProfiles || ['admin', 'colaborador', 'noc']} 
@@ -461,7 +470,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            )}
 
-           {!hasPermission('settings:integration') && !hasPermission('settings:lists') && !hasPermission('settings:event_types') && (
+           {!hasPermission('settings:integration') && !hasPermission('settings:lists') && !hasPermission('settings:profiles') && !hasPermission('settings:event_types') && (
               <p className="text-gray-500 italic text-center py-8">Você não tem permissão para visualizar itens desta seção.</p>
            )}
         </div>
