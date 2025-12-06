@@ -1,6 +1,6 @@
 
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Collaborator, OnCallRecord, SystemSettings } from '../types';
 import { generateUUID, formatDate, promptForUser } from '../utils/helpers';
 
@@ -32,6 +32,26 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
     endTime: '',
     observation: ''
   });
+
+  const sortedOnCalls = useMemo(() => {
+    return [...onCalls].sort((a, b) => {
+        const dateA = a.startDate || '';
+        const dateB = b.startDate || '';
+        
+        // Comparação de data de início (Decrescente: Mais futuro/recente primeiro)
+        const dateComparison = dateB.localeCompare(dateA);
+        if (dateComparison !== 0) return dateComparison;
+
+        // Desempate por hora de início (Decrescente)
+        const timeA = a.startTime || '';
+        const timeB = b.startTime || '';
+        const timeComparison = timeB.localeCompare(timeA);
+        if (timeComparison !== 0) return timeComparison;
+
+        // Desempate por data de criação
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+  }, [onCalls]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -231,7 +251,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
           <h2 className="text-xl font-bold text-gray-800">Plantões Registrados</h2>
         </div>
         <div className="space-y-3">
-           {onCalls.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhum plantão registrado.</p> : onCalls.map(o => (
+           {sortedOnCalls.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhum plantão registrado.</p> : sortedOnCalls.map(o => (
              <div key={o.id} className="flex flex-col md:flex-row justify-between items-center p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-all">
                <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
