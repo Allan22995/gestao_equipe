@@ -1,5 +1,6 @@
 
 
+
 export interface DaySchedule {
   enabled: boolean;
   start: string;
@@ -175,4 +176,12 @@ export const SYSTEM_PERMISSIONS = [
   { id: 'write:vacation', label: 'Gerenciar Férias', category: 'Edição' },
   { id: 'write:balance', label: 'Ajuste Manual de Saldo', category: 'Edição' },
   { id: 'write:coverage_rules', label: 'Configurar Regras de Cobertura', category: 'Configuração' },
+
+  // Novas Permissões Granulares de Configuração
+  { id: 'settings:integration', label: 'Config: Integrações (Planilha)', category: 'Configuração (Detalhes)' },
+  { id: 'settings:lists', label: 'Config: Filiais, Setores e Perfis', category: 'Configuração (Detalhes)' },
+  { id: 'settings:event_types', label: 'Config: Tipos de Evento', category: 'Configuração (Detalhes)' },
+  { id: 'settings:access_control', label: 'Config: Controle de Acesso (Roles)', category: 'Configuração (Detalhes)' },
+  { id: 'settings:schedule_templates', label: 'Config: Modelos de Jornada', category: 'Configuração (Detalhes)' },
+  { id: 'settings:system_msg', label: 'Config: Avisos do Sistema', category: 'Configuração (Detalhes)' },
 ];

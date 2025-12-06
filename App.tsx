@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS } from './types';
 import { dbService } from './services/storage'; 
@@ -292,7 +293,7 @@ function App() {
           currentUserAllowedSectors={currentUserAllowedSectors}
         />;
       case 'comunicados': return <CommunicationGenerator />;
-      case 'configuracoes': return <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} />;
+      case 'configuracoes': return <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} hasPermission={hasPermission} />;
       default: return null;
     }
   };
