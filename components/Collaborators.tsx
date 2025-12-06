@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -141,12 +142,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       }
     }
 
-    // Validation for Phone (Not required for NOC)
-    if (!formData.phone && !isNoc) {
-       showToast('Telefone é obrigatório para este perfil.', true);
-       return;
-    }
-
     // Validation for Schedule (Not required for NOC)
     const hasWorkDays = (Object.values(schedule) as DaySchedule[]).some(day => day.enabled && day.start && day.end);
     if (!hasWorkDays && !isNoc) {
@@ -274,9 +269,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               <label className="text-xs font-semibold text-gray-600 mb-1">Telefone (Celular)</label>
               <input 
                 type="text" 
-                required={formData.profile !== 'noc'}
-                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-gray-100" 
-                placeholder={formData.profile === 'noc' ? 'Opcional para NOC' : '(XX) 9XXXX-XXXX'} 
+                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
+                placeholder="(XX) 9XXXX-XXXX" 
                 value={formData.phone} 
                 onChange={e => setFormData({...formData, phone: e.target.value})} 
               />
