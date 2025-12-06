@@ -40,12 +40,22 @@ export const Events: React.FC<EventsProps> = ({
      return collaborators.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
   }, [collaborators, currentUserAllowedSectors]);
 
-  // Filter Events History
+  // Filter Events History and Sort by Date Descending
   const allowedEvents = useMemo(() => {
-     if (currentUserAllowedSectors.length === 0) return events;
-     return events.filter(e => {
-        const colab = collaborators.find(c => c.id === e.collaboratorId);
-        return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
+     let filtered = events;
+     
+     if (currentUserAllowedSectors.length > 0) {
+        filtered = events.filter(e => {
+            const colab = collaborators.find(c => c.id === e.collaboratorId);
+            return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
+        });
+     }
+
+     // Sort by startDate descending (newest first)
+     return [...filtered].sort((a, b) => {
+         const dateA = new Date(a.startDate).getTime();
+         const dateB = new Date(b.startDate).getTime();
+         return dateB - dateA;
      });
   }, [events, collaborators, currentUserAllowedSectors]);
 
