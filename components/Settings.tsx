@@ -1,8 +1,4 @@
 
-
-
-
-
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -127,8 +123,41 @@ const ManageList = ({
 };
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
-  // Tabs Internas
-  const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'jornada' | 'sistema'>('geral');
+  // Determine tab visibility based on permissions
+  const showGeral = hasPermission('settings:integration') || hasPermission('settings:lists') || hasPermission('settings:profiles') || hasPermission('settings:event_types');
+  const showAcesso = hasPermission('settings:access_control');
+  const showJornada = hasPermission('settings:schedule_templates');
+  const showSistema = hasPermission('settings:system_msg');
+
+  // Tabs Internas (Initialize based on permissions)
+  const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'jornada' | 'sistema'>(() => {
+    if (hasPermission('settings:integration') || hasPermission('settings:lists') || hasPermission('settings:profiles') || hasPermission('settings:event_types')) return 'geral';
+    if (hasPermission('settings:access_control')) return 'acesso';
+    if (hasPermission('settings:schedule_templates')) return 'jornada';
+    if (hasPermission('settings:system_msg')) return 'sistema';
+    return 'geral';
+  });
+
+  // Ensure active tab is valid (Redirect if permissions change or URL state is invalid)
+  useEffect(() => {
+    if (activeSubTab === 'geral' && !showGeral) {
+        if (showAcesso) setActiveSubTab('acesso');
+        else if (showJornada) setActiveSubTab('jornada');
+        else if (showSistema) setActiveSubTab('sistema');
+    } else if (activeSubTab === 'acesso' && !showAcesso) {
+        if (showGeral) setActiveSubTab('geral');
+        else if (showJornada) setActiveSubTab('jornada');
+        else if (showSistema) setActiveSubTab('sistema');
+    } else if (activeSubTab === 'jornada' && !showJornada) {
+         if (showGeral) setActiveSubTab('geral');
+         else if (showAcesso) setActiveSubTab('acesso');
+         else if (showSistema) setActiveSubTab('sistema');
+    } else if (activeSubTab === 'sistema' && !showSistema) {
+         if (showGeral) setActiveSubTab('geral');
+         else if (showAcesso) setActiveSubTab('acesso');
+         else if (showJornada) setActiveSubTab('jornada');
+    }
+  }, [activeSubTab, showGeral, showAcesso, showJornada, showSistema]);
 
   // States Geral
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
@@ -362,22 +391,36 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       
       {/* SUB-TABS NAVIGATION */}
       <div className="flex border-b border-gray-200 gap-1 overflow-x-auto">
-        <button onClick={() => setActiveSubTab('geral')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'geral' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Geral & Cadastros
-        </button>
-        <button onClick={() => setActiveSubTab('acesso')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'acesso' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Controle de Acesso
-        </button>
-        <button onClick={() => setActiveSubTab('jornada')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'jornada' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Jornada de Trabalho
-        </button>
-        <button onClick={() => setActiveSubTab('sistema')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'sistema' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Avisos do Sistema
-        </button>
+        {showGeral && (
+          <button onClick={() => setActiveSubTab('geral')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'geral' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Geral & Cadastros
+          </button>
+        )}
+        {showAcesso && (
+          <button onClick={() => setActiveSubTab('acesso')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'acesso' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Controle de Acesso
+          </button>
+        )}
+        {showJornada && (
+          <button onClick={() => setActiveSubTab('jornada')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'jornada' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Jornada de Trabalho
+          </button>
+        )}
+        {showSistema && (
+          <button onClick={() => setActiveSubTab('sistema')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'sistema' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Avisos do Sistema
+          </button>
+        )}
       </div>
 
+      {(!showGeral && !showAcesso && !showJornada && !showSistema) && (
+          <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg border border-gray-200 mt-6">
+              Você não possui permissões para acessar as configurações.
+          </div>
+      )}
+
       {/* --- TAB: GERAL & CADASTROS --- */}
-      {activeSubTab === 'geral' && (
+      {activeSubTab === 'geral' && showGeral && (
         <div className="animate-fadeIn space-y-8">
            
            {/* Integrações */}
@@ -477,7 +520,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       )}
 
       {/* --- TAB: CONTROLE DE ACESSO --- */}
-      {activeSubTab === 'acesso' && (
+      {activeSubTab === 'acesso' && showAcesso && (
         <div className="animate-fadeIn space-y-8">
            {hasPermission('settings:access_control') ? (
              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -609,7 +652,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       )}
 
       {/* --- TAB: JORNADA DE TRABALHO --- */}
-      {activeSubTab === 'jornada' && (
+      {activeSubTab === 'jornada' && showJornada && (
         <div className="animate-fadeIn">
             {hasPermission('settings:schedule_templates') ? (
               <>
@@ -667,7 +710,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       )}
       
       {/* --- TAB: AVISOS DO SISTEMA --- */}
-      {activeSubTab === 'sistema' && (
+      {activeSubTab === 'sistema' && showSistema && (
         <div className="animate-fadeIn">
           {hasPermission('settings:system_msg') ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
