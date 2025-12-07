@@ -210,7 +210,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         statusColor = 'bg-orange-100 text-orange-800 border border-orange-200';
         isActive = true;
       } else if (todayEvent) {
-        const evtLabel = settings.eventTypes.find(t => t.id === todayEvent.type)?.label || todayEvent.type;
+        const evtConfig = settings.eventTypes.find(t => t.id === todayEvent.type);
+        const evtLabel = evtConfig?.label || todayEvent.type;
         
         if (todayEvent.type === 'ferias') {
             status = `Férias (${evtLabel})`;
@@ -222,15 +223,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
         } else if (todayEvent.type === 'trabalhado') {
              status = `Dia Extra (${evtLabel})`;
              statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
-             // FIX: Contabilizar como ativo se estiver com evento "trabalhado", mesmo fora do horário
              isActive = true; 
         } else {
             status = evtLabel;
             statusColor = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
-            // Verifica comportamento customizado (ex: Evento custom que credita 2x é trabalho)
-            const evtConfig = settings.eventTypes.find(t => t.id === todayEvent.type);
-            if (evtConfig?.behavior === 'credit_2x') {
-                isActive = true;
+            
+            // Logic to determine if active based on configuration
+            if (evtConfig && (evtConfig.behavior === 'credit_2x' || evtConfig.behavior === 'credit_1x')) {
+               // If behavior implies working (credits hours/days), mark as active
+               isActive = true;
+               statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
+            } else if (evtLabel.toLowerCase().includes('trabalha') || evtLabel.toLowerCase().includes('extra')) {
+               // Fallback: Check keywords in label
+               isActive = true;
+               statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
             }
         }
       } else {
