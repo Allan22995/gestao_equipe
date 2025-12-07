@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -231,6 +230,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const editSector = (oldVal: string, newVal: string) => updateList('sectors', oldVal, newVal, 'sector');
   const removeSector = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, sectors: (settings.sectors || []).filter(s => s !== v) }, 'sector'); };
   
+  // --- LOGIC: SHIFT ROTATIONS (ESCALAS) ---
+  const addRotation = (v: string) => { if (settings.shiftRotations?.includes(v)) return; saveSettings({ ...settings, shiftRotations: [...(settings.shiftRotations || []), v] }, 'rotation'); };
+  const editRotation = (oldVal: string, newVal: string) => updateList('shiftRotations', oldVal, newVal, 'rotation');
+  const removeRotation = (v: string) => { if (window.confirm(`Excluir escala ${v}?`)) saveSettings({ ...settings, shiftRotations: (settings.shiftRotations || []).filter(s => s !== v) }, 'rotation'); };
+
   // --- LOGIC: PROFILES (OBJECTS) ---
   const addProfile = () => { 
       const name = newProfileName.trim().toLowerCase();
@@ -804,19 +808,35 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                    </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                   <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos Salvos</h2>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(settings.scheduleTemplates || []).map(t => (
-                         <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
-                            <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
-                            <div className="flex gap-2 shrink-0">
-                               <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
-                               <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
-                            </div>
-                         </div>
-                      ))}
-                   </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Lista de Modelos Salvos */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos de Jornada Salvos</h2>
+                    <div className="flex flex-col gap-2">
+                        {(settings.scheduleTemplates || []).map(t => (
+                          <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
+                              <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
+                                <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
+                              </div>
+                          </div>
+                        ))}
+                        {(settings.scheduleTemplates || []).length === 0 && <p className="text-gray-400 text-sm">Nenhum modelo cadastrado.</p>}
+                    </div>
+                  </div>
+                  
+                  {/* Lista de Escalas (A, B, C...) */}
+                  <ManageList 
+                    title="Escalas de Revezamento" 
+                    items={settings.shiftRotations || []} 
+                    onAdd={addRotation} 
+                    onEdit={editRotation}
+                    onRemove={removeRotation} 
+                    saving={savingState['rotation'] || 'idle'} 
+                    removingId={removingId} 
+                    placeholder="Nova Escala (ex: Escala A)..." 
+                  />
                 </div>
               </>
             ) : (

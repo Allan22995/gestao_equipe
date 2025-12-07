@@ -44,6 +44,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     allowedSectors: [] as string[],
     login: '',
     shiftType: '',
+    hasRotation: false,
+    rotationGroup: '',
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
@@ -98,6 +100,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       allowedSectors: colab.allowedSectors || [],
       login: colab.login,
       shiftType: colab.shiftType,
+      hasRotation: colab.hasRotation || false,
+      rotationGroup: colab.rotationGroup || '',
     });
     
     const safeSchedule = JSON.parse(JSON.stringify(colab.schedule));
@@ -113,7 +117,10 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setFormData({ colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '' });
+    setFormData({ 
+      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '', 
+      hasRotation: false, rotationGroup: '' 
+    });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
   };
@@ -160,15 +167,25 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
        showToast('Esta função exige que pelo menos um setor de visualização seja selecionado.', true);
        return;
     }
+    
+    // Validation for Rotation
+    if (formData.hasRotation && !formData.rotationGroup) {
+      showToast('Selecione um Grupo de Escala se o funcionário possui escala.', true);
+      return;
+    }
 
     // Clean up allowedSectors if role is not restricted (optional but good for data hygiene)
     const finalAllowedSectors = isRoleRestricted ? formData.allowedSectors : [];
+    
+    // Clean up rotation group if hasRotation is false
+    const finalRotationGroup = formData.hasRotation ? formData.rotationGroup : '';
 
     if (editingId) {
       onUpdate({
         id: editingId,
         ...formData,
         allowedSectors: finalAllowedSectors,
+        rotationGroup: finalRotationGroup,
         schedule,
         createdAt: new Date().toISOString(),
       });
@@ -179,6 +196,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         id: generateUUID(),
         ...formData,
         allowedSectors: finalAllowedSectors,
+        rotationGroup: finalRotationGroup,
         schedule,
         createdAt: new Date().toISOString(),
       };
@@ -234,6 +252,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const sectorOptions = settings.sectors || [];
   const scheduleTemplates = settings.scheduleTemplates || [];
+  const rotationOptions = settings.shiftRotations || [];
 
   const filteredCollaborators = collaborators.filter(c => {
     // Security Filter (Respect Restricted View)
@@ -423,8 +442,42 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
           </div>
 
           <div className="border-t border-gray-100 pt-6">
-            <h3 className="text-sm font-bold text-gray-800 mb-4">Jornada Semanal</h3>
+            <h3 className="text-sm font-bold text-gray-800 mb-4">Jornada e Escala</h3>
             
+            {/* ESCALA DE REVEZAMENTO - SECTION */}
+            <div className="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+               <div className="flex flex-col md:flex-row gap-6">
+                  <div className="flex items-center gap-3">
+                     <label className="flex items-center gap-2 cursor-pointer">
+                        <input 
+                           type="checkbox" 
+                           checked={formData.hasRotation}
+                           onChange={e => setFormData({...formData, hasRotation: e.target.checked})}
+                           className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
+                        <span className="font-bold text-gray-700">Possui Escala de Revezamento?</span>
+                     </label>
+                  </div>
+
+                  {formData.hasRotation && (
+                     <div className="flex-1 animate-fadeIn">
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Grupo de Escala</label>
+                        <select 
+                           className="w-full border border-indigo-300 rounded-lg p-2 bg-white text-sm"
+                           value={formData.rotationGroup}
+                           onChange={e => setFormData({...formData, rotationGroup: e.target.value})}
+                        >
+                           <option value="">Selecione a Escala...</option>
+                           {rotationOptions.map(r => (
+                              <option key={r} value={r}>{r}</option>
+                           ))}
+                        </select>
+                        <p className="text-[10px] text-gray-500 mt-1">Selecione a letra/grupo correspondente a escala do funcionário.</p>
+                     </div>
+                  )}
+               </div>
+            </div>
+
             {/* Template Selector */}
             {scheduleTemplates.length > 0 && (
               <div className="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-3">
@@ -593,6 +646,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               
               <div className="pl-2 mt-3 border-t border-gray-100 pt-2 flex flex-wrap gap-2">
                  {c.shiftType && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold">{c.shiftType}</span>}
+                 {c.hasRotation && c.rotationGroup && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-bold">Escala: {c.rotationGroup}</span>}
                  {c.role === 'admin' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-bold">Admin</span>}
               </div>
             </div>

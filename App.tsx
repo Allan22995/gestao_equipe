@@ -60,7 +60,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
     { id: 'folga', label: 'Folga', behavior: 'debit' },
     { id: 'trabalhado', label: 'Trabalhado', behavior: 'credit_2x' }
   ],
-  scheduleTemplates: [], 
+  scheduleTemplates: [],
+  shiftRotations: ['A', 'B', 'C', 'D'], // Escalas padrão
   spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781',
   systemMessage: { active: false, level: 'info', message: '' },
   coverageRules: []

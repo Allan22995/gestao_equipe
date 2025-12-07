@@ -58,6 +58,8 @@ export interface Collaborator {
   login: string;
   shiftType: string;
   schedule: Schedule;
+  hasRotation?: boolean; // Novo: Indica se o funcionário trabalha em escala de revezamento
+  rotationGroup?: string; // Novo: Indica qual a escala (A, B, C, D...)
   createdAt: string;
 }
 
@@ -89,6 +91,7 @@ export interface SystemSettings {
   accessProfiles: AccessProfileConfig[]; // Alterado de string[] para objeto configurável
   eventTypes: EventTypeConfig[];
   scheduleTemplates: ScheduleTemplate[]; // Novo: Lista de Modelos de Jornada
+  shiftRotations?: string[]; // Novo: Lista de nomes de escalas (A, B, C, D)
   spreadsheetUrl?: string;
   systemMessage?: SystemMessage; // Novo: Mensagem global do sistema
   coverageRules?: CoverageRule[]; // Novo: Regras de cobertura mínima

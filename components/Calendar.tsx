@@ -153,6 +153,12 @@ export const Calendar: React.FC<CalendarProps> = ({
   const getCollaboratorOtherContact = (id: string) => {
     return collaborators.find(c => c.id === id)?.otherContact || null;
   };
+  
+  const getCollaboratorScaleInfo = (id: string) => {
+    const c = collaborators.find(c => c.id === id);
+    if (c?.hasRotation && c?.rotationGroup) return `[Escala ${c.rotationGroup}]`;
+    return null;
+  };
 
   const getEventTypeLabel = (evt: EventRecord) => {
     if (evt.typeLabel) return evt.typeLabel;
@@ -351,6 +357,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
            {selectedDay?.dayEvents.map((e: any, idx) => {
               const name = getCollaboratorName(e.collaboratorId);
+              const scaleInfo = getCollaboratorScaleInfo(e.collaboratorId);
               const phone = getCollaboratorPhone(e.collaboratorId);
               const otherContact = getCollaboratorOtherContact(e.collaboratorId);
               let borderClass = '';
@@ -376,7 +383,7 @@ export const Calendar: React.FC<CalendarProps> = ({
               return (
                 <div key={idx} className={`p-3 border-l-4 rounded-r-md ${borderClass} ${bgClass}`}>
                   <div className="font-bold text-gray-800 flex justify-between">
-                    <span>{name}</span>
+                    <span>{name} {scaleInfo && <span className="text-xs font-normal text-purple-700">{scaleInfo}</span>}</span>
                     <span className="text-xs font-normal opacity-75 uppercase tracking-wider">{title}</span>
                   </div>
                   {canViewPhones && (

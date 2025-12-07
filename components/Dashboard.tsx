@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap } from '../utils/helpers';
@@ -347,10 +346,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  // Customize Label display
                  let displayLabel = evtLabel;
                  if (e.type === 'trabalhado') displayLabel = `Folga Trabalhada - Extra`;
+                 
+                 // Show Rotation if available
+                 let colabNameDisplay = colab.name;
+                 if (colab.hasRotation && colab.rotationGroup) colabNameDisplay += ` [${colab.rotationGroup}]`;
 
                  nextWeekEvents.push({
                      id: e.id,
-                     colabName: colab.name,
+                     colabName: colabNameDisplay,
                      type: 'Evento',
                      desc: displayLabel,
                      date: e.startDate,
@@ -375,9 +378,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  
                  if (filterSectors.length > 0 && (!colab.sector || !filterSectors.includes(colab.sector))) return;
 
+                 let colabNameDisplay = colab.name;
+                 if (colab.hasRotation && colab.rotationGroup) colabNameDisplay += ` [${colab.rotationGroup}]`;
+
                  nextWeekEvents.push({
                      id: v.id,
-                     colabName: colab.name,
+                     colabName: colabNameDisplay,
                      type: 'Férias',
                      desc: 'Início das Férias',
                      date: v.startDate,
@@ -561,7 +567,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
              {details.map(d => (
                <div key={d.id} className="flex justify-between items-center p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedColab(d)}>
                  <div>
-                    <div className="font-bold text-gray-800 text-sm">{d.name}</div>
+                    <div className="font-bold text-gray-800 text-sm">
+                        {d.name}
+                        {d.hasRotation && d.rotationGroup && (
+                           <span className="ml-1 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">Escala {d.rotationGroup}</span>
+                        )}
+                    </div>
                     <div className="text-xs text-indigo-500 font-medium">
                       {d.role} • {d.branch} • {d.sector}
                       {d.shiftType && <span className="ml-1 text-gray-400">• {d.shiftType}</span>}
@@ -623,6 +634,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <span className="block text-gray-500 text-xs uppercase font-bold">Turno</span>
                     <span className="font-medium">{selectedColab.shiftType || '-'}</span>
                   </div>
+                  {selectedColab.hasRotation && selectedColab.rotationGroup && (
+                    <div>
+                      <span className="block text-gray-500 text-xs uppercase font-bold">Escala</span>
+                      <span className="font-medium bg-purple-100 text-purple-800 px-1 rounded text-xs">Grupo {selectedColab.rotationGroup}</span>
+                    </div>
+                  )}
                   <div>
                     <span className="block text-gray-500 text-xs uppercase font-bold">Email</span>
                     <span className="font-medium text-xs">{selectedColab.email}</span>
