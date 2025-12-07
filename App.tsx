@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig } from './types';
+import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from './types';
 import { dbService } from './services/storage'; 
 import { auth } from './services/firebase'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -61,7 +61,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
     { id: 'trabalhado', label: 'Trabalhado', behavior: 'credit_2x' }
   ],
   scheduleTemplates: [],
-  shiftRotations: ['A', 'B', 'C', 'D'], // Escalas padrão
+  shiftRotations: [
+    { id: 'A', label: 'Escala A', workSundays: [1, 2, 3] }, // Padrão: 3x1
+    { id: 'B', label: 'Escala B', workSundays: [2, 3, 4] },
+    { id: 'C', label: 'Escala C', workSundays: [1, 3, 4] },
+    { id: 'D', label: 'Escala D', workSundays: [1, 2, 4] }
+  ],
   spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781',
   systemMessage: { active: false, level: 'info', message: '' },
   coverageRules: []
@@ -202,6 +207,17 @@ function App() {
                id: p,
                name: p,
                active: true // Default ativo para legados
+             }));
+          }
+
+          // Migração de ShiftRotations Antigos (String[] -> RotationRule[])
+          if (loadedSettings.shiftRotations && loadedSettings.shiftRotations.length > 0 && typeof loadedSettings.shiftRotations[0] === 'string') {
+             console.log("⚠️ Migrando escalas legadas (string) para objetos...");
+             const legacyRotations = loadedSettings.shiftRotations as unknown as string[];
+             loadedSettings.shiftRotations = legacyRotations.map(r => ({
+                id: r,
+                label: `Escala ${r}`,
+                workSundays: [1, 2, 3] // Default placeholder: trabalha os 3 primeiros
              }));
           }
 

@@ -455,7 +455,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                            onChange={e => setFormData({...formData, hasRotation: e.target.checked})}
                            className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
                         />
-                        <span className="font-bold text-gray-700">Possui Escala de Revezamento?</span>
+                        <span className="font-bold text-gray-700">Possui Escala de Revezamento (Domingos)?</span>
                      </label>
                   </div>
 
@@ -469,10 +469,12 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                         >
                            <option value="">Selecione a Escala...</option>
                            {rotationOptions.map(r => (
-                              <option key={r} value={r}>{r}</option>
+                              <option key={r.id} value={r.id}>
+                                {r.label} (Domingos: {r.workSundays.join(', ')}º)
+                              </option>
                            ))}
                         </select>
-                        <p className="text-[10px] text-gray-500 mt-1">Selecione a letra/grupo correspondente a escala do funcionário.</p>
+                        <p className="text-[10px] text-gray-500 mt-1">Selecione a escala para automatizar as folgas dominicais.</p>
                      </div>
                   )}
                </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
-import { weekDayMap } from '../utils/helpers';
+import { weekDayMap, getWeekOfMonth } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 import { MultiSelect } from './ui/MultiSelect';
 
@@ -115,6 +115,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const prevDayKey = getPrevDayKey(currentDayIndex);
     const nextDayKey = getNextDayKey(currentDayIndex);
 
+    const isSunday = currentDayIndex === 0;
+    const sundayOfMonthIndex = getWeekOfMonth(now); // 1, 2, 3, 4, 5
+
     let activeCount = 0;
     let inactiveCount = 0;
     const tempDetails: any[] = [];
@@ -157,16 +160,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
         if (context === 'tomorrow') {
             // Se hoje começa um turno que vira pro dia seguinte?
-            // Na verdade, 'tomorrow' context é para verificar se um turno de amanhã afeta 'hoje'.
-            // Geralmente não afeta 'trabalhando agora', a menos que seja muito cedo.
-            // Mantendo lógica original simples:
             if (startsPreviousDay) return currentMinutes >= startMins;
             return false;
         }
         return false;
     };
 
-    const isShiftActive = (scheduleDay: any, context: 'today' | 'yesterday' | 'tomorrow') => {
+    const isShiftActive = (scheduleDay: any, context: 'today' | 'yesterday' | 'tomorrow', colab: Collaborator) => {
+         // --- LÓGICA DE ESCALA DE REVEZAMENTO (DOMINGO) ---
+         // Se for domingo, tem escala ativa, e o funcionário tem um grupo definido
+         if (isSunday && context === 'today' && colab.hasRotation && colab.rotationGroup) {
+             const rotationRule = settings.shiftRotations?.find(r => r.id === colab.rotationGroup);
+             if (rotationRule) {
+                 // Se o domingo atual NÃO estiver na lista de trabalho, força enabled = false
+                 if (!rotationRule.workSundays.includes(sundayOfMonthIndex)) {
+                     return false; 
+                 }
+                 // Se estiver na lista, força a verificação de horário (mesmo que schedule.enabled estivesse false no cadastro básico)
+                 // Assumimos que o horário é o definido no schedule.domingo.start/end, mesmo que 'enabled' esteja false lá.
+                 // Porém, se não tiver horário definido (start/end), não tem como validar.
+             }
+         }
+
          if (!scheduleDay.enabled) return false;
          return isTimeInRange(scheduleDay.start, scheduleDay.end, !!scheduleDay.startsPreviousDay, context);
     };
@@ -219,13 +234,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
       let isWorkingShift = false;
 
       // Check standard schedule
-      if (isShiftActive(c.schedule[prevDayKey], 'yesterday')) isWorkingShift = true;
-      if (!isWorkingShift && isShiftActive(c.schedule[currentDayKey], 'today')) isWorkingShift = true;
-      if (!isWorkingShift && isShiftActive(c.schedule[nextDayKey], 'tomorrow')) isWorkingShift = true;
+      if (isShiftActive(c.schedule[prevDayKey], 'yesterday', c)) isWorkingShift = true;
+      if (!isWorkingShift && isShiftActive(c.schedule[currentDayKey], 'today', c)) isWorkingShift = true;
+      if (!isWorkingShift && isShiftActive(c.schedule[nextDayKey], 'tomorrow', c)) isWorkingShift = true;
 
       let status = 'Fora do Horário';
       let statusColor = 'bg-blue-100 text-blue-800';
       let isActive = false;
+
+      // Check Rotation Off Day (Domingo de Folga pela Escala)
+      let isRotationOff = false;
+      if (isSunday && c.hasRotation && c.rotationGroup) {
+          const rotationRule = settings.shiftRotations?.find(r => r.id === c.rotationGroup);
+          if (rotationRule && !rotationRule.workSundays.includes(sundayOfMonthIndex)) {
+              isRotationOff = true;
+          }
+      }
 
       if (approvedVacation) {
         status = 'Férias';
@@ -258,44 +282,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
         } else if (isWorkEvent) {
              status = `Dia Extra (${evtLabel})`;
              statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
-             
-             // --- LÓGICA DE VERIFICAÇÃO DE HORÁRIO PARA DIA EXTRA ---
-             // Se o funcionário está em dia extra, ele deve respeitar o horário parametrizado.
-             // 1. Tenta pegar o horário do dia atual (mesmo que enabled=false)
-             let schedToCheck = c.schedule[currentDayKey];
-             
-             // 2. Se o dia atual não tiver horário (ex: Domingo vazio), busca o primeiro dia útil habilitado (ex: Segunda)
-             // Isso assume que o "Extra" segue o padrão de turno normal do colaborador.
-             if (!schedToCheck.start || !schedToCheck.end) {
-                 const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
-                 const standardDay = daysOrder.find(d => c.schedule[d].enabled && c.schedule[d].start && c.schedule[d].end);
-                 if (standardDay) {
-                     schedToCheck = c.schedule[standardDay];
-                 }
-             }
-
-             // 3. Verifica se está no horário
-             let isTimeActive = false;
-             // Check if consistent with 'yesterday' logic (e.g. night shift finishing today)
-             // Para simplificar no contexto de extra, focamos principalmente no 'today' e 'yesterday' transition
-             if (isTimeInRange(schedToCheck.start, schedToCheck.end, !!schedToCheck.startsPreviousDay, 'today')) isTimeActive = true;
-             // Caso seja um turno noturno que começou ontem (se aplicável ao extra)
-             // if (!isTimeActive && isTimeInRange(schedToCheck.start, schedToCheck.end, !!schedToCheck.startsPreviousDay, 'yesterday')) isTimeActive = true;
-
-             if (isTimeActive) {
-                 isActive = true;
-             } else {
-                 isActive = false; // Fora do horário do extra
-             }
+             isActive = true; // Assume active if explicitly worked
         } else {
             status = evtLabel;
             statusColor = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
         }
       } else {
-        if (isWorkingShift) {
-          status = 'Trabalhando';
-          statusColor = 'bg-green-100 text-green-800 border border-green-200';
-          isActive = true;
+        if (isRotationOff) {
+            status = 'Folga de Escala';
+            statusColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+            isWorkingShift = false;
+        } else if (isWorkingShift) {
+            // Se for domingo e tiver escala, mostra aviso visual
+            if (isSunday && c.hasRotation) {
+               status = 'Plantão Escala';
+            } else {
+               status = 'Trabalhando';
+            }
+            statusColor = 'bg-green-100 text-green-800 border border-green-200';
+            isActive = true;
         }
       }
 
@@ -395,7 +400,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     setUpcoming(nextWeekEvents.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
 
-  }, [collaborators, events, onCalls, vacationRequests, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors, settings.eventTypes, settings.roles, availableBranches]);
+  }, [collaborators, events, onCalls, vacationRequests, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors, settings.eventTypes, settings.roles, availableBranches, settings.shiftRotations]);
 
   const summaryData = useMemo(() => {
     if (!showSummary) return null;

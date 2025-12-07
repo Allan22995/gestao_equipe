@@ -1,6 +1,3 @@
-
-
-
 export interface DaySchedule {
   enabled: boolean;
   start: string;
@@ -23,6 +20,13 @@ export interface ScheduleTemplate {
   id: string;
   name: string;
   schedule: Schedule;
+}
+
+// Novo: Configuração Detalhada de Escala de Revezamento
+export interface RotationRule {
+  id: string; // ex: 'A', 'B'
+  label: string; // ex: 'Escala A'
+  workSundays: number[]; // [1, 2, 3] significa que trabalha no 1º, 2º e 3º domingo.
 }
 
 // Configuração de Função (Role)
@@ -88,13 +92,13 @@ export interface SystemSettings {
   branches: string[];
   roles: RoleConfig[]; 
   sectors: string[]; 
-  accessProfiles: AccessProfileConfig[]; // Alterado de string[] para objeto configurável
+  accessProfiles: AccessProfileConfig[]; 
   eventTypes: EventTypeConfig[];
-  scheduleTemplates: ScheduleTemplate[]; // Novo: Lista de Modelos de Jornada
-  shiftRotations?: string[]; // Novo: Lista de nomes de escalas (A, B, C, D)
+  scheduleTemplates: ScheduleTemplate[]; 
+  shiftRotations: RotationRule[]; // Alterado de string[] para RotationRule[]
   spreadsheetUrl?: string;
-  systemMessage?: SystemMessage; // Novo: Mensagem global do sistema
-  coverageRules?: CoverageRule[]; // Novo: Regras de cobertura mínima
+  systemMessage?: SystemMessage; 
+  coverageRules?: CoverageRule[]; 
 }
 
 // Mantemos compatibilidade com string, mas o valor virá do config

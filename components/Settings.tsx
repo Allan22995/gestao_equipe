@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig } from '../types';
+import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
 
 interface SettingsProps {
@@ -185,6 +185,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [sysMsgLevel, setSysMsgLevel] = useState<'info' | 'warning' | 'error'>(settings.systemMessage?.level || 'info');
   const [sysMsgContent, setSysMsgContent] = useState(settings.systemMessage?.message || '');
 
+  // Rotation Edit States
+  const [newRotationId, setNewRotationId] = useState('');
+  const [rotationWorkSundays, setRotationWorkSundays] = useState<number[]>([]);
+
   // Loading States
   const [savingState, setSavingState] = useState<Record<string, 'idle' | 'saving' | 'success'>>({});
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -231,9 +235,42 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const removeSector = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, sectors: (settings.sectors || []).filter(s => s !== v) }, 'sector'); };
   
   // --- LOGIC: SHIFT ROTATIONS (ESCALAS) ---
-  const addRotation = (v: string) => { if (settings.shiftRotations?.includes(v)) return; saveSettings({ ...settings, shiftRotations: [...(settings.shiftRotations || []), v] }, 'rotation'); };
-  const editRotation = (oldVal: string, newVal: string) => updateList('shiftRotations', oldVal, newVal, 'rotation');
-  const removeRotation = (v: string) => { if (window.confirm(`Excluir escala ${v}?`)) saveSettings({ ...settings, shiftRotations: (settings.shiftRotations || []).filter(s => s !== v) }, 'rotation'); };
+  // Agora suporta objetos RotationRule
+  const addRotation = () => {
+    if (!newRotationId.trim()) { showToast('Defina um nome para a escala (ex: A, B).', true); return; }
+    if (rotationWorkSundays.length === 0) { showToast('Selecione ao menos um domingo de trabalho.', true); return; }
+    
+    // Check duplicate ID
+    if (settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) {
+        showToast('Já existe uma escala com este ID.', true);
+        return;
+    }
+
+    const newRule: RotationRule = {
+       id: newRotationId.trim().toUpperCase(),
+       label: `Escala ${newRotationId.trim().toUpperCase()}`,
+       workSundays: rotationWorkSundays.sort((a, b) => a - b)
+    };
+
+    saveSettings({ ...settings, shiftRotations: [...settings.shiftRotations, newRule] }, 'rotation', () => {
+        setNewRotationId('');
+        setRotationWorkSundays([]);
+    });
+  };
+
+  const removeRotation = (id: string) => {
+      if (window.confirm(`Excluir Escala ${id}?`)) {
+          saveSettings({ ...settings, shiftRotations: settings.shiftRotations.filter(r => r.id !== id) }, 'rotation');
+      }
+  };
+
+  const toggleRotationSunday = (sundayIndex: number) => {
+     setRotationWorkSundays(prev => {
+        if (prev.includes(sundayIndex)) return prev.filter(i => i !== sundayIndex);
+        return [...prev, sundayIndex];
+     });
+  };
+
 
   // --- LOGIC: PROFILES (OBJECTS) ---
   const addProfile = () => { 
@@ -826,17 +863,61 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                     </div>
                   </div>
                   
-                  {/* Lista de Escalas (A, B, C...) */}
-                  <ManageList 
-                    title="Escalas de Revezamento" 
-                    items={settings.shiftRotations || []} 
-                    onAdd={addRotation} 
-                    onEdit={editRotation}
-                    onRemove={removeRotation} 
-                    saving={savingState['rotation'] || 'idle'} 
-                    removingId={removingId} 
-                    placeholder="Nova Escala (ex: Escala A)..." 
-                  />
+                  {/* Lista de Escalas (A, B, C...) com Configuração de Domingos */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-bold text-gray-800 mb-4">Escalas de Revezamento</h2>
+                    <p className="text-sm text-gray-500 mb-4">Configure quais domingos do mês cada escala deve trabalhar (ex: regra de folga obrigatória após 3 domingos).</p>
+                    
+                    {/* Add Rotation Form */}
+                    <div className="bg-indigo-50 p-4 rounded-lg mb-4 border border-indigo-100">
+                        <div className="flex gap-2 mb-3">
+                           <input 
+                             type="text" 
+                             className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm outline-none" 
+                             placeholder="Nova Escala (ex: A, B)..." 
+                             value={newRotationId} 
+                             onChange={e => setNewRotationId(e.target.value)} 
+                           />
+                           <button onClick={addRotation} disabled={savingState['rotation'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Adicionar</button>
+                        </div>
+                        
+                        <div>
+                           <label className="text-xs font-bold text-gray-600 uppercase mb-2 block">Domingos Trabalhados no Mês:</label>
+                           <div className="flex flex-wrap gap-2">
+                              {[1, 2, 3, 4, 5].map(idx => (
+                                <button
+                                  key={idx}
+                                  onClick={() => toggleRotationSunday(idx)}
+                                  className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors ${rotationWorkSundays.includes(idx) ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-500 border-gray-300 hover:border-indigo-300'}`}
+                                >
+                                  {idx}º
+                                </button>
+                              ))}
+                           </div>
+                        </div>
+                    </div>
+
+                    {/* List of Rotations */}
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {(settings.shiftRotations || []).map(r => (
+                          <div key={r.id} className="p-3 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
+                              <div>
+                                 <div className="font-bold text-gray-800">Escala {r.id}</div>
+                                 <div className="text-xs text-gray-500 mt-1 flex gap-1">
+                                    Trabalha: 
+                                    {r.workSundays.length > 0 
+                                      ? r.workSundays.map(s => <span key={s} className="bg-white border border-gray-200 px-1 rounded">{s}º</span>) 
+                                      : <span className="italic">Nenhum</span>
+                                    }
+                                 </div>
+                              </div>
+                              <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
                 </div>
               </>
             ) : (

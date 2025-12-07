@@ -1,4 +1,3 @@
-
 export const generateUUID = () => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
@@ -45,6 +44,23 @@ export const weekDayMap: Record<number, string> = {
   4: 'quinta',
   5: 'sexta',
   6: 'sabado',
+};
+
+// Retorna o índice do dia da semana no mês (ex: 1º domingo, 2º domingo)
+// 1 a 5
+export const getWeekOfMonth = (date: Date): number => {
+  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const dayOfWeek = date.getDay(); // 0 (Domingo) a 6 (Sábado)
+  
+  let count = 0;
+  // Itera do dia 1 até o dia atual, contando quantas vezes aquele dia da semana ocorreu
+  for (let d = 1; d <= date.getDate(); d++) {
+    const tempDate = new Date(date.getFullYear(), date.getMonth(), d);
+    if (tempDate.getDay() === dayOfWeek) {
+      count++;
+    }
+  }
+  return count;
 };
 
 export const promptForUser = (action: string): string | null => {
