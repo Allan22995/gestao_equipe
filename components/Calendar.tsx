@@ -13,11 +13,12 @@ interface CalendarProps {
   currentUserProfile: UserProfile;
   currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
   canViewPhones: boolean; // Permissão ACL
+  availableBranches: string[]; // Lista de filiais permitidas
 }
 
 export const Calendar: React.FC<CalendarProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
-  currentUserAllowedSectors, canViewPhones
+  currentUserAllowedSectors, canViewPhones, availableBranches
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<{ date: string, dayEvents: any[], holiday?: string } | null>(null);
@@ -28,12 +29,19 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [filterRoles, setFilterRoles] = useState<string[]>([]);
   const [filterSectors, setFilterSectors] = useState<string[]>([]);
 
-  // If user is restricted to only 1 sector, force filter. If multiple, allow selection but limit options.
+  // If user is restricted to only 1 sector, force filter.
   useEffect(() => {
     if (currentUserAllowedSectors.length === 1) {
       setFilterSectors([currentUserAllowedSectors[0]]);
     }
   }, [currentUserAllowedSectors]);
+
+  // If user is restricted to only 1 branch, force filter.
+  useEffect(() => {
+    if (availableBranches.length === 1) {
+      setFilterBranches([availableBranches[0]]);
+    }
+  }, [availableBranches]);
 
   // Available sectors for filter dropdown
   const availableSectors = useMemo(() => {
@@ -61,18 +69,30 @@ export const Calendar: React.FC<CalendarProps> = ({
     const colab = collaborators.find(c => c.id === colabId);
     if (!colab) return false;
 
-    // First check restriction permission
+    // First check restriction permission (Sector)
     if (currentUserAllowedSectors.length > 0) {
-      // If user has allowed sectors, the colab MUST belong to one of them
       if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) {
         return false;
       }
     }
 
+    // Check restriction permission (Branch) - though filterBranches should handle it,
+    // we double check if availableBranches is restricted.
+    if (availableBranches.length > 0) {
+       // Note: filterBranches will be pre-filled, so the below logic for filterBranches usually covers it.
+       // But if filterBranches is empty (meaning "All"), we must ensure "All" is within availableBranches.
+       // However, MultiSelect UI logic: Empty = All Options. 
+       // If user is restricted to 1 branch, filterBranches has 1 item.
+       // If user sees all, filterBranches is empty.
+    }
+
     const matchesName = filterName ? colab.name.toLowerCase().includes(filterName.toLowerCase()) : true;
     
-    // Multi-Select Logic: If filter array is empty, it means "All", otherwise check inclusion
-    const matchesBranch = filterBranches.length > 0 ? filterBranches.includes(colab.branch) : true;
+    // Multi-Select Logic: If filter array is empty, it means "All" (of the available ones), otherwise check inclusion
+    const matchesBranch = filterBranches.length > 0 
+      ? filterBranches.includes(colab.branch) 
+      : (availableBranches.length > 0 ? availableBranches.includes(colab.branch) : true);
+
     const matchesRole = filterRoles.length > 0 ? filterRoles.includes(colab.role) : true;
     const matchesSector = filterSectors.length > 0 ? (colab.sector && filterSectors.includes(colab.sector)) : true;
 
@@ -243,10 +263,11 @@ export const Calendar: React.FC<CalendarProps> = ({
            <div>
               <MultiSelect 
                 label="Filiais"
-                options={settings?.branches || []}
+                options={availableBranches}
                 selected={filterBranches}
                 onChange={setFilterBranches}
-                placeholder="Todas"
+                placeholder={availableBranches.length > 1 ? 'Todas' : 'Sua Filial'}
+                disabled={availableBranches.length === 1}
               />
            </div>
 

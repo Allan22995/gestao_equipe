@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap } from '../utils/helpers';
@@ -14,11 +13,12 @@ interface DashboardProps {
   currentUserProfile: UserProfile;
   currentUserAllowedSectors: string[];
   canViewPhones: boolean; // Permissão ACL
+  availableBranches: string[]; // Lista de filiais permitidas
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
-  currentUserAllowedSectors, canViewPhones
+  currentUserAllowedSectors, canViewPhones, availableBranches
 }) => {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [details, setDetails] = useState<any[]>([]);
@@ -41,6 +41,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   }, [currentUserAllowedSectors]);
 
+  // Force Branch Filter if Restricted (single branch)
+  useEffect(() => {
+    if (availableBranches.length === 1) {
+      setFilterBranches([availableBranches[0]]);
+    }
+  }, [availableBranches]);
+
   // Available sectors for filter dropdown
   const availableSectors = useMemo(() => {
     if (!settings?.sectors) return [];
@@ -55,20 +62,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (currentUserAllowedSectors.length > 0) {
       filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
     }
+    
+    // Filtra colaboradores pela filial permitida ou selecionada
     if (filterBranches.length > 0) {
-      filtered = filtered.filter(c => filterBranches.includes(c.branch));
+        filtered = filtered.filter(c => filterBranches.includes(c.branch));
+    } else if (availableBranches.length > 0) {
+        filtered = filtered.filter(c => availableBranches.includes(c.branch));
     }
+
     if (filterSectors.length > 0) {
       filtered = filtered.filter(c => c.sector && filterSectors.includes(c.sector));
     }
 
-    if (filterBranches.length > 0 || filterSectors.length > 0) {
+    if (filterBranches.length > 0 || filterSectors.length > 0 || availableBranches.length > 0) {
        const rolesInUse = new Set(filtered.map(c => c.role));
        return Array.from(rolesInUse).sort();
     }
 
     return settings.roles.map(r => r.name).sort();
-  }, [collaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings.roles]);
+  }, [collaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings.roles, availableBranches]);
 
   useEffect(() => {
      if (filterRoles.length > 0) {
@@ -111,6 +123,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (currentUserAllowedSectors.length > 0) {
         if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
       }
+
+      // Branch Restriction (Available Branches)
+      if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
 
       const matchesName = filterName ? c.name.toLowerCase().includes(filterName.toLowerCase()) : true;
       const matchesBranch = filterBranches.length > 0 ? filterBranches.includes(c.branch) : true;
@@ -282,6 +297,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  if (currentUserAllowedSectors.length > 0) {
                      if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) return;
                  }
+                 if (availableBranches.length > 0 && !availableBranches.includes(colab.branch)) return;
+
                  if (filterName && !colab.name.toLowerCase().includes(filterName.toLowerCase())) return;
                  if (filterBranches.length > 0 && !filterBranches.includes(colab.branch)) return;
                  if (filterRoles.length > 0 && !filterRoles.includes(colab.role)) return;
@@ -316,6 +333,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
              const colab = collaborators.find(c => c.id === v.collaboratorId);
              if (colab) {
                  if (currentUserAllowedSectors.length > 0 && (!colab.sector || !currentUserAllowedSectors.includes(colab.sector))) return;
+                 if (availableBranches.length > 0 && !availableBranches.includes(colab.branch)) return;
+                 
                  if (filterSectors.length > 0 && (!colab.sector || !filterSectors.includes(colab.sector))) return;
 
                  nextWeekEvents.push({
@@ -332,7 +351,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     setUpcoming(nextWeekEvents.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
 
-  }, [collaborators, events, onCalls, vacationRequests, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors, settings.eventTypes, settings.roles]);
+  }, [collaborators, events, onCalls, vacationRequests, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors, settings.eventTypes, settings.roles, availableBranches]);
 
   const summaryData = useMemo(() => {
     if (!showSummary) return null;
@@ -436,10 +455,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div>
               <MultiSelect 
                 label="Filiais"
-                options={settings.branches}
+                options={availableBranches}
                 selected={filterBranches}
                 onChange={setFilterBranches}
-                placeholder="Todas as Filiais"
+                placeholder={availableBranches.length > 1 ? 'Todas as Filiais' : 'Sua Filial'}
+                disabled={availableBranches.length === 1}
               />
           </div>
           <div>

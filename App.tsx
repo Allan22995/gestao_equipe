@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS } from './types';
 import { dbService } from './services/storage'; 
@@ -48,6 +45,7 @@ function App() {
   // Current User Context
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userColabId, setUserColabId] = useState<string | null>(null);
+  const [userBranch, setUserBranch] = useState<string | null>(null); // Nova prop para armazenar a filial do usuário
   const [currentUserAllowedSectors, setCurrentUserAllowedSectors] = useState<string[]>([]);
   const [currentUserPermissions, setCurrentUserPermissions] = useState<string[]>([]);
 
@@ -84,6 +82,7 @@ function App() {
       if (foundColab) {
         setUserProfile(foundColab.profile || 'colaborador');
         setUserColabId(foundColab.id);
+        setUserBranch(foundColab.branch || null); // Armazena a filial
         
         // 1. Encontrar a Role Config
         let roleConfig = settings.roles.find(r => r.name === foundColab.role);
@@ -121,6 +120,7 @@ function App() {
         setUserProfile(null); 
         setCurrentUserAllowedSectors([]);
         setCurrentUserPermissions([]);
+        setUserBranch(null);
       }
     }
   }, [user, collaborators, settings.roles]);
@@ -212,6 +212,13 @@ function App() {
 
   const currentUserName = userColabId ? (collaborators.find(c => c.id === userColabId)?.name || user?.email) : user?.email || 'Sistema';
 
+  // --- LOGIC: BRANCH RESTRICTION ---
+  // Se for admin, vê todas. Se não, vê apenas a sua.
+  // Se não tiver branch definida, por segurança vê todas (ou poderia ser vazio, mas melhor garantir usabilidade)
+  const availableBranches = (userProfile === 'admin' || !userBranch)
+    ? settings.branches
+    : [userBranch];
+
   // --- TAB CONTROL LOGIC ---
   const allTabs: {id: TabType, label: string, icon: string}[] = [
     { id: 'calendario', label: 'Calendário', icon: '📆' },
@@ -246,17 +253,20 @@ function App() {
             collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} 
             settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={currentUserAllowedSectors}
             canViewPhones={hasPermission('view:phones')}
+            availableBranches={availableBranches}
           />;
       case 'dashboard':
         return <Dashboard 
             collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} 
             settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={currentUserAllowedSectors}
             canViewPhones={hasPermission('view:phones')}
+            availableBranches={availableBranches}
           />;
       case 'simulador':
         return <Simulator 
             collaborators={collaborators} events={events} settings={settings} onSaveSettings={handleSaveSettings}
             currentUserAllowedSectors={currentUserAllowedSectors} canEditRules={hasPermission('write:coverage_rules')}
+            availableBranches={availableBranches}
           />;
       case 'colaboradores':
         return <Collaborators 

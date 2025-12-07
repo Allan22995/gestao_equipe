@@ -10,6 +10,7 @@ interface SimulatorProps {
   onSaveSettings: (s: SystemSettings) => void;
   currentUserAllowedSectors: string[];
   canEditRules: boolean;
+  availableBranches: string[]; // Lista de filiais permitidas
 }
 
 // Temporary Event Interface for Proposal
@@ -27,7 +28,8 @@ export const Simulator: React.FC<SimulatorProps> = ({
   settings,
   onSaveSettings,
   currentUserAllowedSectors,
-  canEditRules
+  canEditRules,
+  availableBranches
 }) => {
   const [activeTab, setActiveTab] = useState<'simulation' | 'rules'>('simulation');
   
@@ -43,6 +45,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   });
   
   const [filterSectors, setFilterSectors] = useState<string[]>([]); // Sector Filter (Multi)
+  const [filterBranches, setFilterBranches] = useState<string[]>([]); // Branch Filter (Multi)
   const [filterRoles, setFilterRoles] = useState<string[]>([]); // Role Filter (Multi)
   
   const [proposedEvents, setProposedEvents] = useState<ProposedEvent[]>([]);
@@ -69,6 +72,13 @@ export const Simulator: React.FC<SimulatorProps> = ({
     }
   }, [currentUserAllowedSectors]);
 
+  // Force Branch Filter if Restricted (single branch)
+  useEffect(() => {
+    if (availableBranches.length === 1) {
+      setFilterBranches([availableBranches[0]]);
+    }
+  }, [availableBranches]);
+
   // Available sectors for filter dropdown
   const availableSectors = useMemo(() => {
     if (!settings?.sectors) return [];
@@ -83,6 +93,11 @@ export const Simulator: React.FC<SimulatorProps> = ({
     if (currentUserAllowedSectors.length > 0) {
         filteredColabs = filteredColabs.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
     }
+    
+    // Filter by Available Branches
+    if (availableBranches.length > 0) {
+        filteredColabs = filteredColabs.filter(c => availableBranches.includes(c.branch));
+    }
 
     // 2. If sectors are selected in the simulator, filter further
     if (filterSectors.length > 0) {
@@ -95,7 +110,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
     // 3. If no sector selected, show all configured roles
     return settings.roles.map(r => r.name).sort();
-  }, [filterSectors, collaborators, settings.roles, currentUserAllowedSectors]);
+  }, [filterSectors, collaborators, settings.roles, currentUserAllowedSectors, availableBranches]);
 
   // --- Reset filterRoles if they are not valid for the new sector ---
   useEffect(() => {
@@ -156,6 +171,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
         if (currentUserAllowedSectors.length > 0) {
             if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
         }
+
+        // Branch Restriction
+        if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
         
         // Visual Filters
         // If filterRoles has items, the collaborator's role MUST be in it.
@@ -269,7 +287,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     });
 
     return { days, results, grandTotals };
-  }, [simStartDate, simEndDate, filterRoles, filterSectors, collaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions]);
+  }, [simStartDate, simEndDate, filterRoles, filterSectors, collaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions, availableBranches]);
 
 
   // --- HANDLERS ---
@@ -421,6 +439,10 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                     .filter(c => {
                                       // 1. Restriction Check
                                       if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return false;
+                                      
+                                      // Branch Check
+                                      if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
+
                                       // 2. Simulator Sector Filter Check (Multi)
                                       if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
                                       return true;
