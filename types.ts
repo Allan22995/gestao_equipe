@@ -1,3 +1,6 @@
+
+
+
 export interface DaySchedule {
   enabled: boolean;
   start: string;
@@ -55,8 +58,6 @@ export interface Collaborator {
   login: string;
   shiftType: string;
   schedule: Schedule;
-  hasShiftScale?: boolean; // Novo: Indica se possui escala de revezamento (domingos)
-  shiftScaleGroup?: string; // Novo: Grupo de escala (A, B, C, D)
   createdAt: string;
 }
 
