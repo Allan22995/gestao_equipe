@@ -37,8 +37,6 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     notes: ''
   });
 
-  const isAdmin = currentUserProfile === 'admin';
-
   // Filter Collaborators for Dropdown
   const allowedCollaborators = useMemo(() => {
      let filtered = collaborators;
@@ -99,8 +97,8 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
   };
 
   const handleDelete = (id: string) => {
-    if (!isAdmin) {
-      showToast('Apenas administradores podem excluir solicitações.', true);
+    if (!canEdit) {
+      showToast('Você não tem permissão para excluir solicitações.', true);
       return;
     }
     if (window.confirm('Tem certeza que deseja excluir esta previsão de férias?')) {
@@ -306,14 +304,12 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
                   >
                     Editar
                   </button>
-                  {isAdmin && (
-                    <button 
-                      onClick={() => handleDelete(r.id)} 
-                      className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
-                    >
-                      Excluir
-                    </button>
-                  )}
+                  <button 
+                    onClick={() => handleDelete(r.id)} 
+                    className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
+                  >
+                    Excluir
+                  </button>
                 </div>
                 )}
               </div>

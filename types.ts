@@ -189,7 +189,7 @@ export const SYSTEM_PERMISSIONS = [
   { id: 'write:collaborators', label: 'Editar/Excluir Colaboradores', category: 'Edição' },
   { id: 'write:events', label: 'Editar/Excluir Eventos', category: 'Edição' },
   { id: 'write:on_calls', label: 'Editar/Excluir Plantões', category: 'Edição' },
-  { id: 'write:vacation', label: 'Gerenciar Férias (Criar/Editar)', category: 'Edição' },
+  { id: 'write:vacation', label: 'Gerenciar Férias (Criar/Editar/Excluir)', category: 'Edição' }, // Atualizado
   { id: 'write:vacation_status', label: 'Aprovar/Alterar Status de Férias', category: 'Edição' }, // Nova Permissão
   { id: 'write:balance', label: 'Ajuste Manual de Saldo', category: 'Edição' },
   { id: 'write:coverage_rules', label: 'Configurar Regras de Cobertura', category: 'Configuração' },
