@@ -14,11 +14,12 @@ interface CalendarProps {
   currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
   canViewPhones: boolean; // Permissão ACL
   availableBranches: string[]; // Lista de filiais permitidas
+  userColabId: string | null;
 }
 
 export const Calendar: React.FC<CalendarProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
-  currentUserAllowedSectors, canViewPhones, availableBranches
+  currentUserAllowedSectors, canViewPhones, availableBranches, userColabId
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<{ date: string, dayEvents: any[], holiday?: string } | null>(null);
@@ -66,6 +67,11 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   // Helper to check filters against a collaborator ID
   const matchesFilters = (colabId: string) => {
+    // 1. Strict Privacy for 'colaborador' profile
+    if (currentUserProfile === 'colaborador' && userColabId) {
+        if (colabId !== userColabId) return false;
+    }
+
     const colab = collaborators.find(c => c.id === colabId);
     if (!colab) return false;
 

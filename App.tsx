@@ -272,6 +272,7 @@ function App() {
             settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={currentUserAllowedSectors}
             canViewPhones={hasPermission('view:phones')}
             availableBranches={availableBranches}
+            userColabId={userColabId}
           />;
       case 'dashboard':
         return <Dashboard 
