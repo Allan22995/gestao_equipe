@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS } from './types';
+import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig } from './types';
 import { dbService } from './services/storage'; 
 import { auth } from './services/firebase'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -19,13 +19,17 @@ import { generateUUID } from './utils/helpers';
 const DEFAULT_SETTINGS: SystemSettings = {
   branches: ['Matriz', 'Filial Norte'],
   roles: [
-    { name: 'Gerente', canViewAllSectors: true, permissions: SYSTEM_PERMISSIONS.map(p => p.id) },
-    { name: 'Coordenador', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'view:phones', 'write:events', 'write:on_calls'] },
+    { name: 'Gerente', canViewAllSectors: true, permissions: SYSTEM_PERMISSIONS.map(p => p.id), manageableProfiles: ['admin', 'colaborador', 'noc', 'liderança'] },
+    { name: 'Coordenador', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'view:phones', 'write:events', 'write:on_calls'], manageableProfiles: ['colaborador'] },
     { name: 'Vendedor', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard'] },
     { name: 'NOC', canViewAllSectors: true, permissions: ['tab:calendario', 'tab:dashboard', 'view:phones'] }
   ],
   sectors: ['Logística', 'TI', 'Vendas', 'RH'],
-  accessProfiles: ['admin', 'colaborador', 'noc'],
+  accessProfiles: [
+    { id: 'admin', name: 'admin', active: true },
+    { id: 'colaborador', name: 'colaborador', active: true },
+    { id: 'noc', name: 'noc', active: true }
+  ],
   eventTypes: [
     { id: 'ferias', label: 'Férias', behavior: 'neutral' },
     { id: 'folga', label: 'Folga', behavior: 'debit' },
@@ -48,6 +52,7 @@ function App() {
   const [userBranch, setUserBranch] = useState<string | null>(null); // Nova prop para armazenar a filial do usuário
   const [currentUserAllowedSectors, setCurrentUserAllowedSectors] = useState<string[]>([]);
   const [currentUserPermissions, setCurrentUserPermissions] = useState<string[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
   const [activeTab, setActiveTab] = useState<TabType>('calendario');
   
@@ -83,6 +88,7 @@ function App() {
         setUserProfile(foundColab.profile || 'colaborador');
         setUserColabId(foundColab.id);
         setUserBranch(foundColab.branch || null); // Armazena a filial
+        setCurrentUserRole(foundColab.role || '');
         
         // 1. Encontrar a Role Config
         let roleConfig = settings.roles.find(r => r.name === foundColab.role);
@@ -121,6 +127,7 @@ function App() {
         setCurrentUserAllowedSectors([]);
         setCurrentUserPermissions([]);
         setUserBranch(null);
+        setCurrentUserRole('');
       }
     }
   }, [user, collaborators, settings.roles]);
@@ -160,6 +167,17 @@ function App() {
             }
             return r;
           });
+
+          // Migração de Perfis de Acesso Antigos (String[] -> AccessProfileConfig[])
+          if (loadedSettings.accessProfiles && loadedSettings.accessProfiles.length > 0 && typeof loadedSettings.accessProfiles[0] === 'string') {
+             console.log("⚠️ Migrando perfis de acesso legado (string) para objetos...");
+             const legacyProfiles = loadedSettings.accessProfiles as unknown as string[];
+             loadedSettings.accessProfiles = legacyProfiles.map(p => ({
+               id: p,
+               name: p,
+               active: true // Default ativo para legados
+             }));
+          }
 
           setSettings(loadedSettings);
         } else {
@@ -274,6 +292,7 @@ function App() {
           showToast={showToast} settings={settings} currentUserProfile={userProfile}
           canEdit={hasPermission('write:collaborators')}
           currentUserAllowedSectors={currentUserAllowedSectors}
+          currentUserRole={currentUserRole}
         />;
       case 'eventos':
         return <Events 

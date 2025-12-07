@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS } from '../types';
+import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig } from '../types';
 import { generateUUID } from '../utils/helpers';
 
 interface SettingsProps {
@@ -166,6 +166,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
+  
+  // States Profiles
+  const [newProfileName, setNewProfileName] = useState('');
 
   // States Jornada
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -209,7 +212,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     try { await setSettings(newSettings); setSaving(key, 'success'); if (callback) callback(); } catch (e) { console.error(e); setSaving(key, 'idle'); }
   };
 
-  // --- LOGIC: BRANCHES, SECTORS, PROFILES ---
+  // --- LOGIC: BRANCHES, SECTORS ---
   const updateList = (listKey: keyof SystemSettings, oldVal: string, newVal: string, saveKey: string) => {
       const currentList = settings[listKey] as string[];
       if (currentList.includes(newVal)) {
@@ -228,9 +231,35 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const editSector = (oldVal: string, newVal: string) => updateList('sectors', oldVal, newVal, 'sector');
   const removeSector = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, sectors: (settings.sectors || []).filter(s => s !== v) }, 'sector'); };
   
-  const addProfile = (v: string) => { const p = v.toLowerCase(); if (settings.accessProfiles?.includes(p)) return; saveSettings({ ...settings, accessProfiles: [...(settings.accessProfiles || []), p] }, 'profile'); };
-  const editProfile = (oldVal: string, newVal: string) => updateList('accessProfiles', oldVal, newVal.toLowerCase(), 'profile');
-  const removeProfile = (v: string) => { if (['admin', 'colaborador', 'noc'].includes(v)) return; if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, accessProfiles: (settings.accessProfiles || []).filter(p => p !== v) }, 'profile'); };
+  // --- LOGIC: PROFILES (OBJECTS) ---
+  const addProfile = () => { 
+      const name = newProfileName.trim().toLowerCase();
+      if (!name) return;
+      if (settings.accessProfiles?.some(p => p.name.toLowerCase() === name)) {
+          showToast('Perfil já existe.', true);
+          return;
+      }
+      const newProfile: AccessProfileConfig = { id: name, name: name, active: true };
+      saveSettings({ ...settings, accessProfiles: [...(settings.accessProfiles || []), newProfile] }, 'profile', () => setNewProfileName('')); 
+  };
+  
+  const toggleProfileActive = (id: string) => {
+      const updatedProfiles = (settings.accessProfiles || []).map(p => 
+          p.id === id ? { ...p, active: !p.active } : p
+      );
+      saveSettings({ ...settings, accessProfiles: updatedProfiles }, 'profile');
+  };
+
+  const removeProfile = (id: string) => { 
+      // Protect default profiles
+      if (['admin', 'colaborador', 'noc'].includes(id)) {
+          showToast('Perfis padrão do sistema não podem ser excluídos.', true);
+          return;
+      }
+      if (window.confirm(`Excluir perfil?`)) {
+          saveSettings({ ...settings, accessProfiles: (settings.accessProfiles || []).filter(p => p.id !== id) }, 'profile'); 
+      }
+  };
 
   // --- LOGIC: ROLES & ACL ---
   const addRole = () => {
@@ -463,19 +492,62 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
             </div>
            )}
 
-           {/* Perfis de Acesso (Separado) */}
+           {/* Perfis de Acesso (Separado e Atualizado) */}
            {hasPermission('settings:profiles') && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <ManageList 
-                  title="Perfis de Acesso (Sistema)" 
-                  items={settings.accessProfiles || ['admin', 'colaborador', 'noc']} 
-                  onAdd={addProfile} 
-                  onEdit={editProfile}
-                  onRemove={removeProfile} 
-                  saving={savingState['profile'] || 'idle'} 
-                  removingId={removingId} 
-                  placeholder="Novo Perfil (ex: supervisor)..." 
-                />
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Perfis de Acesso (Sistema)</h2>
+                
+                {/* Add Profile */}
+                <div className="flex gap-2 mb-4">
+                    <input 
+                      type="text" 
+                      className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none" 
+                      placeholder="Novo Perfil (ex: supervisor)..." 
+                      value={newProfileName} 
+                      onChange={e => setNewProfileName(e.target.value)} 
+                      onKeyDown={e => e.key === 'Enter' && addProfile()}
+                    />
+                    <button 
+                      onClick={addProfile} 
+                      disabled={!newProfileName.trim() || savingState['profile'] === 'saving'} 
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold min-w-[80px]"
+                    >
+                        Add
+                    </button>
+                </div>
+
+                <div className="space-y-2 border-t border-gray-100 pt-4 max-h-[300px] overflow-y-auto">
+                   {(settings.accessProfiles || []).map(profile => (
+                       <div key={profile.id} className="flex justify-between items-center p-3 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors">
+                           <div className="flex items-center gap-3">
+                               <span className={`font-medium ${!profile.active ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{profile.name}</span>
+                               {!profile.active && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded">Oculto</span>}
+                           </div>
+                           
+                           <div className="flex items-center gap-3">
+                               {/* Toggle Active Switch */}
+                               <label className="flex items-center cursor-pointer">
+                                  <div className="relative">
+                                    <input type="checkbox" className="sr-only" checked={profile.active} onChange={() => toggleProfileActive(profile.id)} />
+                                    <div className={`block w-10 h-6 rounded-full transition-colors ${profile.active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                    <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${profile.active ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                  </div>
+                                  <div className="ml-2 text-xs text-gray-500 font-medium">
+                                    {profile.active ? 'Ativo' : 'Oculto'}
+                                  </div>
+                               </label>
+
+                               <button 
+                                 onClick={() => removeProfile(profile.id)}
+                                 className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded"
+                                 title="Excluir"
+                               >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                               </button>
+                           </div>
+                       </div>
+                   ))}
+                </div>
             </div>
            )}
 

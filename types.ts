@@ -30,6 +30,14 @@ export interface RoleConfig {
   name: string;
   canViewAllSectors: boolean; // Se true, vê tudo. Se false, precisa definir quais setores vê.
   permissions: string[]; // Lista de IDs de permissão (ex: 'tab:dashboard', 'action:edit_events')
+  manageableProfiles?: string[]; // Lista de nomes de perfis que esta role pode atribuir a novos usuários
+}
+
+// Configuração de Perfil de Acesso (Novo Objeto)
+export interface AccessProfileConfig {
+  id: string;
+  name: string;
+  active: boolean; // Flag para restringir visualização no cadastro
 }
 
 // Changed to string to allow dynamic profiles from settings
@@ -76,9 +84,9 @@ export interface CoverageRule {
 
 export interface SystemSettings {
   branches: string[];
-  roles: RoleConfig[]; // Alterado de string[] para RoleConfig[]
+  roles: RoleConfig[]; 
   sectors: string[]; 
-  accessProfiles: string[]; 
+  accessProfiles: AccessProfileConfig[]; // Alterado de string[] para objeto configurável
   eventTypes: EventTypeConfig[];
   scheduleTemplates: ScheduleTemplate[]; // Novo: Lista de Modelos de Jornada
   spreadsheetUrl?: string;

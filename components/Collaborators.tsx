@@ -12,6 +12,7 @@ interface CollaboratorsProps {
   currentUserProfile: UserProfile;
   canEdit: boolean; // Permissão ACL
   currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
+  currentUserRole: string; // Função do usuário logado (para filtrar perfis que podem ser criados)
 }
 
 const initialSchedule: Schedule = {
@@ -26,7 +27,7 @@ const initialSchedule: Schedule = {
 
 export const Collaborators: React.FC<CollaboratorsProps> = ({ 
   collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canEdit,
-  currentUserAllowedSectors 
+  currentUserAllowedSectors, currentUserRole
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -198,10 +199,38 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
-  // Helper to check if profile list is available, otherwise fallback
-  const profileOptions = settings.accessProfiles && settings.accessProfiles.length > 0 
-    ? settings.accessProfiles 
-    : ['admin', 'colaborador', 'noc'];
+  // --- LOGIC: PROFILE OPTIONS ---
+  // 1. Get all active profiles from settings
+  // 2. Filter by currentUserRole restrictions (if any)
+  const profileOptions = React.useMemo(() => {
+    // A. Base list: All ACTIVE profiles in settings
+    let available = (settings.accessProfiles || [])
+       .filter(p => p.active)
+       .map(p => p.name);
+
+    if (available.length === 0) {
+        // Fallback safety if config is empty
+        available = ['colaborador']; 
+    }
+
+    // B. Apply Restriction based on Logged User Role
+    // If user is Admin (firebase profile), allow all active.
+    if (currentUserProfile === 'admin') {
+       return available;
+    }
+
+    // Otherwise, check RoleConfig for manageableProfiles
+    const currentRoleConfig = settings.roles.find(r => r.name === currentUserRole);
+    if (currentRoleConfig && currentRoleConfig.manageableProfiles && currentRoleConfig.manageableProfiles.length > 0) {
+       // Filter: Only show profiles that are BOTH active AND manageable by this role
+       return available.filter(p => currentRoleConfig.manageableProfiles!.includes(p));
+    }
+
+    // Default: If no restriction defined for role, show all active (or restrict to basic? let's show all active for backward compat)
+    return available;
+
+  }, [settings.accessProfiles, settings.roles, currentUserRole, currentUserProfile]);
+
 
   const sectorOptions = settings.sectors || [];
   const scheduleTemplates = settings.scheduleTemplates || [];
@@ -294,6 +323,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Perfil de Acesso *</label>
               <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white capitalize" value={formData.profile} onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}>
+                 {profileOptions.length === 0 && <option value="">Nenhum perfil disponível</option>}
                  {profileOptions.map(p => (
                    <option key={p} value={p}>{p}</option>
                  ))}
