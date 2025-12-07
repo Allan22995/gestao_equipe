@@ -260,9 +260,24 @@ export const Balance: React.FC<BalanceProps> = ({
              let borderClass = 'border-gray-400';
 
              if (item.logType === 'event') {
-                if (item.type === 'trabalhado') { text = `trabalhou e ganhou +${item.daysGained} dias.`; borderClass = 'border-green-400'; }
-                else if (item.type === 'folga') { text = `usou ${item.daysUsed} dias de folga.`; borderClass = 'border-red-400'; }
-                else { text = `entrou de férias.`; borderClass = 'border-blue-400'; }
+                const eventLabel = item.typeLabel || item.type;
+                
+                // Lógica de exibição baseada no ganho/perda de dias, e não apenas no ID string
+                if (item.daysGained > 0) {
+                   text = `registrou "${eventLabel}" (+${item.daysGained} dias).`;
+                   borderClass = 'border-green-400';
+                } else if (item.daysUsed > 0) {
+                   text = `registrou "${eventLabel}" (-${item.daysUsed} dias).`;
+                   borderClass = 'border-red-400';
+                } else {
+                   // Evento neutro (sem ganho nem perda de saldo), ex: Férias (neste sistema)
+                   if (item.type === 'ferias' || eventLabel.toLowerCase().includes('férias')) {
+                       text = `entrou de férias.`;
+                   } else {
+                       text = `registrou evento: ${eventLabel}.`;
+                   }
+                   borderClass = 'border-blue-400';
+                }
              } else {
                 text = `Ajuste Manual (${item.amount > 0 ? '+' : ''}${item.amount}): ${item.reason} (Resp: ${item.createdBy})`;
                 borderClass = 'border-purple-400';
