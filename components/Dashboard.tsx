@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap, getWeekOfMonth } from '../utils/helpers';
@@ -277,7 +278,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
         } else if (isWorkEvent) {
              status = `Dia Extra (${evtLabel})`;
              statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
-             isActive = true; 
+             
+             // --- LÓGICA DE HORÁRIO EM DIA EXTRA ---
+             // Tenta usar o horário do dia atual. Se não houver, busca um dia padrão (fallback).
+             let refSchedule = c.schedule[currentDayKey];
+             let useSchedule = refSchedule;
+             
+             // Se o dia atual não estiver habilitado (ex: Domingo), busca a primeira jornada válida (ex: Segunda)
+             if (!refSchedule.enabled) {
+                 const weekdays: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
+                 const fallbackDay = weekdays.find(d => c.schedule[d].enabled);
+                 if (fallbackDay) {
+                     useSchedule = c.schedule[fallbackDay];
+                 }
+             }
+
+             // Verifica se está dentro do horário usando a jornada de referência
+             if (useSchedule && useSchedule.start && useSchedule.end) {
+                 // Usa contexto 'today' pois estamos verificando o momento presente em relação ao horário de início/fim
+                 isActive = isTimeInRange(useSchedule.start, useSchedule.end, !!useSchedule.startsPreviousDay, 'today');
+             } else {
+                 isActive = false; // Se não achou nenhuma jornada, assume inativo
+             }
+
+             if (!isActive) {
+                 status += " (Fora de Horário)";
+                 statusColor = 'bg-purple-50 text-purple-700 border border-purple-200 opacity-75';
+             }
         } else {
             status = evtLabel;
             statusColor = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
@@ -424,19 +451,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                  date: dateStr,
                                  day: i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : targetDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                              });
-                         } else {
-                             // É Trabalho de Escala (Opcional mostrar)
-                             // Se quiser mostrar os domingos trabalhados, descomente abaixo:
-                             /*
-                             nextWeekEvents.push({
-                                 id: `rot-work-${c.id}-${dateStr}`,
-                                 colabName: `${c.name} [Escala ${c.rotationGroup}]`,
-                                 type: 'Escala',
-                                 desc: 'Domingo de Trabalho',
-                                 date: dateStr,
-                                 day: i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : targetDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                             });
-                             */
                          }
                     }
                 }
