@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings, UserProfile } from '../types';
 import { getFeriados, getWeekOfMonth } from '../utils/helpers';
@@ -421,22 +422,40 @@ export const Calendar: React.FC<CalendarProps> = ({
               }
 
               return (
-                <div key={idx} className={`p-3 border-l-4 rounded-r-md ${borderClass} ${bgClass}`}>
-                  <div className="font-bold text-gray-800 flex justify-between">
-                    <span>{name} {scaleInfo && <span className="text-xs font-normal text-purple-700">{scaleInfo}</span>}</span>
-                    <span className="text-xs font-normal opacity-75 uppercase tracking-wider">{title}</span>
-                  </div>
-                  {canViewPhones && (
-                    <div className="mt-1 flex flex-col gap-0.5">
-                       {phone && <div className="text-xs text-gray-600 font-semibold flex items-center gap-1">📞 {phone}</div>}
-                       {otherContact && <div className="text-xs text-indigo-600 font-semibold flex items-center gap-1">💬 {otherContact}</div>}
+                <div key={idx} className={`p-3 border-l-4 rounded-r-md ${borderClass} ${bgClass} transition-all hover:shadow-md`}>
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-gray-800 text-sm leading-snug break-words">{name}</span>
+                        {scaleInfo && <span className="text-[10px] font-bold text-purple-700 mt-0.5">{scaleInfo}</span>}
+                        
+                         {/* Contacts inside the left column to align with name */}
+                         {canViewPhones && (phone || otherContact) && (
+                            <div className="flex flex-col gap-0.5 mt-1.5">
+                               {phone && <div className="text-xs text-gray-600 font-medium flex items-center gap-1">📞 {phone}</div>}
+                               {otherContact && <div className="text-xs text-indigo-600 font-medium flex items-center gap-1">💬 {otherContact}</div>}
+                            </div>
+                         )}
                     </div>
-                  )}
-                  <div className="text-sm text-gray-600 mt-1">
-                    {e.kind === 'plantao' ? `${e.startTime} - ${e.endTime}` : ''}
-                    {(e.kind === 'vacation_req' && e.notes) ? <span className="block mt-1 italic text-xs">Obs: {e.notes}</span> : ''}
-                    {e.observation && <span className="block mt-1 italic text-xs">Obs: {e.observation}</span>}
+                    
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-white/60 border border-black/5 text-gray-700 shadow-sm text-right max-w-[120px] whitespace-normal leading-tight">
+                            {title}
+                        </span>
+                        {e.kind === 'plantao' && (
+                           <span className="text-xs font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                             {e.startTime} - {e.endTime}
+                           </span>
+                        )}
+                    </div>
                   </div>
+
+                  {/* Observations */}
+                  {((e.kind === 'vacation_req' && e.notes) || e.observation) && (
+                      <div className="mt-2 text-xs text-gray-600 bg-white/50 p-2 rounded border border-black/5">
+                          {(e.kind === 'vacation_req' && e.notes) && <div className="italic">Obs: {e.notes}</div>}
+                          {e.observation && <div className="italic">Obs: {e.observation}</div>}
+                      </div>
+                  )}
                 </div>
               );
            })}
