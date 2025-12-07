@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap } from '../utils/helpers';
@@ -135,6 +136,42 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return matchesName && matchesBranch && matchesRole && matchesSector;
     });
 
+    // Helper para verificar horário, desacoplado da propriedade 'enabled'
+    const isTimeInRange = (startStr: string, endStr: string, startsPreviousDay: boolean, context: 'today' | 'yesterday' | 'tomorrow') => {
+        if (!startStr || !endStr) return false;
+
+        const [sh, sm] = startStr.split(':').map(Number);
+        const [eh, em] = endStr.split(':').map(Number);
+        const startMins = sh * 60 + sm;
+        const endMins = eh * 60 + em;
+
+        if (context === 'yesterday') {
+            if (!startsPreviousDay && startMins > endMins) return currentMinutes <= endMins; // Virada de dia normal (ex: 22h as 06h)
+            return false;
+        }
+        if (context === 'today') {
+            if (startsPreviousDay) return currentMinutes <= endMins; // Turno começou ontem (ex: 22h ontem, até 06h hoje)
+            else {
+                if (startMins < endMins) return currentMinutes >= startMins && currentMinutes <= endMins; // Turno normal (08h as 17h)
+                else return currentMinutes >= startMins; // Turno vira noite (22h as ...)
+            }
+        }
+        if (context === 'tomorrow') {
+            // Se hoje começa um turno que vira pro dia seguinte?
+            // Na verdade, 'tomorrow' context é para verificar se um turno de amanhã afeta 'hoje'.
+            // Geralmente não afeta 'trabalhando agora', a menos que seja muito cedo.
+            // Mantendo lógica original simples:
+            if (startsPreviousDay) return currentMinutes >= startMins;
+            return false;
+        }
+        return false;
+    };
+
+    const isShiftActive = (scheduleDay: any, context: 'today' | 'yesterday' | 'tomorrow') => {
+         if (!scheduleDay.enabled) return false;
+         return isTimeInRange(scheduleDay.start, scheduleDay.end, !!scheduleDay.startsPreviousDay, context);
+    };
+
     filteredCollaborators.forEach(c => {
       const approvedVacation = vacationRequests.find(v => {
         if (v.collaboratorId !== c.id || v.status !== 'aprovado') return false;
@@ -182,33 +219,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       let isWorkingShift = false;
 
-      const isShiftActive = (scheduleDay: any, context: 'today' | 'yesterday' | 'tomorrow') => {
-         if (!scheduleDay.enabled || !scheduleDay.start || !scheduleDay.end) return false;
-
-         const [sh, sm] = scheduleDay.start.split(':').map(Number);
-         const [eh, em] = scheduleDay.end.split(':').map(Number);
-         const startMins = sh * 60 + sm;
-         const endMins = eh * 60 + em;
-         const startsPreviousDay = !!scheduleDay.startsPreviousDay;
-
-         if (context === 'yesterday') {
-             if (!startsPreviousDay && startMins > endMins) return currentMinutes <= endMins;
-             return false;
-         }
-         if (context === 'today') {
-             if (startsPreviousDay) return currentMinutes <= endMins;
-             else {
-                 if (startMins < endMins) return currentMinutes >= startMins && currentMinutes <= endMins;
-                 else return currentMinutes >= startMins;
-             }
-         }
-         if (context === 'tomorrow') {
-             if (startsPreviousDay) return currentMinutes >= startMins;
-             return false;
-         }
-         return false;
-      };
-
+      // Check standard schedule
       if (isShiftActive(c.schedule[prevDayKey], 'yesterday')) isWorkingShift = true;
       if (!isWorkingShift && isShiftActive(c.schedule[currentDayKey], 'today')) isWorkingShift = true;
       if (!isWorkingShift && isShiftActive(c.schedule[nextDayKey], 'tomorrow')) isWorkingShift = true;
@@ -228,6 +239,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const evtConfig = settings.eventTypes.find(t => t.id === todayEvent.type);
         const evtLabel = evtConfig?.label || todayEvent.type;
         
+        // Determina se é um evento de trabalho (Extra/Crédito)
+        let isWorkEvent = false;
+        if (todayEvent.type === 'trabalhado') {
+            isWorkEvent = true;
+        } else if (evtConfig && (evtConfig.behavior === 'credit_2x' || evtConfig.behavior === 'credit_1x')) {
+            isWorkEvent = true;
+        } else if (evtLabel.toLowerCase().includes('trabalha') || evtLabel.toLowerCase().includes('extra')) {
+            isWorkEvent = true;
+        }
+
         if (todayEvent.type === 'ferias') {
             status = `Férias (${evtLabel})`;
             statusColor = 'bg-blue-100 text-blue-800 border border-blue-200';
@@ -235,24 +256,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
             status = `Folga (${evtLabel})`;
             statusColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
             isWorkingShift = false;
-        } else if (todayEvent.type === 'trabalhado') {
+        } else if (isWorkEvent) {
              status = `Dia Extra (${evtLabel})`;
              statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
-             isActive = true; 
+             
+             // --- LÓGICA DE VERIFICAÇÃO DE HORÁRIO PARA DIA EXTRA ---
+             // Se o funcionário está em dia extra, ele deve respeitar o horário parametrizado.
+             // 1. Tenta pegar o horário do dia atual (mesmo que enabled=false)
+             let schedToCheck = c.schedule[currentDayKey];
+             
+             // 2. Se o dia atual não tiver horário (ex: Domingo vazio), busca o primeiro dia útil habilitado (ex: Segunda)
+             // Isso assume que o "Extra" segue o padrão de turno normal do colaborador.
+             if (!schedToCheck.start || !schedToCheck.end) {
+                 const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+                 const standardDay = daysOrder.find(d => c.schedule[d].enabled && c.schedule[d].start && c.schedule[d].end);
+                 if (standardDay) {
+                     schedToCheck = c.schedule[standardDay];
+                 }
+             }
+
+             // 3. Verifica se está no horário
+             let isTimeActive = false;
+             // Check if consistent with 'yesterday' logic (e.g. night shift finishing today)
+             // Para simplificar no contexto de extra, focamos principalmente no 'today' e 'yesterday' transition
+             if (isTimeInRange(schedToCheck.start, schedToCheck.end, !!schedToCheck.startsPreviousDay, 'today')) isTimeActive = true;
+             // Caso seja um turno noturno que começou ontem (se aplicável ao extra)
+             // if (!isTimeActive && isTimeInRange(schedToCheck.start, schedToCheck.end, !!schedToCheck.startsPreviousDay, 'yesterday')) isTimeActive = true;
+
+             if (isTimeActive) {
+                 isActive = true;
+             } else {
+                 isActive = false; // Fora do horário do extra
+             }
         } else {
             status = evtLabel;
             statusColor = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
-            
-            // Logic to determine if active based on configuration
-            if (evtConfig && (evtConfig.behavior === 'credit_2x' || evtConfig.behavior === 'credit_1x')) {
-               // If behavior implies working (credits hours/days), mark as active
-               isActive = true;
-               statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
-            } else if (evtLabel.toLowerCase().includes('trabalha') || evtLabel.toLowerCase().includes('extra')) {
-               // Fallback: Check keywords in label
-               isActive = true;
-               statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
-            }
         }
       } else {
         if (isWorkingShift) {
