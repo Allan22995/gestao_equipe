@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -288,6 +289,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
      
      const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, permissions: newPerms } : r);
      saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
+  };
+  
+  // Logic for Manageable Profiles
+  const toggleManageableProfile = (roleName: string, profile: string) => {
+     const role = settings.roles.find(r => r.name === roleName);
+     if (!role) return;
+     
+     let currentManageable = role.manageableProfiles || [];
+     if (currentManageable.includes(profile)) {
+         currentManageable = currentManageable.filter(p => p !== profile);
+     } else {
+         currentManageable = [...currentManageable, profile];
+     }
+     
+     const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, manageableProfiles: currentManageable } : r);
+     saveSettings({ ...settings, roles: updatedRoles }, 'acl_profile_update');
   };
 
   // --- LOGIC: EVENTS ---
@@ -604,6 +621,33 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                   {settings.roles.find(r => r.name === selectedRoleForACL)?.canViewAllSectors ? 'GLOBAL (Tudo)' : 'RESTRITO (Por Usuário)'}
                                 </button>
                              </div>
+                          </div>
+
+                          {/* Seção de Perfis Gerenciáveis */}
+                          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                             <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 border-b border-gray-100 pb-1">Gerenciamento de Perfis</h4>
+                             <p className="text-xs text-gray-500 mb-3">Selecione quais perfis de acesso um usuário com a função <b>{selectedRoleForACL}</b> tem permissão para atribuir a novos colaboradores.</p>
+                             <div className="flex flex-wrap gap-3">
+                                {(settings.accessProfiles || ['admin', 'colaborador', 'noc']).map(profile => {
+                                   const role = settings.roles.find(r => r.name === selectedRoleForACL);
+                                   const isAllowed = role?.manageableProfiles?.includes(profile) || false;
+                                   
+                                   return (
+                                     <button
+                                       key={profile}
+                                       onClick={() => toggleManageableProfile(selectedRoleForACL, profile)}
+                                       className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all capitalize ${
+                                          isAllowed 
+                                          ? 'bg-purple-100 text-purple-700 border-purple-300 shadow-sm' 
+                                          : 'bg-white text-gray-500 border-gray-300 hover:border-gray-400'
+                                       }`}
+                                     >
+                                        {isAllowed && '✓ '} {profile}
+                                     </button>
+                                   );
+                                })}
+                             </div>
+                             <p className="text-[10px] text-gray-400 mt-2 italic">* Se nenhum for selecionado, o usuário não verá opções ao cadastrar colaboradores.</p>
                           </div>
 
                           {/* Matriz de Permissões */}
