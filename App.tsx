@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from './types';
 import { dbService } from './services/storage'; 
@@ -28,7 +29,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
     { 
       name: 'Liderança', 
       canViewAllSectors: false, 
-      permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'tab:saldo', 'tab:previsao_ferias', 'write:events', 'write:on_calls', 'view:phones'], 
+      permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'tab:saldo', 'tab:previsao_ferias', 'write:events', 'write:on_calls', 'view:phones', 'write:vacation', 'write:vacation_status'], 
       manageableProfiles: ['colaborador', 'liderança'] 
     },
     { 
@@ -118,7 +119,7 @@ function App() {
       if (foundColab) {
         setUserProfile(foundColab.profile || 'colaborador');
         setUserColabId(foundColab.id);
-        setUserBranch(foundColab.branch || null); // Armazena a filial
+        setUserBranch(foundColab.branch || null); // Armazena a filial do usuário
         setCurrentUserRole(foundColab.role || '');
         
         // 1. Encontrar a Role Config
@@ -368,6 +369,7 @@ function App() {
           collaborators={collaborators} requests={vacationRequests} onAdd={handleAddVacation} onUpdate={handleUpdateVacation} onDelete={handleDeleteVacation}
           showToast={showToast} logAction={logAction} currentUserProfile={userProfile} currentUserName={currentUserName as string}
           canEdit={hasPermission('write:vacation')}
+          canManageStatus={hasPermission('write:vacation_status')}
           currentUserAllowedSectors={currentUserAllowedSectors}
           userColabId={userColabId}
         />;

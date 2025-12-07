@@ -14,6 +14,7 @@ interface VacationForecastProps {
   currentUserProfile: UserProfile;
   currentUserName: string;
   canEdit: boolean; // Permissão ACL
+  canManageStatus: boolean; // Nova Permissão: Aprovar/Rejeitar
   currentUserAllowedSectors: string[]; // Novo: Filtro de setor
   userColabId: string | null;
 }
@@ -25,7 +26,7 @@ const CalendarIcon = () => (
 );
 
 export const VacationForecast: React.FC<VacationForecastProps> = ({ 
-  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, canEdit, currentUserAllowedSectors, userColabId
+  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, canEdit, canManageStatus, currentUserAllowedSectors, userColabId
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -125,8 +126,8 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     const user = currentUserName;
 
     if (!editingId) {
-      // Se não for admin, forçar status pendente na criação
-      const initialStatus = isAdmin ? formData.status : 'pendente';
+      // Se tiver permissão de gerenciar status, permite criar já aprovado, senão padrão 'pendente'
+      const initialStatus = canManageStatus ? formData.status : 'pendente';
 
       const newReq: VacationRequest = {
         id: generateUUID(),
@@ -144,17 +145,13 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       showToast('Previsão de férias registrada!');
       resetForm();
     } else {
-      // Se não for admin e tentar mudar status, bloquear (embora o select esteja disabled, é bom garantir)
-      if (!isAdmin && formData.status === 'aprovado') {
-         // Se o usuário tentar "hackear" ou mudar, ignorar se não for admin (porem o select estará travado)
-      }
-
+      // Update
       onUpdate({
         id: editingId,
         collaboratorId: formData.collaboratorId,
         startDate: formData.startDate,
         endDate: formData.endDate,
-        status: formData.status,
+        status: formData.status, // O select já cuida de travar se não tiver permissão
         notes: formData.notes,
         updatedBy: user,
         lastUpdatedAt: new Date().toISOString()
@@ -242,14 +239,14 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
               className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100 disabled:text-gray-500"
               value={formData.status}
               onChange={e => setFormData({...formData, status: e.target.value as VacationStatus})}
-              disabled={!isAdmin} // Apenas Admin pode aprovar/mudar status livremente
+              disabled={!canManageStatus} // Permite alteração se tiver a permissão
             >
               <option value="pendente">Pendente</option>
-              <option value="aprovado">Aprovado {(!isAdmin && formData.status !== 'aprovado') ? '(Restrito Admin)' : ''}</option>
+              <option value="aprovado">Aprovado {(!canManageStatus && formData.status !== 'aprovado') ? '(Restrito)' : ''}</option>
               <option value="negociacao">Em Negociação</option>
               <option value="nova_opcao">Nova Opção (Contraproposta)</option>
             </select>
-            {!isAdmin && <p className="text-[10px] text-gray-400 mt-1">Apenas Administradores podem alterar o status de aprovação.</p>}
+            {!canManageStatus && <p className="text-[10px] text-gray-400 mt-1">Você não tem permissão para alterar o status da solicitação.</p>}
           </div>
 
           <div className="flex flex-col md:col-span-2">
