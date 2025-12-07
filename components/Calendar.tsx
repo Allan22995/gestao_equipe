@@ -152,18 +152,9 @@ export const Calendar: React.FC<CalendarProps> = ({
                                 kind: 'rotation_off',
                                 typeLabel: 'Folga de Escala'
                             });
-                        } else {
-                            // É DOMINGO DE TRABALHO PELA ESCALA
-                            // Opcional: Mostrar visualmente que é dia de trabalho?
-                            // O usuário pediu "retornar o campo da escala que o mesmo tem" e "visualização fácil".
-                            // Vamos adicionar um marcador discreto de trabalho.
-                            virtualRotationEvents.push({
-                                id: `rot-work-${c.id}-${dateStr}`,
-                                collaboratorId: c.id,
-                                kind: 'rotation_work',
-                                typeLabel: 'Escala (Trabalho)'
-                            });
                         }
+                        // NOTA: Domingos trabalhados (isWorkingSunday === true) NÃO são adicionados 
+                        // para não poluir o calendário, conforme solicitado.
                     }
                 }
             }
@@ -254,8 +245,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                  else colorClass = 'bg-gray-100 text-gray-600 border border-dashed border-gray-400';
               } else if (item.kind === 'rotation_off') {
                  colorClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200'; // Folga de Escala
-              } else if (item.kind === 'rotation_work') {
-                 colorClass = 'bg-purple-100 text-purple-800 border border-purple-200'; // Trabalho de Escala
               } else if (item.kind === 'event') {
                 // Dynamic colors based on legacy type or default
                 if (item.type === 'ferias') colorClass = 'bg-blue-100 text-blue-800';
@@ -268,7 +257,7 @@ export const Calendar: React.FC<CalendarProps> = ({
               const reqLabel = isReq ? (item.status === 'aprovado' ? '(Aprov.)' : item.status === 'nova_opcao' ? '(Opção)' : '(Prev.)') : '';
               
               // Simplifica label para virtual events
-              const virtualLabel = (item.kind === 'rotation_off') ? '(Folga Escala)' : (item.kind === 'rotation_work') ? '(Escala)' : '';
+              const virtualLabel = (item.kind === 'rotation_off') ? '(Folga Escala)' : '';
 
               return (
                 <div key={idx} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 truncate ${colorClass}`}>
@@ -379,9 +368,6 @@ export const Calendar: React.FC<CalendarProps> = ({
            <span className="w-3 h-3 rounded-full bg-red-500"></span> Trabalhado
         </div>
         <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded-full bg-purple-500"></span> Escala (Trabalho)
-        </div>
-        <div className="flex items-center gap-2">
            <span className="w-3 h-3 rounded-full bg-orange-500"></span> Plantão
         </div>
         <div className="flex items-center gap-2">
@@ -426,10 +412,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                  borderClass = 'border-emerald-400';
                  bgClass = 'bg-emerald-50';
                  title = 'Folga de Escala (Domingo)';
-              } else if (e.kind === 'rotation_work') {
-                 borderClass = 'border-purple-400';
-                 bgClass = 'bg-purple-50';
-                 title = 'Escala (Trabalho)';
               } else if (e.kind === 'event') {
                 title = getEventTypeLabel(e);
                 if (e.type === 'ferias') { borderClass = 'border-blue-400'; bgClass = 'bg-blue-50'; }
