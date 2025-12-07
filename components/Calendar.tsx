@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings, UserProfile } from '../types';
-import { getFeriados } from '../utils/helpers';
+import { getFeriados, getWeekOfMonth } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 import { MultiSelect } from './ui/MultiSelect';
 
@@ -82,16 +82,6 @@ export const Calendar: React.FC<CalendarProps> = ({
       }
     }
 
-    // Check restriction permission (Branch) - though filterBranches should handle it,
-    // we double check if availableBranches is restricted.
-    if (availableBranches.length > 0) {
-       // Note: filterBranches will be pre-filled, so the below logic for filterBranches usually covers it.
-       // But if filterBranches is empty (meaning "All"), we must ensure "All" is within availableBranches.
-       // However, MultiSelect UI logic: Empty = All Options. 
-       // If user is restricted to 1 branch, filterBranches has 1 item.
-       // If user sees all, filterBranches is empty.
-    }
-
     const matchesName = filterName ? colab.name.toLowerCase().includes(filterName.toLowerCase()) : true;
     
     // Multi-Select Logic: If filter array is empty, it means "All" (of the available ones), otherwise check inclusion
@@ -109,30 +99,83 @@ export const Calendar: React.FC<CalendarProps> = ({
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const checkDate = new Date(dateStr + 'T00:00:00');
 
+    // 1. Database Events
     let dayEvents = events.filter(e => {
       const start = new Date(e.startDate + 'T00:00:00');
       const end = new Date(e.endDate + 'T00:00:00');
       return checkDate >= start && checkDate <= end;
     }).map(e => ({ ...e, kind: 'event' as const }));
 
+    // 2. OnCall Shifts
     let dayOnCalls = onCalls.filter(oc => {
       const start = new Date(oc.startDate + 'T00:00:00');
       const end = new Date(oc.endDate + 'T00:00:00');
       return checkDate >= start && checkDate <= end;
     }).map(oc => ({ ...oc, kind: 'plantao' as const }));
 
+    // 3. Vacation Requests
     let dayVacationReqs = vacationRequests.filter(v => {
       const start = new Date(v.startDate + 'T00:00:00');
       const end = new Date(v.endDate + 'T00:00:00');
       return checkDate >= start && checkDate <= end;
     }).map(v => ({ ...v, kind: 'vacation_req' as const }));
 
-    // Apply filters
+    // 4. Dynamic Rotation Rules (Escalas) - VIRTUAL EVENTS
+    const virtualRotationEvents: any[] = [];
+    
+    // Se for Domingo, verifica regras de escala
+    if (checkDate.getDay() === 0) { 
+        const weekIndex = getWeekOfMonth(checkDate);
+        
+        collaborators.forEach(c => {
+            // Verifica filtros primeiro para não processar desnecessariamente
+            if (!matchesFilters(c.id)) return;
+            
+            // Só aplica se o colaborador tem escala definida
+            if (c.hasRotation && c.rotationGroup) {
+                const rule = settings?.shiftRotations.find(r => r.id === c.rotationGroup);
+                
+                // Se existe regra, verifica se é dia de trabalho ou folga
+                if (rule) {
+                    const isWorkingSunday = rule.workSundays.includes(weekIndex);
+                    
+                    // Verifica se já existe um evento explícito (ex: Férias, Atestado) que sobrepõe
+                    // Se houver, o evento explícito tem precedência visual
+                    const hasExplicitEvent = [...dayEvents, ...dayVacationReqs].some(e => e.collaboratorId === c.id);
+                    
+                    if (!hasExplicitEvent) {
+                        if (!isWorkingSunday) {
+                            // É DOMINGO DE FOLGA PELA ESCALA
+                            virtualRotationEvents.push({
+                                id: `rot-off-${c.id}-${dateStr}`,
+                                collaboratorId: c.id,
+                                kind: 'rotation_off',
+                                typeLabel: 'Folga de Escala'
+                            });
+                        } else {
+                            // É DOMINGO DE TRABALHO PELA ESCALA
+                            // Opcional: Mostrar visualmente que é dia de trabalho?
+                            // O usuário pediu "retornar o campo da escala que o mesmo tem" e "visualização fácil".
+                            // Vamos adicionar um marcador discreto de trabalho.
+                            virtualRotationEvents.push({
+                                id: `rot-work-${c.id}-${dateStr}`,
+                                collaboratorId: c.id,
+                                kind: 'rotation_work',
+                                typeLabel: 'Escala (Trabalho)'
+                            });
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Apply filters to standard events
     dayEvents = dayEvents.filter(e => matchesFilters(e.collaboratorId));
     dayOnCalls = dayOnCalls.filter(oc => matchesFilters(oc.collaboratorId));
     dayVacationReqs = dayVacationReqs.filter(v => matchesFilters(v.collaboratorId));
 
-    return [...dayEvents, ...dayOnCalls, ...dayVacationReqs];
+    return [...dayEvents, ...dayOnCalls, ...dayVacationReqs, ...virtualRotationEvents];
   };
 
   const handleDayClick = (day: number, dayEvents: any[], holiday?: string) => {
@@ -209,6 +252,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                  if(item.status === 'aprovado') colorClass = 'bg-blue-100 text-blue-800 border border-blue-300';
                  else if (item.status === 'nova_opcao') colorClass = 'bg-blue-100 text-blue-800 border border-blue-300';
                  else colorClass = 'bg-gray-100 text-gray-600 border border-dashed border-gray-400';
+              } else if (item.kind === 'rotation_off') {
+                 colorClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200'; // Folga de Escala
+              } else if (item.kind === 'rotation_work') {
+                 colorClass = 'bg-purple-100 text-purple-800 border border-purple-200'; // Trabalho de Escala
               } else if (item.kind === 'event') {
                 // Dynamic colors based on legacy type or default
                 if (item.type === 'ferias') colorClass = 'bg-blue-100 text-blue-800';
@@ -219,12 +266,15 @@ export const Calendar: React.FC<CalendarProps> = ({
 
               const isReq = item.kind === 'vacation_req';
               const reqLabel = isReq ? (item.status === 'aprovado' ? '(Aprov.)' : item.status === 'nova_opcao' ? '(Opção)' : '(Prev.)') : '';
+              
+              // Simplifica label para virtual events
+              const virtualLabel = (item.kind === 'rotation_off') ? '(Folga Escala)' : (item.kind === 'rotation_work') ? '(Escala)' : '';
 
               return (
                 <div key={idx} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 truncate ${colorClass}`}>
                   <div className={`w-1.5 h-1.5 rounded-full bg-current shrink-0`}></div>
                   <span className="truncate font-medium">
-                    {getCollaboratorName(item.collaboratorId)} {reqLabel}
+                    {getCollaboratorName(item.collaboratorId)} {reqLabel} {virtualLabel}
                   </span>
                 </div>
               );
@@ -329,7 +379,7 @@ export const Calendar: React.FC<CalendarProps> = ({
            <span className="w-3 h-3 rounded-full bg-red-500"></span> Trabalhado
         </div>
         <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded-full bg-indigo-500"></span> Outros
+           <span className="w-3 h-3 rounded-full bg-purple-500"></span> Escala (Trabalho)
         </div>
         <div className="flex items-center gap-2">
            <span className="w-3 h-3 rounded-full bg-orange-500"></span> Plantão
@@ -372,6 +422,14 @@ export const Calendar: React.FC<CalendarProps> = ({
                  if(e.status === 'aprovado') { borderClass = 'border-blue-500'; bgClass = 'bg-blue-50'; title = 'Férias Aprovadas'; }
                  else if(e.status === 'nova_opcao') { borderClass = 'border-blue-500'; bgClass = 'bg-blue-50'; title = 'Nova Opção de Férias'; }
                  else { borderClass = 'border-gray-400 border-dashed'; bgClass = 'bg-gray-50'; title = `Previsão (${e.status === 'negociacao' ? 'Em Negociação' : e.status})`; }
+              } else if (e.kind === 'rotation_off') {
+                 borderClass = 'border-emerald-400';
+                 bgClass = 'bg-emerald-50';
+                 title = 'Folga de Escala (Domingo)';
+              } else if (e.kind === 'rotation_work') {
+                 borderClass = 'border-purple-400';
+                 bgClass = 'bg-purple-50';
+                 title = 'Escala (Trabalho)';
               } else if (e.kind === 'event') {
                 title = getEventTypeLabel(e);
                 if (e.type === 'ferias') { borderClass = 'border-blue-400'; bgClass = 'bg-blue-50'; }

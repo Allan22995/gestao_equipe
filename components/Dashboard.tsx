@@ -138,7 +138,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return matchesName && matchesBranch && matchesRole && matchesSector;
     });
 
-    // Helper para verificar horário, desacoplado da propriedade 'enabled'
+    // Helper para verificar horário
     const isTimeInRange = (startStr: string, endStr: string, startsPreviousDay: boolean, context: 'today' | 'yesterday' | 'tomorrow') => {
         if (!startStr || !endStr) return false;
 
@@ -148,18 +148,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const endMins = eh * 60 + em;
 
         if (context === 'yesterday') {
-            if (!startsPreviousDay && startMins > endMins) return currentMinutes <= endMins; // Virada de dia normal (ex: 22h as 06h)
+            if (!startsPreviousDay && startMins > endMins) return currentMinutes <= endMins; 
             return false;
         }
         if (context === 'today') {
-            if (startsPreviousDay) return currentMinutes <= endMins; // Turno começou ontem (ex: 22h ontem, até 06h hoje)
+            if (startsPreviousDay) return currentMinutes <= endMins; 
             else {
-                if (startMins < endMins) return currentMinutes >= startMins && currentMinutes <= endMins; // Turno normal (08h as 17h)
-                else return currentMinutes >= startMins; // Turno vira noite (22h as ...)
+                if (startMins < endMins) return currentMinutes >= startMins && currentMinutes <= endMins; 
+                else return currentMinutes >= startMins; 
             }
         }
         if (context === 'tomorrow') {
-            // Se hoje começa um turno que vira pro dia seguinte?
             if (startsPreviousDay) return currentMinutes >= startMins;
             return false;
         }
@@ -168,17 +167,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     const isShiftActive = (scheduleDay: any, context: 'today' | 'yesterday' | 'tomorrow', colab: Collaborator) => {
          // --- LÓGICA DE ESCALA DE REVEZAMENTO (DOMINGO) ---
-         // Se for domingo, tem escala ativa, e o funcionário tem um grupo definido
          if (isSunday && context === 'today' && colab.hasRotation && colab.rotationGroup) {
              const rotationRule = settings.shiftRotations?.find(r => r.id === colab.rotationGroup);
              if (rotationRule) {
-                 // Se o domingo atual NÃO estiver na lista de trabalho, força enabled = false
+                 // Se o domingo atual NÃO estiver na lista de trabalho, força enabled = false (Folga)
                  if (!rotationRule.workSundays.includes(sundayOfMonthIndex)) {
                      return false; 
                  }
-                 // Se estiver na lista, força a verificação de horário (mesmo que schedule.enabled estivesse false no cadastro básico)
-                 // Assumimos que o horário é o definido no schedule.domingo.start/end, mesmo que 'enabled' esteja false lá.
-                 // Porém, se não tiver horário definido (start/end), não tem como validar.
              }
          }
 
@@ -282,7 +277,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         } else if (isWorkEvent) {
              status = `Dia Extra (${evtLabel})`;
              statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
-             isActive = true; // Assume active if explicitly worked
+             isActive = true; 
         } else {
             status = evtLabel;
             statusColor = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
@@ -293,7 +288,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             statusColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
             isWorkingShift = false;
         } else if (isWorkingShift) {
-            // Se for domingo e tiver escala, mostra aviso visual
             if (isSunday && c.hasRotation) {
                status = 'Plantão Escala';
             } else {
@@ -326,7 +320,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const nextWeekEvents: any[] = [];
     const todayTime = new Date(todayStr + 'T00:00:00').getTime();
     
-    // Process Events
+    // 1. Process Database Events
     events.forEach(e => {
         const start = new Date(e.startDate + 'T00:00:00');
         const diffTime = start.getTime() - todayTime;
@@ -335,10 +329,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         if (diffDays >= 0 && diffDays <= 7) {
              const colab = collaborators.find(c => c.id === e.collaboratorId);
              if (colab) {
-                 // Check filters for upcoming events too
-                 if (currentUserAllowedSectors.length > 0) {
-                     if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) return;
-                 }
+                 if (currentUserAllowedSectors.length > 0 && (!colab.sector || !currentUserAllowedSectors.includes(colab.sector))) return;
                  if (availableBranches.length > 0 && !availableBranches.includes(colab.branch)) return;
 
                  if (filterName && !colab.name.toLowerCase().includes(filterName.toLowerCase())) return;
@@ -346,13 +337,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  if (filterRoles.length > 0 && !filterRoles.includes(colab.role)) return;
                  if (filterSectors.length > 0 && (!colab.sector || !filterSectors.includes(colab.sector))) return;
 
-                 // Get Event Label
                  const evtLabel = settings.eventTypes.find(t => t.id === e.type)?.label || e.type;
-                 // Customize Label display
                  let displayLabel = evtLabel;
                  if (e.type === 'trabalhado') displayLabel = `Folga Trabalhada - Extra`;
                  
-                 // Show Rotation if available
                  let colabNameDisplay = colab.name;
                  if (colab.hasRotation && colab.rotationGroup) colabNameDisplay += ` [${colab.rotationGroup}]`;
 
@@ -368,7 +356,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
     });
 
-    // Process Vacations (Starting in next 7 days)
+    // 2. Process Vacations (Starting in next 7 days)
     vacationRequests.forEach(v => {
         if (v.status !== 'aprovado') return;
         const start = new Date(v.startDate + 'T00:00:00');
@@ -380,7 +368,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
              if (colab) {
                  if (currentUserAllowedSectors.length > 0 && (!colab.sector || !currentUserAllowedSectors.includes(colab.sector))) return;
                  if (availableBranches.length > 0 && !availableBranches.includes(colab.branch)) return;
-                 
                  if (filterSectors.length > 0 && (!colab.sector || !filterSectors.includes(colab.sector))) return;
 
                  let colabNameDisplay = colab.name;
@@ -397,6 +384,65 @@ export const Dashboard: React.FC<DashboardProps> = ({
              }
         }
     });
+
+    // 3. Process Dynamic Rotation Off Days (Virtual Events) for Next 7 Days
+    for (let i = 0; i <= 7; i++) {
+        const targetDate = new Date(todayTime + (i * 24 * 60 * 60 * 1000));
+        const dateStr = targetDate.toISOString().split('T')[0];
+        
+        // Only verify Sundays
+        if (targetDate.getDay() === 0) {
+            const weekIndex = getWeekOfMonth(targetDate);
+            
+            collaborators.forEach(c => {
+                if (!c.hasRotation || !c.rotationGroup) return;
+
+                // Apply Filters
+                if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return;
+                if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return;
+                if (filterName && !c.name.toLowerCase().includes(filterName.toLowerCase())) return;
+                if (filterBranches.length > 0 && !filterBranches.includes(c.branch)) return;
+                if (filterRoles.length > 0 && !filterRoles.includes(c.role)) return;
+                if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return;
+
+                const rule = settings.shiftRotations?.find(r => r.id === c.rotationGroup);
+                if (rule) {
+                    const isWorking = rule.workSundays.includes(weekIndex);
+                    
+                    // Check if explicit event overrides this
+                    const hasExplicitEvent = events.some(e => e.collaboratorId === c.id && e.startDate <= dateStr && e.endDate >= dateStr);
+                    const hasVacation = vacationRequests.some(v => v.collaboratorId === c.id && v.startDate <= dateStr && v.endDate >= dateStr && v.status === 'aprovado');
+                    
+                    if (!hasExplicitEvent && !hasVacation) {
+                         if (!isWorking) {
+                             // É Folga de Escala
+                             nextWeekEvents.push({
+                                 id: `rot-off-${c.id}-${dateStr}`,
+                                 colabName: `${c.name} [Escala ${c.rotationGroup}]`,
+                                 type: 'Folga de Escala',
+                                 desc: 'Folga de Revezamento',
+                                 date: dateStr,
+                                 day: i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : targetDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                             });
+                         } else {
+                             // É Trabalho de Escala (Opcional mostrar)
+                             // Se quiser mostrar os domingos trabalhados, descomente abaixo:
+                             /*
+                             nextWeekEvents.push({
+                                 id: `rot-work-${c.id}-${dateStr}`,
+                                 colabName: `${c.name} [Escala ${c.rotationGroup}]`,
+                                 type: 'Escala',
+                                 desc: 'Domingo de Trabalho',
+                                 date: dateStr,
+                                 day: i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : targetDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                             });
+                             */
+                         }
+                    }
+                }
+            });
+        }
+    }
 
     setUpcoming(nextWeekEvents.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
 
@@ -605,7 +651,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                    <div>
                       <div className="font-bold text-gray-800 text-sm">{evt.colabName}</div>
                       <div className="text-xs text-gray-600 mt-0.5">{evt.desc}</div>
-                      <div className="text-[10px] text-indigo-500 font-bold uppercase mt-1 tracking-wide">{evt.type}</div>
+                      <div className={`text-[10px] font-bold uppercase mt-1 tracking-wide ${evt.type === 'Folga de Escala' ? 'text-emerald-500' : 'text-indigo-500'}`}>{evt.type}</div>
                    </div>
                 </div>
               ))}
