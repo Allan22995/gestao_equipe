@@ -19,16 +19,41 @@ import { generateUUID } from './utils/helpers';
 const DEFAULT_SETTINGS: SystemSettings = {
   branches: ['Matriz', 'Filial Norte'],
   roles: [
-    { name: 'Gerente', canViewAllSectors: true, permissions: SYSTEM_PERMISSIONS.map(p => p.id), manageableProfiles: ['admin', 'colaborador', 'noc', 'liderança'] },
-    { name: 'Coordenador', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'view:phones', 'write:events', 'write:on_calls'], manageableProfiles: ['colaborador'] },
-    { name: 'Vendedor', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard'] },
-    { name: 'NOC', canViewAllSectors: true, permissions: ['tab:calendario', 'tab:dashboard', 'view:phones'] }
+    { 
+      name: 'Gerente', 
+      canViewAllSectors: true, 
+      permissions: SYSTEM_PERMISSIONS.map(p => p.id), 
+      manageableProfiles: ['admin', 'colaborador', 'noc', 'liderança'] 
+    },
+    { 
+      name: 'Liderança', 
+      canViewAllSectors: false, 
+      permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'tab:saldo', 'tab:previsao_ferias', 'write:events', 'write:on_calls', 'view:phones'], 
+      manageableProfiles: ['colaborador', 'liderança'] 
+    },
+    { 
+      name: 'Coordenador', 
+      canViewAllSectors: false, 
+      permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'view:phones', 'write:events', 'write:on_calls'], 
+      manageableProfiles: ['colaborador'] 
+    },
+    { 
+      name: 'Vendedor', 
+      canViewAllSectors: false, 
+      permissions: ['tab:calendario', 'tab:dashboard'] 
+    },
+    { 
+      name: 'NOC', 
+      canViewAllSectors: true, 
+      permissions: ['tab:calendario', 'tab:dashboard', 'view:phones'] 
+    }
   ],
   sectors: ['Logística', 'TI', 'Vendas', 'RH'],
   accessProfiles: [
     { id: 'admin', name: 'admin', active: true },
     { id: 'colaborador', name: 'colaborador', active: true },
-    { id: 'noc', name: 'noc', active: true }
+    { id: 'noc', name: 'noc', active: true },
+    { id: 'liderança', name: 'liderança', active: true }
   ],
   eventTypes: [
     { id: 'ferias', label: 'Férias', behavior: 'neutral' },

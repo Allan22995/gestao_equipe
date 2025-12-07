@@ -319,6 +319,21 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
      saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
   };
 
+  const toggleManageableProfile = (roleName: string, profileId: string) => {
+    const role = settings.roles.find(r => r.name === roleName);
+    if (!role) return;
+
+    let currentProfiles = role.manageableProfiles || [];
+    if (currentProfiles.includes(profileId)) {
+        currentProfiles = currentProfiles.filter(id => id !== profileId);
+    } else {
+        currentProfiles = [...currentProfiles, profileId];
+    }
+
+    const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, manageableProfiles: currentProfiles } : r);
+    saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
+  };
+
   // --- LOGIC: EVENTS ---
   const saveEvent = () => {
     if (!newEventLabel.trim()) return;
@@ -675,6 +690,35 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                 >
                                   {settings.roles.find(r => r.name === selectedRoleForACL)?.canViewAllSectors ? 'GLOBAL (Tudo)' : 'RESTRITO (Por Usuário)'}
                                 </button>
+                             </div>
+                          </div>
+                          
+                          {/* Config de Gerenciamento de Perfis (Criação de Usuários) */}
+                          <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                             <h4 className="text-xs font-bold text-blue-800 uppercase mb-2 flex items-center gap-2">
+                                🛡️ Gerenciamento de Cadastros
+                             </h4>
+                             <p className="text-xs text-gray-600 mb-3">Quais tipos de PERFIL esta função ({selectedRoleForACL}) pode atribuir ao cadastrar novos colaboradores?</p>
+                             
+                             <div className="flex flex-wrap gap-2">
+                                {(settings.accessProfiles || []).filter(p => p.active).map(profile => {
+                                   const role = settings.roles.find(r => r.name === selectedRoleForACL);
+                                   const isAllowed = role?.manageableProfiles?.includes(profile.id) || false;
+                                   
+                                   return (
+                                     <button
+                                       key={profile.id}
+                                       onClick={() => toggleManageableProfile(selectedRoleForACL, profile.id)}
+                                       className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                                          isAllowed 
+                                          ? 'bg-blue-600 text-white border-blue-700 shadow-sm' 
+                                          : 'bg-white text-gray-500 border-gray-300 hover:border-blue-300'
+                                       }`}
+                                     >
+                                       {isAllowed && '✓ '} {profile.name}
+                                     </button>
+                                   );
+                                })}
                              </div>
                           </div>
 
