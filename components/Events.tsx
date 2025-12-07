@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Collaborator, EventRecord, SystemSettings } from '../types';
+import { Collaborator, EventRecord, SystemSettings, UserProfile } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
 
 interface EventsProps {
@@ -14,6 +14,8 @@ interface EventsProps {
   settings: SystemSettings;
   canEdit: boolean; // Permissão ACL
   currentUserAllowedSectors: string[]; // Novo: Filtro de setor
+  currentUserProfile: UserProfile;
+  userColabId: string | null;
 }
 
 const CalendarIcon = () => (
@@ -23,7 +25,7 @@ const CalendarIcon = () => (
 );
 
 export const Events: React.FC<EventsProps> = ({ 
-  collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit, currentUserAllowedSectors 
+  collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit, currentUserAllowedSectors, currentUserProfile, userColabId
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -36,16 +38,31 @@ export const Events: React.FC<EventsProps> = ({
 
   // Filter Collaborators for Dropdown
   const allowedCollaborators = useMemo(() => {
-     if (currentUserAllowedSectors.length === 0) return collaborators;
-     return collaborators.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
-  }, [collaborators, currentUserAllowedSectors]);
+     let filtered = collaborators;
+     
+     // 1. Strict Privacy for 'colaborador' profile
+     if (currentUserProfile === 'colaborador' && userColabId) {
+        return filtered.filter(c => c.id === userColabId);
+     }
+
+     if (currentUserAllowedSectors.length > 0) {
+       filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+     }
+     
+     return filtered;
+  }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   // Filter Events History and Sort by Date Descending
   const allowedEvents = useMemo(() => {
      let filtered = events;
      
+     // 1. Strict Privacy for 'colaborador' profile
+     if (currentUserProfile === 'colaborador' && userColabId) {
+         filtered = filtered.filter(e => e.collaboratorId === userColabId);
+     }
+
      if (currentUserAllowedSectors.length > 0) {
-        filtered = events.filter(e => {
+        filtered = filtered.filter(e => {
             const colab = collaborators.find(c => c.id === e.collaboratorId);
             return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
         });
@@ -66,7 +83,7 @@ export const Events: React.FC<EventsProps> = ({
          const createdB = b.createdAt || '';
          return createdB.localeCompare(createdA);
      });
-  }, [events, collaborators, currentUserAllowedSectors]);
+  }, [events, collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
 
   const resetForm = () => {

@@ -15,6 +15,7 @@ interface VacationForecastProps {
   currentUserName: string;
   canEdit: boolean; // Permissão ACL
   currentUserAllowedSectors: string[]; // Novo: Filtro de setor
+  userColabId: string | null;
 }
 
 const CalendarIcon = () => (
@@ -24,7 +25,7 @@ const CalendarIcon = () => (
 );
 
 export const VacationForecast: React.FC<VacationForecastProps> = ({ 
-  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, canEdit, currentUserAllowedSectors
+  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, canEdit, currentUserAllowedSectors, userColabId
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -39,18 +40,38 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
 
   // Filter Collaborators for Dropdown
   const allowedCollaborators = useMemo(() => {
-     if (currentUserAllowedSectors.length === 0) return collaborators;
-     return collaborators.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
-  }, [collaborators, currentUserAllowedSectors]);
+     let filtered = collaborators;
+     
+     // 1. Strict Privacy for 'colaborador' profile
+     if (currentUserProfile === 'colaborador' && userColabId) {
+        return filtered.filter(c => c.id === userColabId);
+     }
+
+     if (currentUserAllowedSectors.length > 0) {
+        filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+     }
+
+     return filtered;
+  }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   // Filter Requests History
   const allowedRequests = useMemo(() => {
-     if (currentUserAllowedSectors.length === 0) return requests;
-     return requests.filter(r => {
-        const colab = collaborators.find(c => c.id === r.collaboratorId);
-        return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
-     });
-  }, [requests, collaborators, currentUserAllowedSectors]);
+     let filtered = requests;
+
+     // 1. Strict Privacy for 'colaborador' profile
+     if (currentUserProfile === 'colaborador' && userColabId) {
+         filtered = filtered.filter(r => r.collaboratorId === userColabId);
+     }
+
+     if (currentUserAllowedSectors.length > 0) {
+        filtered = filtered.filter(r => {
+            const colab = collaborators.find(c => c.id === r.collaboratorId);
+            return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
+        });
+     }
+     
+     return filtered;
+  }, [requests, collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   const resetForm = () => {
     setEditingId(null);

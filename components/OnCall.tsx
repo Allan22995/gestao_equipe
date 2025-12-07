@@ -1,7 +1,7 @@
 
 
 import React, { useState, useMemo } from 'react';
-import { Collaborator, OnCallRecord, SystemSettings } from '../types';
+import { Collaborator, OnCallRecord, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatDate, promptForUser } from '../utils/helpers';
 
 interface OnCallProps {
@@ -14,6 +14,8 @@ interface OnCallProps {
   logAction: (action: string, entity: string, details: string, user: string) => void;
   settings: SystemSettings;
   canEdit: boolean; // Permissão ACL
+  currentUserProfile: UserProfile;
+  userColabId: string | null;
 }
 
 const CalendarIcon = () => (
@@ -22,7 +24,7 @@ const CalendarIcon = () => (
   </svg>
 );
 
-export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit }) => {
+export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit, currentUserProfile, userColabId }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     collaboratorId: '',
@@ -34,7 +36,14 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
   });
 
   const sortedOnCalls = useMemo(() => {
-    return [...onCalls].sort((a, b) => {
+    let filtered = onCalls;
+
+    // 1. Strict Privacy for 'colaborador' profile
+    if (currentUserProfile === 'colaborador' && userColabId) {
+        filtered = filtered.filter(o => o.collaboratorId === userColabId);
+    }
+
+    return [...filtered].sort((a, b) => {
         const dateA = a.startDate || '';
         const dateB = b.startDate || '';
         
@@ -51,7 +60,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
         // Desempate por data de criação
         return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
-  }, [onCalls]);
+  }, [onCalls, currentUserProfile, userColabId]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -122,6 +131,18 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
 
   const getColabName = (id: string) => collaborators.find(c => c.id === id)?.name || '---';
 
+  // Filter Collaborators for Dropdown
+  const allowedCollaborators = useMemo(() => {
+     let filtered = collaborators;
+     
+     // 1. Strict Privacy for 'colaborador' profile
+     if (currentUserProfile === 'colaborador' && userColabId) {
+        return filtered.filter(c => c.id === userColabId);
+     }
+     
+     return filtered;
+  }, [collaborators, currentUserProfile, userColabId]);
+
   return (
     <div className="space-y-8">
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
@@ -166,7 +187,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
               disabled={!!editingId}
             >
               <option value="">Selecione...</option>
-              {collaborators.map(c => (
+              {allowedCollaborators.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>

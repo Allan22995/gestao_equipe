@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Collaborator, EventRecord, BalanceAdjustment } from '../types';
+import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
 
 interface BalanceProps {
@@ -13,10 +13,12 @@ interface BalanceProps {
   currentUserName: string;
   canEdit: boolean; // Permissão ACL
   currentUserAllowedSectors: string[]; // Novo: Filtro de setor
+  currentUserProfile: UserProfile;
+  userColabId: string | null;
 }
 
 export const Balance: React.FC<BalanceProps> = ({ 
-  collaborators, events, adjustments, onAddAdjustment, showToast, logAction, currentUserName, canEdit, currentUserAllowedSectors
+  collaborators, events, adjustments, onAddAdjustment, showToast, logAction, currentUserName, canEdit, currentUserAllowedSectors, currentUserProfile, userColabId
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [adjForm, setAdjForm] = useState({
@@ -72,11 +74,22 @@ export const Balance: React.FC<BalanceProps> = ({
     setAdjForm(prev => ({ ...prev, days: '', reason: '' }));
   };
 
-  // Filter Collaborators First based on Sector Restrictions
+  // Filter Collaborators First based on Sector Restrictions and Profile
   const allowedCollaborators = useMemo(() => {
-     if (currentUserAllowedSectors.length === 0) return collaborators;
-     return collaborators.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
-  }, [collaborators, currentUserAllowedSectors]);
+     let filtered = collaborators;
+
+     // 1. Strict Privacy for 'colaborador' profile
+     if (currentUserProfile === 'colaborador' && userColabId) {
+        return filtered.filter(c => c.id === userColabId);
+     }
+
+     // 2. Sector filtering
+     if (currentUserAllowedSectors.length > 0) {
+         filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+     }
+
+     return filtered;
+  }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   // Then calculate balances for allowed collaborators
   const balances = allowedCollaborators.map(c => {
@@ -97,7 +110,7 @@ export const Balance: React.FC<BalanceProps> = ({
     c.colabId.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filter Log Items based on Sector and Search Term
+  // Filter Log Items based on Sector, Search Term, and Profile
   const filteredLogItems = useMemo(() => {
      const allLogs = [
         ...events.map(e => ({ ...e, logType: 'event', date: e.createdAt })),
@@ -108,13 +121,18 @@ export const Balance: React.FC<BalanceProps> = ({
       .filter(item => {
           const colab = collaborators.find(c => c.id === item.collaboratorId);
           if (!colab) return false;
+
+          // 1. Strict Privacy Check for Log
+          if (currentUserProfile === 'colaborador' && userColabId) {
+              if (colab.id !== userColabId) return false;
+          }
           
-          // 1. Sector Check
+          // 2. Sector Check
           if (currentUserAllowedSectors.length > 0) {
              if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) return false;
           }
 
-          // 2. Search Term Check
+          // 3. Search Term Check
           if (searchTerm) {
              const term = searchTerm.toLowerCase();
              return colab.name.toLowerCase().includes(term) || colab.colabId.toLowerCase().includes(term);
@@ -125,7 +143,7 @@ export const Balance: React.FC<BalanceProps> = ({
       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 50);
 
-  }, [events, adjustments, collaborators, currentUserAllowedSectors, searchTerm]);
+  }, [events, adjustments, collaborators, currentUserAllowedSectors, searchTerm, currentUserProfile, userColabId]);
 
   return (
     <div className="space-y-8">
