@@ -246,6 +246,12 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Ex: 001" value={formData.colabId} onChange={e => setFormData({...formData, colabId: e.target.value})} />
             </div>
 
+            {/* Login Rede */}
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Usuário de Rede/Login *</label>
+              <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="nome.sobrenome" value={formData.login} onChange={e => setFormData({...formData, login: e.target.value})} />
+            </div>
+
             {/* Nome */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Nome Completo *</label>
@@ -257,16 +263,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               <label className="text-xs font-semibold text-gray-600 mb-1">E-mail Google (Login) *</label>
               <input required type="email" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="email@gmail.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
               <span className="text-[10px] text-gray-400">Usado para autenticação no sistema</span>
-            </div>
-
-            {/* Perfil de Acesso */}
-             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Perfil de Acesso *</label>
-              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white capitalize" value={formData.profile} onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}>
-                 {profileOptions.map(p => (
-                   <option key={p} value={p}>{p}</option>
-                 ))}
-              </select>
             </div>
 
             {/* Telefone */}
@@ -282,7 +278,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               />
             </div>
 
-            {/* Outro Contato (Novo) */}
+            {/* Outro Contato */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Outro Contato</label>
               <input 
@@ -292,6 +288,16 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                 value={formData.otherContact} 
                 onChange={e => setFormData({...formData, otherContact: e.target.value})} 
               />
+            </div>
+
+            {/* Perfil de Acesso */}
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Perfil de Acesso *</label>
+              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white capitalize" value={formData.profile} onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}>
+                 {profileOptions.map(p => (
+                   <option key={p} value={p}>{p}</option>
+                 ))}
+              </select>
             </div>
 
             {/* Branch Select */}
@@ -316,7 +322,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </select>
             </div>
 
-            {/* Sector / Squad Select (Condicional) */}
+            {/* Sector / Squad Select */}
             <div className="flex flex-col md:col-span-2">
               <label className="text-xs font-semibold text-gray-600 mb-1">Setor Principal (Lotação)</label>
               <select 
@@ -329,12 +335,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    <option key={s} value={s}>{s}</option>
                  ))}
               </select>
-            </div>
-
-            {/* Login Rede (Opcional) */}
-            <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Usuário de Rede/Login *</label>
-              <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="zé_maga" value={formData.login} onChange={e => setFormData({...formData, login: e.target.value})} />
             </div>
 
             {/* Shift Type (Turno) */}
