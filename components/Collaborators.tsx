@@ -44,6 +44,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     allowedSectors: [] as string[],
     login: '',
     shiftType: '',
+    hasShiftScale: false,
+    shiftScaleGroup: ''
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
@@ -98,6 +100,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       allowedSectors: colab.allowedSectors || [],
       login: colab.login,
       shiftType: colab.shiftType,
+      hasShiftScale: colab.hasShiftScale || false,
+      shiftScaleGroup: colab.shiftScaleGroup || '',
     });
     
     const safeSchedule = JSON.parse(JSON.stringify(colab.schedule));
@@ -113,7 +117,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setFormData({ colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '' });
+    setFormData({ colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '', hasShiftScale: false, shiftScaleGroup: '' });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
   };
@@ -161,13 +165,22 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
        return;
     }
 
+    // Validation for Shift Scale
+    if (formData.hasShiftScale && !formData.shiftScaleGroup) {
+       showToast('Selecione o Grupo de Escala (A, B, C ou D).', true);
+       return;
+    }
+
     // Clean up allowedSectors if role is not restricted (optional but good for data hygiene)
     const finalAllowedSectors = isRoleRestricted ? formData.allowedSectors : [];
+    // Clean up scale group if scale is disabled
+    const finalScaleGroup = formData.hasShiftScale ? formData.shiftScaleGroup : '';
 
     if (editingId) {
       onUpdate({
         id: editingId,
         ...formData,
+        shiftScaleGroup: finalScaleGroup,
         allowedSectors: finalAllowedSectors,
         schedule,
         createdAt: new Date().toISOString(),
@@ -178,6 +191,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       const newColab: Collaborator = {
         id: generateUUID(),
         ...formData,
+        shiftScaleGroup: finalScaleGroup,
         allowedSectors: finalAllowedSectors,
         schedule,
         createdAt: new Date().toISOString(),
@@ -442,6 +456,42 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </div>
             )}
 
+            {/* Configuração de Escala Dominical */}
+            <div className="mb-6 p-4 bg-orange-50 rounded-lg border border-orange-200 flex flex-col md:flex-row gap-4 items-start md:items-center">
+               <div className="flex-1">
+                  <h4 className="text-xs font-bold text-orange-800 uppercase mb-1">Escala de Revezamento (Domingos)</h4>
+                  <p className="text-[10px] text-orange-600">Parametrize se este funcionário segue a regra de 1 folga dominical a cada 3 trabalhados (CLT).</p>
+               </div>
+               
+               <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded border border-orange-200 hover:border-orange-300 shadow-sm transition-all">
+                      <input 
+                        type="checkbox" 
+                        className="rounded text-orange-600 focus:ring-orange-500 w-4 h-4"
+                        checked={formData.hasShiftScale}
+                        onChange={e => setFormData({...formData, hasShiftScale: e.target.checked})}
+                      />
+                      <span className="text-xs font-bold text-gray-700">Trabalha em Escala?</span>
+                  </label>
+
+                  {formData.hasShiftScale && (
+                    <div className="animate-fadeIn">
+                       <select 
+                         value={formData.shiftScaleGroup}
+                         onChange={e => setFormData({...formData, shiftScaleGroup: e.target.value})}
+                         className="border border-orange-300 rounded-lg p-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                       >
+                          <option value="">Selecione o Grupo...</option>
+                          <option value="A">Grupo A</option>
+                          <option value="B">Grupo B</option>
+                          <option value="C">Grupo C</option>
+                          <option value="D">Grupo D</option>
+                       </select>
+                    </div>
+                  )}
+               </div>
+            </div>
+
             <p className="text-xs text-gray-500 mb-4">Configure os dias trabalhados. Se o turno inicia no dia anterior (Ex: A escala de Segunda começa Domingo às 22:00), marque a caixa "Inicia dia anterior".</p>
             
             <div className="space-y-3">
@@ -594,6 +644,9 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               <div className="pl-2 mt-3 border-t border-gray-100 pt-2 flex flex-wrap gap-2">
                  {c.shiftType && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold">{c.shiftType}</span>}
                  {c.role === 'admin' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-bold">Admin</span>}
+                 {c.hasShiftScale && c.shiftScaleGroup && (
+                    <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded border border-orange-200 font-bold">Escala {c.shiftScaleGroup}</span>
+                 )}
               </div>
             </div>
           ))}
