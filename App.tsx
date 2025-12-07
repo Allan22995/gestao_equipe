@@ -19,14 +19,13 @@ import { generateUUID } from './utils/helpers';
 const DEFAULT_SETTINGS: SystemSettings = {
   branches: ['Matriz', 'Filial Norte'],
   roles: [
-    { name: 'Gerente', canViewAllSectors: true, permissions: SYSTEM_PERMISSIONS.map(p => p.id), manageableProfiles: ['admin', 'colaborador', 'noc', 'liderança'] },
-    { name: 'Líder', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'view:phones', 'write:events', 'write:on_calls'], manageableProfiles: ['colaborador', 'liderança'] },
-    { name: 'Coordenador', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'view:phones', 'write:events', 'write:on_calls'], manageableProfiles: ['colaborador'] },
+    { name: 'Gerente', canViewAllSectors: true, permissions: SYSTEM_PERMISSIONS.map(p => p.id) },
+    { name: 'Coordenador', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'view:phones', 'write:events', 'write:on_calls'] },
     { name: 'Vendedor', canViewAllSectors: false, permissions: ['tab:calendario', 'tab:dashboard'] },
     { name: 'NOC', canViewAllSectors: true, permissions: ['tab:calendario', 'tab:dashboard', 'view:phones'] }
   ],
   sectors: ['Logística', 'TI', 'Vendas', 'RH'],
-  accessProfiles: ['admin', 'colaborador', 'noc', 'liderança'],
+  accessProfiles: ['admin', 'colaborador', 'noc'],
   eventTypes: [
     { id: 'ferias', label: 'Férias', behavior: 'neutral' },
     { id: 'folga', label: 'Folga', behavior: 'debit' },
@@ -212,7 +211,6 @@ function App() {
   const handleSaveSettings = async (s: SystemSettings) => { try { await dbService.saveSettings(s); showToast('Configurações salvas!'); } catch (err: any) { console.error(err); showToast(err.message || 'Erro ao salvar.', true); throw err; } };
 
   const currentUserName = userColabId ? (collaborators.find(c => c.id === userColabId)?.name || user?.email) : user?.email || 'Sistema';
-  const currentUserRole = userColabId ? (collaborators.find(c => c.id === userColabId)?.role || '') : '';
 
   // --- LOGIC: BRANCH RESTRICTION ---
   // Se for admin, vê todas. Se não, vê apenas a sua.
@@ -276,7 +274,6 @@ function App() {
           showToast={showToast} settings={settings} currentUserProfile={userProfile}
           canEdit={hasPermission('write:collaborators')}
           currentUserAllowedSectors={currentUserAllowedSectors}
-          currentUserRole={currentUserRole}
         />;
       case 'eventos':
         return <Events 

@@ -30,7 +30,6 @@ export interface RoleConfig {
   name: string;
   canViewAllSectors: boolean; // Se true, vê tudo. Se false, precisa definir quais setores vê.
   permissions: string[]; // Lista de IDs de permissão (ex: 'tab:dashboard', 'action:edit_events')
-  manageableProfiles?: string[]; // Novo: Lista de perfis que esta role pode cadastrar/editar (ex: ['colaborador', 'noc'])
 }
 
 // Changed to string to allow dynamic profiles from settings

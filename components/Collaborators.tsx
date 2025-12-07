@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
 
@@ -12,7 +12,6 @@ interface CollaboratorsProps {
   currentUserProfile: UserProfile;
   canEdit: boolean; // Permissão ACL
   currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
-  currentUserRole: string; // Nova prop: Nome da role do usuário logado
 }
 
 const initialSchedule: Schedule = {
@@ -27,7 +26,7 @@ const initialSchedule: Schedule = {
 
 export const Collaborators: React.FC<CollaboratorsProps> = ({ 
   collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canEdit,
-  currentUserAllowedSectors, currentUserRole
+  currentUserAllowedSectors 
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -199,30 +198,10 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
-  // --- FILTRAGEM DE PERFIS PERMITIDOS (ACL) ---
-  const profileOptions = useMemo(() => {
-    const allProfiles = settings.accessProfiles && settings.accessProfiles.length > 0 
-      ? settings.accessProfiles 
-      : ['admin', 'colaborador', 'noc'];
-
-    // Se o usuário for Admin (Perfil Firebase), vê tudo
-    if (currentUserProfile === 'admin') {
-      return allProfiles;
-    }
-
-    // Se não, verifica a configuração da Role do usuário
-    const roleConfig = settings.roles.find(r => r.name === currentUserRole);
-    if (roleConfig && roleConfig.manageableProfiles && roleConfig.manageableProfiles.length > 0) {
-      // Retorna apenas os perfis que estão na lista 'manageableProfiles'
-      return allProfiles.filter(p => roleConfig.manageableProfiles!.includes(p));
-    }
-
-    // Fallback: Se não tiver configuração, assume que não pode criar nada ou padrão restrito?
-    // Vamos assumir que se não tiver config, retorna vazio para evitar erro de segurança, 
-    // ou retorna 'colaborador' como fallback seguro. 
-    // O ideal é o admin configurar. Vamos retornar vazio para forçar configuração.
-    return [];
-  }, [settings.accessProfiles, settings.roles, currentUserProfile, currentUserRole]);
+  // Helper to check if profile list is available, otherwise fallback
+  const profileOptions = settings.accessProfiles && settings.accessProfiles.length > 0 
+    ? settings.accessProfiles 
+    : ['admin', 'colaborador', 'noc'];
 
   const sectorOptions = settings.sectors || [];
   const scheduleTemplates = settings.scheduleTemplates || [];
@@ -314,21 +293,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             {/* Perfil de Acesso */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Perfil de Acesso *</label>
-              <select 
-                required 
-                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white capitalize" 
-                value={formData.profile} 
-                onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}
-              >
-                 {profileOptions.length === 0 ? (
-                    <option value="" disabled>Sem permissão para cadastrar perfis</option>
-                 ) : (
-                    profileOptions.map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))
-                 )}
+              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white capitalize" value={formData.profile} onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}>
+                 {profileOptions.map(p => (
+                   <option key={p} value={p}>{p}</option>
+                 ))}
               </select>
-              {profileOptions.length === 0 && <span className="text-[10px] text-red-500">Sua função não tem permissão configurada para atribuir perfis. Contate o Admin.</span>}
             </div>
 
             {/* Branch Select */}
