@@ -56,7 +56,69 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
   }, [settings?.sectors, currentUserAllowedSectors]);
 
-  // --- Lógica de Funções Dinâmicas ---
+  // --- LÓGICA DE BASE DE DADOS (SEM FILTROS DE TELA) ---
+  // Calcula colaboradores acessíveis apenas com restrições de segurança (Permissões)
+  // Usado para os contadores estáticos de Escala e Turno
+  const allAccessibleCollaborators = useMemo(() => {
+    return collaborators.filter(c => {
+      // Security: Sector
+      if (currentUserAllowedSectors.length > 0) {
+        if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
+      }
+      // Security: Branch
+      if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
+      return true;
+    });
+  }, [collaborators, currentUserAllowedSectors, availableBranches]);
+
+  // Estatísticas de Escala (Ignora filtros de tela)
+  const rotationStats = useMemo(() => {
+    const counts: Record<string, number> = {};
+    
+    // Inicializa com 0 para todas as escalas configuradas
+    settings.shiftRotations.forEach(r => counts[r.id] = 0);
+    let noRotationCount = 0;
+
+    allAccessibleCollaborators.forEach(c => {
+      if (c.hasRotation && c.rotationGroup) {
+        // Se a escala do colaborador existe na configuração, incrementa
+        if (counts[c.rotationGroup] !== undefined) {
+           counts[c.rotationGroup]++;
+        } else {
+           // Caso seja uma escala antiga/removida, cria entrada dinâmica
+           counts[c.rotationGroup] = (counts[c.rotationGroup] || 0) + 1;
+        }
+      } else {
+        noRotationCount++;
+      }
+    });
+
+    return { counts, noRotationCount };
+  }, [allAccessibleCollaborators, settings.shiftRotations]);
+
+  // Estatísticas de Turno (Ignora filtros de tela)
+  const shiftStats = useMemo(() => {
+    const counts: Record<string, number> = {
+        '1º Turno': 0,
+        '2º Turno': 0,
+        '3º Turno': 0,
+        'ADM': 0
+    };
+    let notDefined = 0;
+
+    allAccessibleCollaborators.forEach(c => {
+        if (c.shiftType) {
+            // Normaliza contagem (caso venha texto diferente, agrupa ou cria novo)
+            counts[c.shiftType] = (counts[c.shiftType] || 0) + 1;
+        } else {
+            notDefined++;
+        }
+    });
+    return { counts, notDefined };
+  }, [allAccessibleCollaborators]);
+
+
+  // --- Lógica de Funções Dinâmicas (Para Filtros) ---
   const availableRoles = useMemo(() => {
     let filtered = collaborators;
 
@@ -64,7 +126,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
     }
     
-    // Filtra colaboradores pela filial permitida ou selecionada
     if (filterBranches.length > 0) {
         filtered = filtered.filter(c => filterBranches.includes(c.branch));
     } else if (availableBranches.length > 0) {
@@ -117,7 +178,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const nextDayKey = getNextDayKey(currentDayIndex);
 
     const isSunday = currentDayIndex === 0;
-    const sundayOfMonthIndex = getWeekOfMonth(now); // 1, 2, 3, 4, 5
+    const sundayOfMonthIndex = getWeekOfMonth(now); 
 
     let activeCount = 0;
     let inactiveCount = 0;
@@ -139,7 +200,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return matchesName && matchesBranch && matchesRole && matchesSector;
     });
 
-    // Helper para verificar horário
     const isTimeInRange = (startStr: string, endStr: string, startsPreviousDay: boolean, context: 'today' | 'yesterday' | 'tomorrow') => {
         if (!startStr || !endStr) return false;
 
@@ -167,11 +227,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     };
 
     const isShiftActive = (scheduleDay: any, context: 'today' | 'yesterday' | 'tomorrow', colab: Collaborator) => {
-         // --- LÓGICA DE ESCALA DE REVEZAMENTO (DOMINGO) ---
          if (isSunday && context === 'today' && colab.hasRotation && colab.rotationGroup) {
              const rotationRule = settings.shiftRotations?.find(r => r.id === colab.rotationGroup);
              if (rotationRule) {
-                 // Se o domingo atual NÃO estiver na lista de trabalho, força enabled = false (Folga)
                  if (!rotationRule.workSundays.includes(sundayOfMonthIndex)) {
                      return false; 
                  }
@@ -258,7 +316,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const evtConfig = settings.eventTypes.find(t => t.id === todayEvent.type);
         const evtLabel = evtConfig?.label || todayEvent.type;
         
-        // Determina se é um evento de trabalho (Extra/Crédito)
         let isWorkEvent = false;
         if (todayEvent.type === 'trabalhado') {
             isWorkEvent = true;
@@ -279,12 +336,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
              status = `Dia Extra (${evtLabel})`;
              statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
              
-             // --- LÓGICA DE HORÁRIO EM DIA EXTRA ---
-             // Tenta usar o horário do dia atual. Se não houver, busca um dia padrão (fallback).
              let refSchedule = c.schedule[currentDayKey];
              let useSchedule = refSchedule;
              
-             // Se o dia atual não estiver habilitado (ex: Domingo), busca a primeira jornada válida (ex: Segunda)
              if (!refSchedule.enabled) {
                  const weekdays: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
                  const fallbackDay = weekdays.find(d => c.schedule[d].enabled);
@@ -293,12 +347,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  }
              }
 
-             // Verifica se está dentro do horário usando a jornada de referência
              if (useSchedule && useSchedule.start && useSchedule.end) {
-                 // Usa contexto 'today' pois estamos verificando o momento presente em relação ao horário de início/fim
                  isActive = isTimeInRange(useSchedule.start, useSchedule.end, !!useSchedule.startsPreviousDay, 'today');
              } else {
-                 isActive = false; // Se não achou nenhuma jornada, assume inativo
+                 isActive = false;
              }
 
              if (!isActive) {
@@ -343,11 +395,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
     setDetails(tempDetails);
 
-    // Upcoming Events Logic (Próximos 7 dias)
+    // Upcoming Events Logic
     const nextWeekEvents: any[] = [];
     const todayTime = new Date(todayStr + 'T00:00:00').getTime();
     
-    // 1. Process Database Events
     events.forEach(e => {
         const start = new Date(e.startDate + 'T00:00:00');
         const diffTime = start.getTime() - todayTime;
@@ -383,7 +434,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
     });
 
-    // 2. Process Vacations (Starting in next 7 days)
     vacationRequests.forEach(v => {
         if (v.status !== 'aprovado') return;
         const start = new Date(v.startDate + 'T00:00:00');
@@ -412,19 +462,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
     });
 
-    // 3. Process Dynamic Rotation Off Days (Virtual Events) for Next 7 Days
     for (let i = 0; i <= 7; i++) {
         const targetDate = new Date(todayTime + (i * 24 * 60 * 60 * 1000));
         const dateStr = targetDate.toISOString().split('T')[0];
         
-        // Only verify Sundays
         if (targetDate.getDay() === 0) {
             const weekIndex = getWeekOfMonth(targetDate);
             
             collaborators.forEach(c => {
                 if (!c.hasRotation || !c.rotationGroup) return;
 
-                // Apply Filters
                 if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return;
                 if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return;
                 if (filterName && !c.name.toLowerCase().includes(filterName.toLowerCase())) return;
@@ -436,13 +483,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 if (rule) {
                     const isWorking = rule.workSundays.includes(weekIndex);
                     
-                    // Check if explicit event overrides this
                     const hasExplicitEvent = events.some(e => e.collaboratorId === c.id && e.startDate <= dateStr && e.endDate >= dateStr);
                     const hasVacation = vacationRequests.some(v => v.collaboratorId === c.id && v.startDate <= dateStr && v.endDate >= dateStr && v.status === 'aprovado');
                     
                     if (!hasExplicitEvent && !hasVacation) {
                          if (!isWorking) {
-                             // É Folga de Escala
                              nextWeekEvents.push({
                                  id: `rot-off-${c.id}-${dateStr}`,
                                  colabName: `${c.name} [Escala ${c.rotationGroup}]`,
@@ -469,12 +514,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const todayStr = today.toISOString().split('T')[0];
     const todayLocale = today.toLocaleDateString('pt-BR');
 
-    // Helper: Check if date string matches today (ignoring time if full ISO)
     const isToday = (isoString?: string) => {
         if (!isoString) return false;
-        // Simple check: starts with YYYY-MM-DD
         if (isoString.startsWith(todayStr)) return true;
-        // Check with timezone adjustment if needed (assuming server saves UTC but we want local day match)
         const d = new Date(isoString);
         return d.toLocaleDateString('pt-BR') === todayLocale;
     };
@@ -595,7 +637,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Cards de Status */}
+      {/* Cards de Status Principais (Dinâmicos) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-emerald-500 rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform">
           <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
@@ -620,6 +662,64 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-orange-100 font-bold uppercase text-xs tracking-wider">AUSENTES / FOLGA / FÉRIAS</p>
           <p className="text-5xl font-bold mt-2">{stats.inactive}</p>
         </div>
+      </div>
+
+      {/* MÉTRICAS DE DISTRIBUIÇÃO (ESTÁTICAS - IGNORAM FILTROS VISUAIS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 z-0 relative">
+          
+          {/* DISTRIBUIÇÃO POR ESCALAS */}
+          <div className="bg-white rounded-xl shadow-lg border border-purple-100 p-5 overflow-hidden">
+             <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                </div>
+                <div>
+                   <h3 className="text-md font-bold text-gray-800">Distribuição por Escalas</h3>
+                   <p className="text-[10px] text-gray-500">Total da equipe (Sem filtros de tela)</p>
+                </div>
+             </div>
+             
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                 {Object.entries(rotationStats.counts).map(([group, count]) => (
+                   <div key={group} className="flex flex-col items-center justify-center p-3 rounded-lg bg-purple-50 border border-purple-100">
+                       <span className="text-xs font-bold text-purple-600 uppercase mb-1">Escala {group}</span>
+                       <span className="text-2xl font-bold text-gray-800">{count}</span>
+                   </div>
+                 ))}
+                 <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-gray-50 border border-gray-200">
+                     <span className="text-xs font-bold text-gray-500 uppercase mb-1">Sem Escala</span>
+                     <span className="text-2xl font-bold text-gray-600">{rotationStats.noRotationCount}</span>
+                 </div>
+             </div>
+          </div>
+
+          {/* DISTRIBUIÇÃO POR TURNOS */}
+          <div className="bg-white rounded-xl shadow-lg border border-blue-100 p-5 overflow-hidden">
+             <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <div>
+                   <h3 className="text-md font-bold text-gray-800">Distribuição por Turnos</h3>
+                   <p className="text-[10px] text-gray-500">Total da equipe (Sem filtros de tela)</p>
+                </div>
+             </div>
+             
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                 {Object.entries(shiftStats.counts).map(([shift, count]) => (
+                   <div key={shift} className="flex flex-col items-center justify-center p-3 rounded-lg bg-blue-50 border border-blue-100">
+                       <span className="text-xs font-bold text-blue-600 uppercase mb-1 text-center whitespace-nowrap overflow-hidden text-ellipsis w-full" title={shift}>{shift}</span>
+                       <span className="text-2xl font-bold text-gray-800">{count}</span>
+                   </div>
+                 ))}
+                 {shiftStats.notDefined > 0 && (
+                     <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-gray-50 border border-gray-200">
+                         <span className="text-xs font-bold text-gray-500 uppercase mb-1">Ñ Definido</span>
+                         <span className="text-2xl font-bold text-gray-600">{shiftStats.notDefined}</span>
+                     </div>
+                 )}
+             </div>
+          </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 z-0 relative">
