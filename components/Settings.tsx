@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -123,14 +124,14 @@ const ManageList = ({
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
   // Determine tab visibility based on permissions
-  const showGeral = hasPermission('settings:integration') || hasPermission('settings:lists') || hasPermission('settings:profiles') || hasPermission('settings:event_types');
+  const showGeral = hasPermission('settings:integration') || hasPermission('settings:branches') || hasPermission('settings:sectors') || hasPermission('settings:profiles') || hasPermission('settings:event_types');
   const showAcesso = hasPermission('settings:access_control');
   const showJornada = hasPermission('settings:schedule_templates');
   const showSistema = hasPermission('settings:system_msg');
 
   // Tabs Internas (Initialize based on permissions)
   const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'jornada' | 'sistema'>(() => {
-    if (hasPermission('settings:integration') || hasPermission('settings:lists') || hasPermission('settings:profiles') || hasPermission('settings:event_types')) return 'geral';
+    if (hasPermission('settings:integration') || hasPermission('settings:branches') || hasPermission('settings:sectors') || hasPermission('settings:profiles') || hasPermission('settings:event_types')) return 'geral';
     if (hasPermission('settings:access_control')) return 'acesso';
     if (hasPermission('settings:schedule_templates')) return 'jornada';
     if (hasPermission('settings:system_msg')) return 'sistema';
@@ -522,31 +523,33 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            )}
 
-           {/* Filiais e Setores */}
-           {hasPermission('settings:lists') && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <ManageList 
-                  title="Filiais" 
-                  items={settings.branches} 
-                  onAdd={addBranch} 
-                  onEdit={editBranch}
-                  onRemove={removeBranch} 
-                  saving={savingState['branch'] || 'idle'} 
-                  removingId={removingId} 
-                  placeholder="Nova Filial..." 
-                />
-                <ManageList 
-                  title="Setores / Squads" 
-                  items={settings.sectors || []} 
-                  onAdd={addSector} 
-                  onEdit={editSector}
-                  onRemove={removeSector} 
-                  saving={savingState['sector'] || 'idle'} 
-                  removingId={removingId} 
-                  placeholder="Novo Setor..." 
-                />
-            </div>
-           )}
+           {/* Filiais e Setores (Separados) */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {hasPermission('settings:branches') && (
+                    <ManageList 
+                      title="Filiais" 
+                      items={settings.branches} 
+                      onAdd={addBranch} 
+                      onEdit={editBranch}
+                      onRemove={removeBranch} 
+                      saving={savingState['branch'] || 'idle'} 
+                      removingId={removingId} 
+                      placeholder="Nova Filial..." 
+                    />
+                )}
+                {hasPermission('settings:sectors') && (
+                    <ManageList 
+                      title="Setores / Squads" 
+                      items={settings.sectors || []} 
+                      onAdd={addSector} 
+                      onEdit={editSector}
+                      onRemove={removeSector} 
+                      saving={savingState['sector'] || 'idle'} 
+                      removingId={removingId} 
+                      placeholder="Novo Setor..." 
+                    />
+                )}
+           </div>
 
            {/* Perfis de Acesso (Separado e Atualizado) */}
            {hasPermission('settings:profiles') && (
@@ -641,7 +644,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            )}
 
-           {!hasPermission('settings:integration') && !hasPermission('settings:lists') && !hasPermission('settings:profiles') && !hasPermission('settings:event_types') && (
+           {!hasPermission('settings:integration') && !hasPermission('settings:branches') && !hasPermission('settings:sectors') && !hasPermission('settings:profiles') && !hasPermission('settings:event_types') && (
               <p className="text-gray-500 italic text-center py-8">Você não tem permissão para visualizar itens desta seção.</p>
            )}
         </div>

@@ -1,4 +1,5 @@
 
+
 export interface DaySchedule {
   enabled: boolean;
   start: string;
@@ -196,7 +197,8 @@ export const SYSTEM_PERMISSIONS = [
 
   // Novas Permissões Granulares de Configuração
   { id: 'settings:integration', label: 'Config: Integrações (Planilha)', category: 'Configuração (Detalhes)' },
-  { id: 'settings:lists', label: 'Config: Filiais e Setores', category: 'Configuração (Detalhes)' },
+  { id: 'settings:branches', label: 'Config: Filiais', category: 'Configuração (Detalhes)' }, // Apartado
+  { id: 'settings:sectors', label: 'Config: Setores', category: 'Configuração (Detalhes)' }, // Apartado
   { id: 'settings:profiles', label: 'Config: Perfis de Acesso', category: 'Configuração (Detalhes)' },
   { id: 'settings:event_types', label: 'Config: Tipos de Evento', category: 'Configuração (Detalhes)' },
   { id: 'settings:access_control', label: 'Config: Controle de Acesso (Roles)', category: 'Configuração (Detalhes)' },

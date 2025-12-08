@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from './types';
 import { dbService } from './services/storage'; 
@@ -196,6 +197,15 @@ function App() {
             if (!r.permissions) {
                 // Default Permissions for legacy objects
                 return { ...r, permissions: ['tab:calendario', 'tab:dashboard'] };
+            }
+            // Migração de Permissão Legada (settings:lists -> settings:branches & settings:sectors)
+            if (r.permissions.includes('settings:lists')) {
+                console.log(`⚠️ Migrando permissão 'settings:lists' para 'settings:branches' e 'settings:sectors' na role: ${r.name}`);
+                const newPerms = r.permissions.filter((p: string) => p !== 'settings:lists');
+                // Adiciona as novas se já não existirem
+                if (!newPerms.includes('settings:branches')) newPerms.push('settings:branches');
+                if (!newPerms.includes('settings:sectors')) newPerms.push('settings:sectors');
+                return { ...r, permissions: newPerms };
             }
             return r;
           });
