@@ -669,7 +669,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   <div className="col-span-1 border-r border-gray-200 pr-4">
                      <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Selecione uma Função</h3>
                      <div className="space-y-1">
-                        {settings.roles.map(r => (
+                        {[...settings.roles].sort((a, b) => a.name.localeCompare(b.name)).map(r => (
                           <div 
                             key={r.name} 
                             className={`flex justify-between items-center p-3 rounded-lg transition-colors group ${selectedRoleForACL === r.name ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50 border border-transparent cursor-pointer'}`}

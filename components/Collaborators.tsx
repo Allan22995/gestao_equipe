@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -268,7 +269,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       c.colabId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.role.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  });
+  }).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-8">

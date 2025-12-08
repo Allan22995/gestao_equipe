@@ -341,7 +341,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       active: activeCount,
       inactive: inactiveCount
     });
-    setDetails(tempDetails);
+    
+    // Sort details alphabetically by name before setting state
+    setDetails(tempDetails.sort((a, b) => a.name.localeCompare(b.name)));
 
     // Upcoming Events Logic (Próximos 7 dias)
     const nextWeekEvents: any[] = [];
