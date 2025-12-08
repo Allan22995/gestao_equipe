@@ -460,7 +460,10 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    <p className="text-xs text-gray-500 mb-3">A função selecionada ({formData.role}) tem visualização restrita. Selecione quais setores este usuário pode ver.</p>
                    
                    <div className="flex flex-wrap gap-2">
-                      {sectorOptions.map(sector => (
+                      {/* FIX: Use combined set of active sectors AND user's existing sectors to show legacy ones */}
+                      {Array.from(new Set([...sectorOptions, ...(formData.allowedSectors || [])]))
+                        .sort()
+                        .map(sector => (
                         <button
                           key={sector}
                           type="button"
