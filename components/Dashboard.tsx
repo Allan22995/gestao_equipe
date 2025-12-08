@@ -537,6 +537,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
      alert("Resumo copiado para a área de transferência!");
   };
 
+  const sortOrderWeek = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+
   return (
     <div className="space-y-6">
       {/* Filtros */}
@@ -630,7 +632,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           
           <div className="overflow-y-auto flex-1 pr-2 space-y-3">
              {details.map(d => (
-               <div key={d.id} className="flex justify-between items-center p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedColab(d)}>
+               <div 
+                 key={d.id} 
+                 className="flex justify-between items-center p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5" 
+                 onClick={() => setSelectedColab(d)}
+               >
                  <div>
                     <div className="font-bold text-gray-800 text-sm">
                         {d.name}
@@ -732,12 +738,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                <div className="mt-4 pt-4 border-t border-gray-100">
                   <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Escala Padrão</h4>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                     {Object.entries(selectedColab.schedule).map(([day, sch]: [string, any]) => (
-                        <div key={day} className={`flex justify-between p-1.5 rounded ${sch.enabled ? 'bg-indigo-50 text-indigo-800' : 'bg-gray-50 text-gray-400'}`}>
-                           <span className="capitalize font-bold">{day}</span>
-                           <span>{sch.enabled ? `${sch.start} - ${sch.end}` : 'Folga'}</span>
-                        </div>
-                     ))}
+                     {sortOrderWeek.map(dayKey => {
+                        const sch = selectedColab.schedule[dayKey];
+                        return (
+                          <div key={dayKey} className={`flex justify-between p-1.5 rounded ${sch.enabled ? 'bg-indigo-50 text-indigo-800' : 'bg-gray-50 text-gray-400'}`}>
+                             <span className="capitalize font-bold">{dayKey}</span>
+                             <span>{sch.enabled ? `${sch.start} - ${sch.end}` : 'Folga'}</span>
+                          </div>
+                        );
+                     })}
                   </div>
                </div>
              </>
