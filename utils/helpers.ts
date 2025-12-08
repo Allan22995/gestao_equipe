@@ -1,5 +1,15 @@
+
 export const generateUUID = () => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
+};
+
+export const formatTitleCase = (str: string) => {
+  if (!str) return '';
+  const exceptions = ['de', 'da', 'do', 'dos', 'das', 'e', 'y'];
+  return str.trim().toLowerCase().split(/\s+/).map((word, i) => {
+    if (exceptions.includes(word) && i !== 0) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }).join(' ');
 };
 
 export const getFeriados = (ano: number): Record<string, string> => {

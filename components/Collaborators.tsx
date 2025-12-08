@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
-import { generateUUID } from '../utils/helpers';
+import { generateUUID, formatTitleCase } from '../utils/helpers';
 
 interface CollaboratorsProps {
   collaborators: Collaborator[];
@@ -51,6 +51,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [isFixingNames, setIsFixingNames] = useState(false);
 
   const handleScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, value: any) => {
     setSchedule(prev => ({
@@ -181,10 +182,14 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     // Clean up rotation group if hasRotation is false
     const finalRotationGroup = formData.hasRotation ? formData.rotationGroup : '';
 
+    // Standardize Name (Title Case)
+    const standardizedName = formatTitleCase(formData.name);
+
     if (editingId) {
       onUpdate({
         id: editingId,
         ...formData,
+        name: standardizedName,
         allowedSectors: finalAllowedSectors,
         rotationGroup: finalRotationGroup,
         schedule,
@@ -196,6 +201,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       const newColab: Collaborator = {
         id: generateUUID(),
         ...formData,
+        name: standardizedName,
         allowedSectors: finalAllowedSectors,
         rotationGroup: finalRotationGroup,
         schedule,
@@ -213,6 +219,42 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     if (window.confirm('Tem certeza que deseja excluir?')) {
       onDelete(id);
       showToast('Colaborador removido.');
+    }
+  };
+
+  const handleFixAllNames = async () => {
+    if (!window.confirm('Isso irá padronizar a formatação dos nomes de TODOS os colaboradores (ex: "JOAO SILVA" para "Joao Silva"). Deseja continuar?')) {
+      return;
+    }
+    
+    setIsFixingNames(true);
+    let count = 0;
+    
+    try {
+      for (const colab of collaborators) {
+        // Skip check if user doesn't have permission to edit this specific user (sector restriction)
+        if (currentUserAllowedSectors.length > 0) {
+           if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) continue;
+        }
+
+        const formatted = formatTitleCase(colab.name);
+        if (formatted !== colab.name) {
+          // Precisamos chamar onUpdate (que chama o Firebase)
+          // Em um app real, seria melhor um batch update, mas aqui usaremos a função existente
+          await onUpdate({ ...colab, name: formatted });
+          count++;
+        }
+      }
+      if (count > 0) {
+        showToast(`${count} nomes foram padronizados com sucesso!`);
+      } else {
+        showToast('Todos os nomes já estão no padrão correto.');
+      }
+    } catch (error) {
+      console.error(error);
+      showToast('Erro ao padronizar nomes.', true);
+    } finally {
+      setIsFixingNames(false);
     }
   };
 
@@ -304,7 +346,16 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             {/* Nome */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Nome Completo *</label>
-              <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Nome do colaborador" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              <input 
+                 required 
+                 type="text" 
+                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
+                 placeholder="Nome do colaborador" 
+                 value={formData.name} 
+                 onChange={e => setFormData({...formData, name: e.target.value})} 
+                 onBlur={() => setFormData(prev => ({ ...prev, name: formatTitleCase(prev.name) }))}
+              />
+              <span className="text-[10px] text-gray-400">Padronizado automaticamente (Ex: Joao da Silva)</span>
             </div>
 
             {/* Email (Vinculo Auth) */}
@@ -589,14 +640,28 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
            <h2 className="text-xl font-bold text-gray-800">Equipe Cadastrada</h2>
-           <div className="w-full md:w-64">
-             <input 
-               type="text" 
-               placeholder="Buscar por nome, ID ou função..." 
-               className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-               value={searchTerm}
-               onChange={e => setSearchTerm(e.target.value)}
-             />
+           
+           <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-center">
+             {canEdit && (
+               <button 
+                 onClick={handleFixAllNames}
+                 disabled={isFixingNames}
+                 className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 px-3 py-2 rounded-lg font-bold flex items-center gap-2 whitespace-nowrap"
+                 title="Padroniza os nomes (Ex: JOAO SILVA -> Joao Silva)"
+               >
+                 {isFixingNames ? 'Processando...' : '✨ Padronizar Nomes'}
+               </button>
+             )}
+
+             <div className="w-full md:w-64">
+               <input 
+                 type="text" 
+                 placeholder="Buscar por nome, ID ou função..." 
+                 className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                 value={searchTerm}
+                 onChange={e => setSearchTerm(e.target.value)}
+               />
+             </div>
            </div>
         </div>
 
