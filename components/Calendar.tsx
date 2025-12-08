@@ -52,6 +52,49 @@ export const Calendar: React.FC<CalendarProps> = ({
     return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
   }, [settings?.sectors, currentUserAllowedSectors]);
 
+  // --- Lógica Dinâmica de Funções (Roles) ---
+  // Filtra as funções disponíveis baseando-se nos setores e filiais selecionados
+  const availableRoles = useMemo(() => {
+    let filtered = collaborators;
+
+    // 1. Aplica restrições de segurança de Setor
+    if (currentUserAllowedSectors.length > 0) {
+      filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+    }
+    
+    // 2. Aplica filtro de Filiais (Selecionado ou Restrito)
+    if (filterBranches.length > 0) {
+        filtered = filtered.filter(c => filterBranches.includes(c.branch));
+    } else if (availableBranches.length > 0) {
+        filtered = filtered.filter(c => availableBranches.includes(c.branch));
+    }
+
+    // 3. Aplica filtro de Setores (Selecionado)
+    if (filterSectors.length > 0) {
+      filtered = filtered.filter(c => c.sector && filterSectors.includes(c.sector));
+    }
+
+    // Se houver algum filtro ativo (Setor ou Filial) ou restrição de segurança,
+    // retorna apenas as roles presentes nos colaboradores filtrados.
+    if (filterBranches.length > 0 || filterSectors.length > 0 || availableBranches.length > 0 || currentUserAllowedSectors.length > 0) {
+       const rolesInUse = new Set(filtered.map(c => c.role));
+       return Array.from(rolesInUse).sort();
+    }
+
+    // Caso contrário, retorna todas as roles configuradas
+    return settings?.roles.map(r => r.name).sort() || [];
+  }, [collaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings?.roles, availableBranches]);
+
+  // Limpa filtro de roles se a role selecionada não estiver mais disponível na lista dinâmica
+  useEffect(() => {
+     if (filterRoles.length > 0) {
+        const validRoles = filterRoles.filter(r => availableRoles.includes(r));
+        if (validRoles.length !== filterRoles.length) {
+           setFilterRoles(validRoles);
+        }
+     }
+  }, [availableRoles, filterRoles]);
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -337,7 +380,7 @@ export const Calendar: React.FC<CalendarProps> = ({
            <div>
               <MultiSelect 
                 label="Função"
-                options={settings?.roles.map(r => r.name) || []}
+                options={availableRoles}
                 selected={filterRoles}
                 onChange={setFilterRoles}
                 placeholder="Todas"
