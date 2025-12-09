@@ -154,6 +154,7 @@ export interface VacationRequest {
   endDate: string;
   status: VacationStatus;
   notes: string; // Para observações ou contra-proposta
+  collaboratorAcceptedProposal?: boolean; // Indica se o colaborador aceitou a contraproposta
   createdAt: string;
   updatedBy?: string;
   lastUpdatedAt?: string;

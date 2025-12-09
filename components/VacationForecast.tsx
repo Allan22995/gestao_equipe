@@ -84,8 +84,26 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     });
   };
 
+  // Helper para verificar se o usuário pode interagir (Editar/Excluir) com a solicitação
+  const canInteractWithRequest = (req: VacationRequest) => {
+    // Se for gestor/admin com permissão de status, pode sempre
+    if (canManageStatus) return true;
+
+    // Se for colaborador
+    if (currentUserProfile === 'colaborador') {
+       // Só pode editar se for 'nova_opcao' (para aceitar ou contrapropor)
+       // Se for 'pendente' ou 'aprovado', está bloqueado aguardando o líder
+       return req.status === 'nova_opcao';
+    }
+    
+    return canEdit; // Fallback para outras regras
+  };
+
   const handleEdit = (req: VacationRequest) => {
-    if (!canEdit) return;
+    if (!canInteractWithRequest(req)) {
+       showToast('Você não pode editar esta solicitação no momento.', true);
+       return;
+    }
     setEditingId(req.id);
     setFormData({
       collaboratorId: req.collaboratorId,
@@ -97,16 +115,33 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = (id: string) => {
-    if (!canEdit) {
-      showToast('Você não tem permissão para excluir solicitações.', true);
+  const handleDelete = (id: string, reqStatus: VacationStatus) => {
+    if (!canEdit) return;
+
+    // Regra de bloqueio para colaborador
+    if (currentUserProfile === 'colaborador' && reqStatus !== 'nova_opcao') {
+      showToast('Aguarde a análise da liderança. Você não pode excluir solicitações pendentes.', true);
       return;
     }
+
     if (window.confirm('Tem certeza que deseja excluir esta previsão de férias?')) {
       onDelete(id);
       logAction('delete', 'previsao_ferias', `Previsão ID ${id} excluída`, currentUserName);
       showToast('Previsão removida com sucesso.');
     }
+  };
+
+  const handleAcceptProposal = (req: VacationRequest) => {
+    const user = currentUserName;
+    onUpdate({
+      ...req,
+      status: 'pendente', // Volta para pendente para o líder aprovar final
+      collaboratorAcceptedProposal: true, // Marca que o colab aceitou
+      updatedBy: user,
+      lastUpdatedAt: new Date().toISOString()
+    });
+    logAction('update', 'previsao_ferias', `Colaborador aceitou contraproposta ID ${req.id}`, user);
+    showToast('Proposta aceita! Enviado para aprovação final da liderança.');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -125,6 +160,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     const user = currentUserName;
 
     if (!editingId) {
+      // CRIAÇÃO
       // Se tiver permissão de gerenciar status, permite criar já aprovado, senão padrão 'pendente'
       const initialStatus = canManageStatus ? formData.status : 'pendente';
 
@@ -141,22 +177,38 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       onAdd(newReq);
       
       logAction('create', 'previsao_ferias', `Nova previsão criada para colab ${formData.collaboratorId}`, user);
-      showToast('Previsão de férias registrada!');
+      showToast('Previsão de férias registrada! Aguarde aprovação.');
       resetForm();
     } else {
-      // Update
+      // ATUALIZAÇÃO
+      let nextStatus = formData.status;
+      let acceptedFlag = false;
+
+      // Se for colaborador editando, significa que ele está negociando/rejeitando uma 'nova_opcao'
+      // ou apenas corrigindo algo se o sistema permitisse (mas bloqueamos 'pendente').
+      // Então se ele edita, volta para 'pendente' e remove a flag de aceite.
+      if (currentUserProfile === 'colaborador') {
+         nextStatus = 'pendente';
+         acceptedFlag = false;
+      } else {
+         // Se for líder, mantém o status escolhido no form, mas preserva a flag se ele não mudou nada relevante?
+         // Simplificação: Lider define o estado final. Se líder muda, limpa a flag de aceite do colab pois mudou a proposta.
+         acceptedFlag = false; 
+      }
+
       onUpdate({
         id: editingId,
         collaboratorId: formData.collaboratorId,
         startDate: formData.startDate,
         endDate: formData.endDate,
-        status: formData.status, // O select já cuida de travar se não tiver permissão
+        status: nextStatus,
         notes: formData.notes,
+        collaboratorAcceptedProposal: acceptedFlag,
         updatedBy: user,
         lastUpdatedAt: new Date().toISOString()
       } as VacationRequest);
       
-      logAction('update', 'previsao_ferias', `Previsão ID ${editingId} atualizada. Status: ${formData.status}`, user);
+      logAction('update', 'previsao_ferias', `Previsão ID ${editingId} atualizada. Status: ${nextStatus}`, user);
       showToast('Previsão atualizada com sucesso!');
       resetForm();
     }
@@ -169,7 +221,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">
-            {editingId ? 'Editar Previsão' : 'Nova Previsão de Férias'}
+            {editingId ? 'Editar Previsão / Contraproposta' : 'Nova Previsão de Férias'}
           </h2>
           {editingId && (
             <button onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700 underline">
@@ -238,14 +290,14 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
               className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100 disabled:text-gray-500"
               value={formData.status}
               onChange={e => setFormData({...formData, status: e.target.value as VacationStatus})}
-              disabled={!canManageStatus} // Permite alteração se tiver a permissão
+              disabled={!canManageStatus} // Permite alteração se tiver a permissão (Líder)
             >
               <option value="pendente">Pendente</option>
               <option value="aprovado">Aprovado {(!canManageStatus && formData.status !== 'aprovado') ? '(Restrito)' : ''}</option>
               <option value="negociacao">Em Negociação</option>
               <option value="nova_opcao">Nova Opção (Contraproposta)</option>
             </select>
-            {!canManageStatus && <p className="text-[10px] text-gray-400 mt-1">Você não tem permissão para alterar o status da solicitação.</p>}
+            {!canManageStatus && <p className="text-[10px] text-gray-400 mt-1">Apenas a liderança pode alterar o status.</p>}
           </div>
 
           <div className="flex flex-col md:col-span-2">
@@ -265,7 +317,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
            </div>
 
           <button type="submit" className="md:col-span-2 bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-transform active:scale-95">
-            {editingId ? 'Salvar Alterações' : 'Registrar Previsão'}
+            {editingId ? (currentUserProfile === 'colaborador' ? 'Enviar para Aprovação' : 'Salvar Alterações') : 'Registrar Previsão'}
           </button>
         </form>
         ) : <p className="text-center text-gray-500 italic">Modo Leitura: Você não tem permissão para gerenciar férias.</p>}
@@ -284,12 +336,20 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
               case 'nova_opcao': statusColor = 'bg-blue-100 text-blue-800'; statusLabel = 'Nova Opção'; break;
             }
 
+            const canAction = canInteractWithRequest(r);
+
             return (
               <div key={r.id} className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-all">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-bold text-gray-800">{getColabName(r.collaboratorId)}</span>
                     <span className={`text-xs px-2 py-0.5 rounded font-bold ${statusColor}`}>{statusLabel}</span>
+                    
+                    {r.collaboratorAcceptedProposal && r.status === 'pendente' && (
+                       <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold flex items-center gap-1">
+                          ✓ Aceite do Colaborador
+                       </span>
+                    )}
                   </div>
                   <div className="text-sm text-gray-600">
                     {formatDate(r.startDate)} até {formatDate(r.endDate)}
@@ -297,21 +357,42 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
                   {r.notes && <div className="text-xs text-gray-500 italic mt-1">Obs: {r.notes}</div>}
                   {r.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Atualizado por: {r.updatedBy}</div>}
                 </div>
+                
                 {canEdit && (
-                <div className="flex gap-2 mt-3 md:mt-0">
-                  <button 
-                    onClick={() => handleEdit(r)} 
-                    className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors"
-                  >
-                    Editar
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(r.id)} 
-                    className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
-                  >
-                    Excluir
-                  </button>
-                </div>
+                  <div className="flex gap-2 mt-3 md:mt-0">
+                    {/* Botão de Aceite para Colaborador */}
+                    {currentUserProfile === 'colaborador' && r.status === 'nova_opcao' && (
+                      <button 
+                         onClick={() => handleAcceptProposal(r)}
+                         className="text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm font-bold shadow-sm transition-colors flex items-center gap-1"
+                      >
+                         <span>✓</span> Aceitar
+                      </button>
+                    )}
+
+                    {/* Botões de Edição/Exclusão */}
+                    {canAction ? (
+                        <>
+                          <button 
+                            onClick={() => handleEdit(r)} 
+                            className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors"
+                          >
+                            {currentUserProfile === 'colaborador' && r.status === 'nova_opcao' ? 'Editar / Contrapor' : 'Editar'}
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(r.id, r.status)} 
+                            className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
+                          >
+                            Excluir
+                          </button>
+                        </>
+                    ) : (
+                        // Se não pode agir, mostra status para o colaborador
+                        currentUserProfile === 'colaborador' && r.status !== 'aprovado' && (
+                           <span className="text-xs text-gray-400 italic px-2 py-1 bg-gray-50 rounded">Aguardando Liderança...</span>
+                        )
+                    )}
+                  </div>
                 )}
               </div>
             );
