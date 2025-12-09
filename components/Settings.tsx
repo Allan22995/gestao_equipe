@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -188,8 +187,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [sysMsgContent, setSysMsgContent] = useState(settings.systemMessage?.message || '');
 
   // Rotation Edit States
-  const [editingRotationId, setEditingRotationId] = useState<string | null>(null); // NEW: Track edit mode
   const [newRotationId, setNewRotationId] = useState('');
+  const [rotationWorkSundays, setRotationWorkSundays] = useState<number[]>([]);
 
   // Loading States
   const [savingState, setSavingState] = useState<Record<string, 'idle' | 'saving' | 'success'>>({});
@@ -237,522 +236,770 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const removeSector = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, sectors: (settings.sectors || []).filter(s => s !== v) }, 'sector'); };
   
   // --- LOGIC: SHIFT ROTATIONS (ESCALAS) ---
-  // Agora suporta apenas Rótulos/IDs
-  const saveRotation = () => {
+  // Agora suporta objetos RotationRule
+  const addRotation = () => {
     if (!newRotationId.trim()) { showToast('Defina um nome para a escala (ex: A, B).', true); return; }
+    if (rotationWorkSundays.length === 0) { showToast('Selecione ao menos um domingo de trabalho.', true); return; }
     
-    // Check duplicate ID (only if not editing)
-    if (!editingRotationId && settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) {
+    // Check duplicate ID
+    if (settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) {
         showToast('Já existe uma escala com este ID.', true);
         return;
     }
 
-    let updatedRotations = [...settings.shiftRotations];
-    
-    if (editingRotationId) {
-        // Update Mode
-        updatedRotations = updatedRotations.map(r => 
-           r.id === editingRotationId 
-             ? { ...r, label: `Escala ${newRotationId.trim().toUpperCase()}` }
-             : r
-        );
-    } else {
-        // Create Mode
-        const newRule: RotationRule = {
-          id: newRotationId.trim().toUpperCase(),
-          label: `Escala ${newRotationId.trim().toUpperCase()}`
-        };
-        updatedRotations.push(newRule);
-    }
-    
-    saveSettings({ ...settings, shiftRotations: updatedRotations }, 'rotation', () => {
-       setNewRotationId('');
-       setEditingRotationId(null);
+    const newRule: RotationRule = {
+       id: newRotationId.trim().toUpperCase(),
+       label: `Escala ${newRotationId.trim().toUpperCase()}`,
+       workSundays: rotationWorkSundays.sort((a, b) => a - b)
+    };
+
+    saveSettings({ ...settings, shiftRotations: [...settings.shiftRotations, newRule] }, 'rotation', () => {
+        setNewRotationId('');
+        setRotationWorkSundays([]);
     });
   };
 
-  const deleteRotation = (id: string) => {
-    if (window.confirm('Excluir esta escala?')) {
-        const updated = settings.shiftRotations.filter(r => r.id !== id);
-        saveSettings({ ...settings, shiftRotations: updated }, 'rotation');
+  const removeRotation = (id: string) => {
+      if (window.confirm(`Excluir Escala ${id}?`)) {
+          saveSettings({ ...settings, shiftRotations: settings.shiftRotations.filter(r => r.id !== id) }, 'rotation');
+      }
+  };
+
+  const toggleRotationSunday = (sundayIndex: number) => {
+     setRotationWorkSundays(prev => {
+        if (prev.includes(sundayIndex)) return prev.filter(i => i !== sundayIndex);
+        return [...prev, sundayIndex];
+     });
+  };
+
+
+  // --- LOGIC: PROFILES (OBJECTS) ---
+  const addProfile = () => { 
+      const name = newProfileName.trim().toLowerCase();
+      if (!name) return;
+      if (settings.accessProfiles?.some(p => p.name.toLowerCase() === name)) {
+          showToast('Perfil já existe.', true);
+          return;
+      }
+      const newProfile: AccessProfileConfig = { id: name, name: name, active: true };
+      saveSettings({ ...settings, accessProfiles: [...(settings.accessProfiles || []), newProfile] }, 'profile', () => setNewProfileName('')); 
+  };
+  
+  const toggleProfileActive = (id: string) => {
+      const updatedProfiles = (settings.accessProfiles || []).map(p => 
+          p.id === id ? { ...p, active: !p.active } : p
+      );
+      saveSettings({ ...settings, accessProfiles: updatedProfiles }, 'profile');
+  };
+
+  const removeProfile = (id: string) => { 
+      // Protect default profiles
+      if (['admin', 'colaborador', 'noc'].includes(id)) {
+          showToast('Perfis padrão do sistema não podem ser excluídos.', true);
+          return;
+      }
+      if (window.confirm(`Excluir perfil?`)) {
+          saveSettings({ ...settings, accessProfiles: (settings.accessProfiles || []).filter(p => p.id !== id) }, 'profile'); 
+      }
+  };
+
+  // --- LOGIC: ROLES & ACL ---
+  const addRole = () => {
+    if (!newRoleName.trim()) return;
+    if (settings.roles.some(r => r.name.toLowerCase() === newRoleName.toLowerCase())) { showToast('Função já existe', true); return; }
+    const newRole: RoleConfig = { name: newRoleName.trim(), canViewAllSectors: true, permissions: ['tab:calendario', 'tab:dashboard'] };
+    saveSettings({ ...settings, roles: [...settings.roles, newRole] }, 'role', () => setNewRoleName(''));
+  };
+
+  const startEditRole = (roleName: string) => {
+    setEditingRoleName(roleName);
+    setEditRoleNameInput(roleName);
+  };
+
+  const saveEditRole = () => {
+     if (!editingRoleName || !editRoleNameInput.trim()) return;
+     
+     // Check duplicidade (exceto o proprio)
+     if (editRoleNameInput !== editingRoleName && settings.roles.some(r => r.name.toLowerCase() === editRoleNameInput.toLowerCase())) {
+        showToast('Já existe uma função com este nome.', true);
+        return;
+     }
+
+     const updatedRoles = settings.roles.map(r => r.name === editingRoleName ? { ...r, name: editRoleNameInput.trim() } : r);
+     
+     // Se a role estava selecionada na tela de permissoes, atualizar a seleção também
+     if (selectedRoleForACL === editingRoleName) setSelectedRoleForACL(editRoleNameInput.trim());
+
+     saveSettings({ ...settings, roles: updatedRoles }, 'role', () => {
+        setEditingRoleName(null);
+        setEditRoleNameInput('');
+     });
+  };
+
+  const removeRole = (name: string) => {
+    if (window.confirm(`Excluir função ${name}?`)) saveSettings({ ...settings, roles: settings.roles.filter(r => r.name !== name) }, 'role');
+    if (selectedRoleForACL === name) setSelectedRoleForACL('');
+  };
+
+  const toggleRoleRestriction = (roleName: string) => {
+     const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, canViewAllSectors: !r.canViewAllSectors } : r);
+     saveSettings({ ...settings, roles: updatedRoles }, 'role_restriction');
+  };
+
+  const togglePermission = (roleName: string, permId: string) => {
+     const role = settings.roles.find(r => r.name === roleName);
+     if (!role) return;
+
+     let newPerms = role.permissions || [];
+     if (newPerms.includes(permId)) {
+       newPerms = newPerms.filter(p => p !== permId);
+     } else {
+       newPerms = [...newPerms, permId];
+     }
+     
+     const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, permissions: newPerms } : r);
+     saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
+  };
+
+  const toggleManageableProfile = (roleName: string, profileId: string) => {
+    const role = settings.roles.find(r => r.name === roleName);
+    if (!role) return;
+
+    let currentProfiles = role.manageableProfiles || [];
+    if (currentProfiles.includes(profileId)) {
+        currentProfiles = currentProfiles.filter(id => id !== profileId);
+    } else {
+        currentProfiles = [...currentProfiles, profileId];
+    }
+
+    const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, manageableProfiles: currentProfiles } : r);
+    saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
+  };
+
+  // --- LOGIC: EVENTS ---
+  const saveEvent = () => {
+    if (!newEventLabel.trim()) return;
+    
+    if (editingEventId) {
+       // Update existing
+       const updatedEvents = settings.eventTypes.map(e => e.id === editingEventId ? { ...e, label: newEventLabel.trim(), behavior: newEventBehavior } : e);
+       saveSettings({ ...settings, eventTypes: updatedEvents }, 'event', () => {
+          setNewEventLabel('');
+          setNewEventBehavior('neutral');
+          setEditingEventId(null);
+       });
+    } else {
+       // Add new
+       const newType: EventTypeConfig = { id: generateUUID(), label: newEventLabel.trim(), behavior: newEventBehavior };
+       saveSettings({ ...settings, eventTypes: [...settings.eventTypes, newType] }, 'event', () => setNewEventLabel(''));
     }
   };
-  
-  const startEditRotation = (r: RotationRule) => {
-      setEditingRotationId(r.id);
-      setNewRotationId(r.id); // Assuming ID is the label base
-  };
-  
-  const cancelEditRotation = () => {
-      setEditingRotationId(null);
-      setNewRotationId('');
+
+  const handleEditEvent = (e: EventTypeConfig) => {
+      setEditingEventId(e.id);
+      setNewEventLabel(e.label);
+      setNewEventBehavior(e.behavior);
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top to see inputs
   };
 
-  // --- RENDER ---
+  const cancelEditEvent = () => {
+      setEditingEventId(null);
+      setNewEventLabel('');
+      setNewEventBehavior('neutral');
+  };
+
+  const removeEvent = (id: string) => { if (window.confirm('Excluir?')) saveSettings({ ...settings, eventTypes: settings.eventTypes.filter(e => e.id !== id) }, 'event'); };
+
+  // --- LOGIC: TEMPLATES ---
+  const saveTemplate = () => {
+    if (!templateName.trim()) { showToast('Nome obrigatório', true); return; }
+    
+    if (editingTemplateId) {
+        // Update
+        const updatedTemplates = (settings.scheduleTemplates || []).map(t => 
+            t.id === editingTemplateId ? { ...t, name: templateName.trim(), schedule: templateSchedule } : t
+        );
+        saveSettings({ ...settings, scheduleTemplates: updatedTemplates }, 'template', () => { 
+            setTemplateName(''); 
+            setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+            setEditingTemplateId(null);
+        });
+    } else {
+        // Create
+        const newT: ScheduleTemplate = { id: generateUUID(), name: templateName.trim(), schedule: templateSchedule };
+        saveSettings({ ...settings, scheduleTemplates: [...(settings.scheduleTemplates || []), newT] }, 'template', () => { 
+            setTemplateName(''); 
+            setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); 
+        });
+    }
+  };
+
+  const loadTemplateForEdit = (t: ScheduleTemplate) => {
+      setEditingTemplateId(t.id);
+      setTemplateName(t.name);
+      setTemplateSchedule(JSON.parse(JSON.stringify(t.schedule)));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditTemplate = () => {
+      setEditingTemplateId(null);
+      setTemplateName('');
+      setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+  };
+
+  const removeTemplate = (id: string) => { if (window.confirm('Excluir modelo?')) saveSettings({ ...settings, scheduleTemplates: (settings.scheduleTemplates || []).filter(t => t.id !== id) }, 'template'); };
+
+  // --- LOGIC: SYSTEM MESSAGE ---
+  const saveSystemMessage = () => {
+    saveSettings({
+      ...settings,
+      systemMessage: {
+        active: sysMsgActive,
+        level: sysMsgLevel,
+        message: sysMsgContent
+      }
+    }, 'system_msg');
+  };
+
+  // --- UI HELPERS ---
+  const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+  
+  // Group Permissions
+  const groupedPermissions = SYSTEM_PERMISSIONS.reduce((acc, curr) => {
+    if (!acc[curr.category]) acc[curr.category] = [];
+    acc[curr.category].push(curr);
+    return acc;
+  }, {} as Record<string, typeof SYSTEM_PERMISSIONS>);
+
   return (
-     <div className="space-y-6">
-       
-       {/* Sub-Tabs Navigation */}
-       <div className="flex space-x-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
-          {showGeral && (
-            <button 
-              onClick={() => setActiveSubTab('geral')} 
-              className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeSubTab === 'geral' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
-            >
-              Geral e Listas
-            </button>
-          )}
-          {showAcesso && (
-             <button 
-               onClick={() => setActiveSubTab('acesso')} 
-               className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeSubTab === 'acesso' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
-             >
-               Controle de Acesso
-             </button>
-          )}
-          {showJornada && (
-             <button 
-               onClick={() => setActiveSubTab('jornada')} 
-               className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeSubTab === 'jornada' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
-             >
-               Jornadas e Escalas
-             </button>
-          )}
-          {showSistema && (
-             <button 
-               onClick={() => setActiveSubTab('sistema')} 
-               className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${activeSubTab === 'sistema' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
-             >
-               Avisos do Sistema
-             </button>
-          )}
-       </div>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-gray-800">Configurações do Sistema</h1>
+      
+      {/* SUB-TABS NAVIGATION */}
+      <div className="flex border-b border-gray-200 gap-1 overflow-x-auto">
+        {showGeral && (
+          <button onClick={() => setActiveSubTab('geral')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'geral' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Geral & Cadastros
+          </button>
+        )}
+        {showAcesso && (
+          <button onClick={() => setActiveSubTab('acesso')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'acesso' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Controle de Acesso
+          </button>
+        )}
+        {showJornada && (
+          <button onClick={() => setActiveSubTab('jornada')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'jornada' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Jornada de Trabalho
+          </button>
+        )}
+        {showSistema && (
+          <button onClick={() => setActiveSubTab('sistema')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'sistema' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Avisos do Sistema
+          </button>
+        )}
+      </div>
 
-       {/* TAB: JORNADA E ESCALAS */}
-       {activeSubTab === 'jornada' && (
-         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fadeIn">
-            {/* ESCALAS DE REVEZAMENTO */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Escalas de Revezamento</h2>
-                <p className="text-xs text-gray-500 mb-4">Defina os nomes das escalas disponíveis (ex: Escala A, B). A lógica de folgas (3x1) é calculada automaticamente baseada na data de início do colaborador.</p>
-                
-                {hasPermission('create:rotations') && (
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
-                    <h3 className="text-xs font-bold text-gray-600 uppercase mb-2">{editingRotationId ? 'Editar Escala' : 'Nova Escala'}</h3>
-                    <div className="flex gap-2 mb-2">
-                        <input 
-                           type="text" 
-                           placeholder="Identificador (Ex: A, B, Azul)" 
-                           className="flex-1 border border-gray-300 rounded p-2 text-sm"
-                           value={newRotationId}
-                           onChange={e => setNewRotationId(e.target.value)}
-                           maxLength={10}
-                           disabled={savingState['rotation'] === 'saving'}
-                        />
-                    </div>
-                    <div className="flex gap-2">
-                         {editingRotationId && (
-                             <button onClick={cancelEditRotation} className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded text-xs">Cancelar</button>
-                         )}
-                         <button 
-                           onClick={saveRotation}
-                           disabled={savingState['rotation'] === 'saving'}
-                           className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded text-xs"
-                         >
-                           {savingState['rotation'] === 'saving' ? 'Salvando...' : editingRotationId ? 'Atualizar Escala' : 'Criar Escala'}
-                         </button>
-                    </div>
-                </div>
+      {(!showGeral && !showAcesso && !showJornada && !showSistema) && (
+          <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg border border-gray-200 mt-6">
+              Você não possui permissões para acessar as configurações.
+          </div>
+      )}
+
+      {/* --- TAB: GERAL & CADASTROS --- */}
+      {activeSubTab === 'geral' && showGeral && (
+        <div className="animate-fadeIn space-y-8">
+           
+           {/* Integrações */}
+           {hasPermission('settings:integration') && (
+             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+               <h2 className="text-lg font-bold text-gray-800 mb-4">Integrações (Links Externos)</h2>
+               <div className="flex flex-col gap-2">
+                 <label className="text-xs font-bold text-gray-500 uppercase">Link Planilha de Plantões</label>
+                 <div className="flex gap-2">
+                   <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none" value={spreadsheetUrl} onChange={e => setSpreadsheetUrl(e.target.value)} />
+                   <button onClick={() => saveSettings({ ...settings, spreadsheetUrl }, 'integration')} disabled={savingState['integration'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Salvar</button>
+                 </div>
+               </div>
+             </div>
+           )}
+
+           {/* Filiais e Setores (Separados) */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {hasPermission('settings:branches') && (
+                    <ManageList 
+                      title="Filiais" 
+                      items={settings.branches} 
+                      onAdd={addBranch} 
+                      onEdit={editBranch}
+                      onRemove={removeBranch} 
+                      saving={savingState['branch'] || 'idle'} 
+                      removingId={removingId} 
+                      placeholder="Nova Filial..." 
+                    />
                 )}
+                {hasPermission('settings:sectors') && (
+                    <ManageList 
+                      title="Setores / Squads" 
+                      items={settings.sectors || []} 
+                      onAdd={addSector} 
+                      onEdit={editSector}
+                      onRemove={removeSector} 
+                      saving={savingState['sector'] || 'idle'} 
+                      removingId={removingId} 
+                      placeholder="Novo Setor..." 
+                    />
+                )}
+           </div>
 
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                   {settings.shiftRotations.map(rot => (
-                       <div key={rot.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
-                          <div>
-                              <div className="font-bold text-gray-800">{rot.label}</div>
-                              <div className="text-xs text-gray-500">ID: {rot.id}</div>
-                          </div>
-                          <div className="flex gap-2">
-                             {hasPermission('edit:rotations') && <button onClick={() => startEditRotation(rot)} className="text-blue-500 hover:underline text-xs font-bold">Editar</button>}
-                             {hasPermission('delete:rotations') && <button onClick={() => deleteRotation(rot.id)} className="text-red-500 hover:underline text-xs font-bold">Excluir</button>}
-                          </div>
-                       </div>
-                   ))}
-                   {settings.shiftRotations.length === 0 && <p className="text-gray-400 text-xs text-center py-2">Nenhuma escala definida.</p>}
-                </div>
-            </div>
-
-            {/* MODELOS DE JORNADA (SCHEDULE TEMPLATES) */}
-            {/* ... Mantido o código original de Templates ... */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex justify-between items-center mb-4">
-                   <h2 className="text-lg font-bold text-gray-800">Modelos de Jornada (Templates)</h2>
-                   {editingTemplateId && <button onClick={() => { setEditingTemplateId(null); setTemplateName(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); }} className="text-xs text-red-500 hover:underline">Cancelar Edição</button>}
-                </div>
+           {/* Perfis de Acesso (Separado e Atualizado) */}
+           {hasPermission('settings:profiles') && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Perfis de Acesso (Sistema)</h2>
                 
-                {/* Editor de Template */}
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4 space-y-3">
-                   <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Modelo</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ex: Administrativo Padrão" 
-                        className="w-full border border-gray-300 rounded p-2 text-sm"
-                        value={templateName}
-                        onChange={e => setTemplateName(e.target.value)}
-                      />
-                   </div>
-                   {/* Mini Schedule Editor (Simplified for brevity in settings) */}
-                   <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-500 uppercase">Configuração Rápida de Horários</p>
-                      {['segunda', 'sexta', 'sabado', 'domingo'].map(d => {
-                          const day = d as keyof Schedule;
-                          // Show only a few days as representative or build full list if needed
-                          // For brevity, let's just show a summary or full list
-                          return (
-                            <div key={day} className="flex items-center gap-2 text-xs">
-                               <input type="checkbox" checked={templateSchedule[day].enabled} onChange={e => setTemplateSchedule({...templateSchedule, [day]: {...templateSchedule[day], enabled: e.target.checked}})} />
-                               <span className="capitalize w-16">{day}</span>
-                               <input type="time" value={templateSchedule[day].start} onChange={e => setTemplateSchedule({...templateSchedule, [day]: {...templateSchedule[day], start: e.target.value}})} className="border rounded px-1" disabled={!templateSchedule[day].enabled}/>
-                               <span>-</span>
-                               <input type="time" value={templateSchedule[day].end} onChange={e => setTemplateSchedule({...templateSchedule, [day]: {...templateSchedule[day], end: e.target.value}})} className="border rounded px-1" disabled={!templateSchedule[day].enabled}/>
-                            </div>
-                          )
-                      })}
-                      <p className="text-[10px] text-gray-400 italic">*Edite os outros dias se necessário na tela de cadastro ou expanda aqui.</p>
-                   </div>
-                   
-                   <button 
-                     onClick={() => {
-                        if(!templateName) return showToast('Nome obrigatório', true);
-                        const newTmpl = { id: editingTemplateId || generateUUID(), name: templateName, schedule: templateSchedule };
-                        const updated = editingTemplateId 
-                           ? settings.scheduleTemplates.map(t => t.id === editingTemplateId ? newTmpl : t)
-                           : [...settings.scheduleTemplates, newTmpl];
-                        saveSettings({ ...settings, scheduleTemplates: updated }, 'templates');
-                        setEditingTemplateId(null); setTemplateName(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule)));
-                     }}
-                     className="w-full bg-blue-600 text-white font-bold py-2 rounded text-xs hover:bg-blue-700"
-                   >
-                      {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Novo Modelo'}
-                   </button>
-                </div>
-
-                <div className="space-y-2">
-                   {settings.scheduleTemplates.map(t => (
-                      <div key={t.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100 text-sm">
-                         <span className="font-bold text-gray-700">{t.name}</span>
-                         <div className="flex gap-2">
-                            <button onClick={() => { setEditingTemplateId(t.id); setTemplateName(t.name); setTemplateSchedule(t.schedule); }} className="text-blue-500 hover:underline text-xs">Editar</button>
-                            <button onClick={() => { if(window.confirm('Excluir?')) saveSettings({...settings, scheduleTemplates: settings.scheduleTemplates.filter(x => x.id !== t.id)}, 'templates') }} className="text-red-500 hover:underline text-xs">Excluir</button>
-                         </div>
-                      </div>
-                   ))}
-                </div>
-            </div>
-         </div>
-       )}
-
-       {/* TAB: GERAL */}
-       {activeSubTab === 'geral' && (
-         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fadeIn">
-            {/* Integração Planilha */}
-            {hasPermission('settings:integration') && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 lg:col-span-2">
-                <h2 className="text-lg font-bold text-gray-800 mb-2">Integração com Planilha de Escalas</h2>
-                <div className="flex gap-2">
+                {/* Add Profile */}
+                <div className="flex gap-2 mb-4">
                     <input 
                       type="text" 
-                      placeholder="URL da Planilha Google Sheets..." 
-                      className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                      value={spreadsheetUrl}
-                      onChange={e => setSpreadsheetUrl(e.target.value)}
+                      className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none" 
+                      placeholder="Novo Perfil (ex: supervisor)..." 
+                      value={newProfileName} 
+                      onChange={e => setNewProfileName(e.target.value)} 
+                      onKeyDown={e => e.key === 'Enter' && addProfile()}
                     />
                     <button 
-                      onClick={() => saveSettings({ ...settings, spreadsheetUrl }, 'sheet')}
-                      disabled={savingState['sheet'] === 'saving'}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-bold transition-all disabled:opacity-50"
+                      onClick={addProfile} 
+                      disabled={!newProfileName.trim() || savingState['profile'] === 'saving'} 
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold min-w-[80px]"
                     >
-                      {savingState['sheet'] === 'saving' ? '...' : 'Salvar URL'}
+                        Add
                     </button>
                 </div>
-            </div>
-            )}
 
-            {/* Listas Básicas */}
-            {hasPermission('settings:branches') && (
-            <ManageList 
-                title="Filiais" 
-                items={settings.branches} 
-                onAdd={addBranch} 
-                onEdit={editBranch}
-                onRemove={removeBranch} 
-                saving={savingState['branch'] || 'idle'} 
-                removingId={null}
-                placeholder="Nova Filial..."
-            />
-            )}
+                <div className="space-y-2 border-t border-gray-100 pt-4 max-h-[300px] overflow-y-auto">
+                   {(settings.accessProfiles || []).map(profile => (
+                       <div key={profile.id} className="flex justify-between items-center p-3 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors">
+                           <div className="flex items-center gap-3">
+                               <span className={`font-medium ${!profile.active ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{profile.name}</span>
+                               {!profile.active && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded">Oculto</span>}
+                           </div>
+                           
+                           <div className="flex items-center gap-3">
+                               {/* Toggle Active Switch */}
+                               <label className="flex items-center cursor-pointer">
+                                  <div className="relative">
+                                    <input type="checkbox" className="sr-only" checked={profile.active} onChange={() => toggleProfileActive(profile.id)} />
+                                    <div className={`block w-10 h-6 rounded-full transition-colors ${profile.active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                    <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${profile.active ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                  </div>
+                                  <div className="ml-2 text-xs text-gray-500 font-medium">
+                                    {profile.active ? 'Ativo' : 'Oculto'}
+                                  </div>
+                               </label>
 
-            {hasPermission('settings:sectors') && (
-            <ManageList 
-                title="Setores / Squads" 
-                items={settings.sectors || []} 
-                onAdd={addSector} 
-                onEdit={editSector}
-                onRemove={removeSector} 
-                saving={savingState['sector'] || 'idle'} 
-                removingId={null}
-                placeholder="Novo Setor..."
-            />
-            )}
-
-            {hasPermission('settings:profiles') && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Perfis de Acesso</h2>
-                <div className="flex gap-2 mb-4">
-                    <input type="text" placeholder="Nome do Perfil (ex: estagiario)" className="flex-1 border border-gray-300 rounded p-2 text-sm" value={newProfileName} onChange={e => setNewProfileName(e.target.value)} />
-                    <button onClick={() => {
-                        if(!newProfileName) return;
-                        const newProfile: AccessProfileConfig = { id: newProfileName.toLowerCase(), name: newProfileName.toLowerCase(), active: true };
-                        if(settings.accessProfiles.find(p => p.id === newProfile.id)) return showToast('Perfil já existe', true);
-                        saveSettings({...settings, accessProfiles: [...settings.accessProfiles, newProfile]}, 'profiles');
-                        setNewProfileName('');
-                    }} className="bg-indigo-600 text-white px-4 py-2 rounded font-bold text-sm">Add</button>
-                </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {settings.accessProfiles.map(p => (
-                        <div key={p.id} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
-                            <span className={!p.active ? 'text-gray-400 line-through' : ''}>{p.name}</span>
-                            <button onClick={() => {
-                                const updated = settings.accessProfiles.map(x => x.id === p.id ? {...x, active: !x.active} : x);
-                                saveSettings({...settings, accessProfiles: updated}, 'profiles');
-                            }} className={`text-xs font-bold px-2 py-1 rounded ${p.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {p.active ? 'Ativo' : 'Inativo'}
-                            </button>
-                        </div>
-                    ))}
+                               <button 
+                                 onClick={() => removeProfile(profile.id)}
+                                 className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded"
+                                 title="Excluir"
+                               >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                               </button>
+                           </div>
+                       </div>
+                   ))}
                 </div>
             </div>
-            )}
+           )}
 
-            {hasPermission('settings:event_types') && (
-             // ... Event Types Editor (Similar Logic)
+           {/* Tipos de Evento */}
+           {hasPermission('settings:event_types') && (
              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">Tipos de Evento</h2>
-                <div className="bg-gray-50 p-3 rounded mb-3 flex flex-col gap-2">
-                    <input type="text" placeholder="Nome do Evento (ex: Curso Externo)" className="border p-2 rounded text-sm" value={newEventLabel} onChange={e => setNewEventLabel(e.target.value)} />
-                    <select className="border p-2 rounded text-sm" value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as EventBehavior)}>
-                        <option value="neutral">Neutro (Apenas Registro)</option>
-                        <option value="debit">Débito (Consome Saldo)</option>
-                        <option value="credit_1x">Crédito 1x (Trabalho Normal)</option>
-                        <option value="credit_2x">Crédito 2x (Trabalho Extra/Feriado)</option>
-                    </select>
-                    <button onClick={() => {
-                        if(!newEventLabel) return;
-                        const newType: EventTypeConfig = { id: generateUUID(), label: newEventLabel, behavior: newEventBehavior };
-                        saveSettings({...settings, eventTypes: [...settings.eventTypes, newType]}, 'events');
-                        setNewEventLabel(''); setNewEventBehavior('neutral');
-                    }} className="bg-indigo-600 text-white py-1 rounded text-sm font-bold">Adicionar</button>
-                </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                     {settings.eventTypes.map(evt => (
-                         <div key={evt.id} className="flex justify-between p-2 border rounded text-xs items-center">
-                             <div>
-                                 <span className="font-bold">{evt.label}</span>
-                                 <span className="ml-2 text-gray-500">({evt.behavior})</span>
-                             </div>
-                             <button onClick={() => {
-                                 if(window.confirm('Excluir?')) saveSettings({...settings, eventTypes: settings.eventTypes.filter(x => x.id !== evt.id)}, 'events');
-                             }} className="text-red-500">Excluir</button>
-                         </div>
-                     ))}
-                </div>
+               <div className="flex justify-between items-center mb-4">
+                   <h2 className="text-lg font-bold text-gray-800">Tipos de Evento</h2>
+                   {editingEventId && <button onClick={cancelEditEvent} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
+               </div>
+               
+               <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 rounded-lg transition-colors ${editingEventId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50 border border-transparent'}`}>
+                  <input type="text" placeholder="Nome do Evento" className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventLabel} onChange={e => setNewEventLabel(e.target.value)} />
+                  <select className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as EventBehavior)}>
+                     <option value="neutral">Neutro</option>
+                     <option value="debit">Debita (Folga)</option>
+                     <option value="credit_1x">Credita (1x)</option>
+                     <option value="credit_2x">Credita (2x)</option>
+                  </select>
+                  <button onClick={saveEvent} disabled={!newEventLabel.trim() || savingState['event'] === 'saving'} className={`${editingEventId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold rounded-lg transition-colors`}>
+                      {editingEventId ? 'Atualizar' : 'Adicionar'}
+                  </button>
+               </div>
+               <div className="space-y-2">
+                  {settings.eventTypes.map(e => (
+                     <div key={e.id} className={`flex justify-between items-center p-2 border-b last:border-0 transition-colors ${editingEventId === e.id ? 'bg-indigo-50 border-indigo-200' : 'border-gray-100'}`}>
+                        <div><span className="font-bold">{e.label}</span> <span className="text-xs text-gray-500 ml-2">({e.behavior})</span></div>
+                        <div className="flex gap-2">
+                           <button onClick={() => handleEditEvent(e)} className="text-blue-500 text-xs font-bold bg-blue-50 px-2 py-1 rounded hover:bg-blue-100">Editar</button>
+                           <button onClick={() => removeEvent(e.id)} className="text-red-500 text-xs font-bold bg-red-50 px-2 py-1 rounded hover:bg-red-100">Excluir</button>
+                        </div>
+                     </div>
+                  ))}
+               </div>
              </div>
-            )}
-         </div>
-       )}
+           )}
 
-       {/* TAB: CONTROLE DE ACESSO (ROLES) */}
-       {activeSubTab === 'acesso' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fadeIn">
-              <h2 className="text-lg font-bold text-gray-800 mb-4">Controle de Acesso (Funções/Cargos)</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Left: Role List */}
-                  <div className="border-r pr-6">
-                      <div className="mb-4 flex gap-2">
-                          <input type="text" placeholder="Nova Função..." className="flex-1 border p-2 rounded text-sm" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} />
-                          <button onClick={() => {
-                              if(!newRoleName) return;
-                              const newRole: RoleConfig = { name: newRoleName, canViewAllSectors: false, permissions: [] };
-                              if(settings.roles.find(r => r.name === newRoleName)) return showToast('Já existe', true);
-                              saveSettings({...settings, roles: [...settings.roles, newRole]}, 'roles');
-                              setNewRoleName('');
-                          }} className="bg-indigo-600 text-white px-3 rounded font-bold">+</button>
-                      </div>
-                      <div className="space-y-1">
-                          {settings.roles.map(r => (
-                              <div 
-                                key={r.name} 
-                                onClick={() => setSelectedRoleForACL(r.name)}
-                                className={`p-2 rounded cursor-pointer text-sm flex justify-between items-center ${selectedRoleForACL === r.name ? 'bg-indigo-100 text-indigo-800 font-bold' : 'hover:bg-gray-50'}`}
-                              >
-                                  {r.name}
-                                  <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Excluir?')) saveSettings({...settings, roles: settings.roles.filter(x => x.name !== r.name)}, 'roles'); }} className="text-red-400 hover:text-red-600 text-xs">×</button>
+           {!hasPermission('settings:integration') && !hasPermission('settings:branches') && !hasPermission('settings:sectors') && !hasPermission('settings:profiles') && !hasPermission('settings:event_types') && (
+              <p className="text-gray-500 italic text-center py-8">Você não tem permissão para visualizar itens desta seção.</p>
+           )}
+        </div>
+      )}
+
+      {/* --- TAB: CONTROLE DE ACESSO --- */}
+      {activeSubTab === 'acesso' && showAcesso && (
+        <div className="animate-fadeIn space-y-8">
+           {hasPermission('settings:access_control') ? (
+             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+               <h2 className="text-lg font-bold text-gray-800 mb-2">Gerenciar Funções (Roles)</h2>
+               <p className="text-sm text-gray-500 mb-6">Crie funções para categorizar colaboradores e atribua permissões específicas.</p>
+               
+               {/* Adicionar Role */}
+               <div className="flex gap-2 mb-6 max-w-md">
+                 <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none" placeholder="Nova Função (Ex: Coordenador)..." value={newRoleName} onChange={e => setNewRoleName(e.target.value)} />
+                 <button onClick={addRole} disabled={!newRoleName.trim() || savingState['role'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Adicionar</button>
+               </div>
+
+               {/* Seletor de Role para Editar Permissões */}
+               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="col-span-1 border-r border-gray-200 pr-4">
+                     <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Selecione uma Função</h3>
+                     <div className="space-y-1">
+                        {[...settings.roles].sort((a, b) => a.name.localeCompare(b.name)).map(r => (
+                          <div 
+                            key={r.name} 
+                            className={`flex justify-between items-center p-3 rounded-lg transition-colors group ${selectedRoleForACL === r.name ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50 border border-transparent cursor-pointer'}`}
+                            onClick={() => setSelectedRoleForACL(r.name)}
+                          >
+                            {editingRoleName === r.name ? (
+                               <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
+                                  <input 
+                                    autoFocus 
+                                    className="flex-1 text-sm border border-indigo-300 rounded px-1 py-0.5 outline-none" 
+                                    value={editRoleNameInput} 
+                                    onChange={e => setEditRoleNameInput(e.target.value)} 
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') saveEditRole();
+                                        if (e.key === 'Escape') setEditingRoleName(null);
+                                    }}
+                                  />
+                                  <button onClick={saveEditRole} className="text-green-600 font-bold px-1">✓</button>
+                                  <button onClick={() => setEditingRoleName(null)} className="text-gray-400 font-bold px-1">✕</button>
+                               </div>
+                            ) : (
+                               <>
+                                  <span className={`font-medium truncate ${selectedRoleForACL === r.name ? 'text-indigo-700' : 'text-gray-700'}`}>{r.name}</span>
+                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                     <button 
+                                        onClick={() => startEditRole(r.name)}
+                                        className="text-blue-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded"
+                                        title="Renomear"
+                                     >
+                                        ✎
+                                     </button>
+                                     <button 
+                                        onClick={() => removeRole(r.name)}
+                                        className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded"
+                                        title="Excluir"
+                                     >
+                                        🗑️
+                                     </button>
+                                  </div>
+                               </>
+                            )}
+                          </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  <div className="col-span-2">
+                     {selectedRoleForACL ? (
+                       <div className="animate-fadeIn">
+                          <div className="flex justify-between items-center mb-4 bg-gray-50 p-4 rounded-lg">
+                             <div>
+                                <h3 className="text-lg font-bold text-gray-800">Editando: <span className="text-indigo-600">{selectedRoleForACL}</span></h3>
+                                <p className="text-xs text-gray-500">Defina o que esta função pode ver e fazer.</p>
+                             </div>
+                             
+                             {/* Config de Restrição de Setor (Visualização) */}
+                             <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-700">Acesso aos Dados:</span>
+                                <button 
+                                  onClick={() => toggleRoleRestriction(selectedRoleForACL)}
+                                  className={`px-3 py-1 rounded text-xs font-bold transition-colors ${settings.roles.find(r => r.name === selectedRoleForACL)?.canViewAllSectors ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}
+                                >
+                                  {settings.roles.find(r => r.name === selectedRoleForACL)?.canViewAllSectors ? 'GLOBAL (Tudo)' : 'RESTRITO (Por Usuário)'}
+                                </button>
+                             </div>
+                          </div>
+                          
+                          {/* Config de Gerenciamento de Perfis (Criação de Usuários) */}
+                          <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                             <h4 className="text-xs font-bold text-blue-800 uppercase mb-2 flex items-center gap-2">
+                                🛡️ Gerenciamento de Cadastros
+                             </h4>
+                             <p className="text-xs text-gray-600 mb-3">Quais tipos de PERFIL esta função ({selectedRoleForACL}) pode atribuir ao cadastrar novos colaboradores?</p>
+                             
+                             <div className="flex flex-wrap gap-2">
+                                {(settings.accessProfiles || []).filter(p => p.active).map(profile => {
+                                   const role = settings.roles.find(r => r.name === selectedRoleForACL);
+                                   const isAllowed = role?.manageableProfiles?.includes(profile.id) || false;
+                                   
+                                   return (
+                                     <button
+                                       key={profile.id}
+                                       onClick={() => toggleManageableProfile(selectedRoleForACL, profile.id)}
+                                       className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                                          isAllowed 
+                                          ? 'bg-blue-600 text-white border-blue-700 shadow-sm' 
+                                          : 'bg-white text-gray-500 border-gray-300 hover:border-blue-300'
+                                       }`}
+                                     >
+                                       {isAllowed && '✓ '} {profile.name}
+                                     </button>
+                                   );
+                                })}
+                             </div>
+                          </div>
+
+                          {/* Matriz de Permissões */}
+                          <div className="space-y-6">
+                             {Object.entries(groupedPermissions).map(([category, perms]) => (
+                                <div key={category}>
+                                   <h4 className="text-xs font-bold text-gray-500 uppercase border-b border-gray-100 pb-1 mb-3">{category}</h4>
+                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      {perms.map(perm => {
+                                        const role = settings.roles.find(r => r.name === selectedRoleForACL);
+                                        const isActive = role?.permissions?.includes(perm.id) || false;
+
+                                        return (
+                                          <label key={perm.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isActive ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                                             <div className={`w-5 h-5 rounded flex items-center justify-center border ${isActive ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'}`}>
+                                                {isActive && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                             </div>
+                                             <input 
+                                               type="checkbox" 
+                                               className="hidden" 
+                                               checked={isActive} 
+                                               onChange={() => togglePermission(selectedRoleForACL, perm.id)} 
+                                             />
+                                             <span className={`text-sm ${isActive ? 'text-indigo-800 font-medium' : 'text-gray-600'}`}>{perm.label}</span>
+                                          </label>
+                                        );
+                                      })}
+                                   </div>
+                                </div>
+                             ))}
+                          </div>
+                       </div>
+                     ) : (
+                       <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                          <span className="text-4xl mb-2">👈</span>
+                          <p>Selecione uma função à esquerda para configurar permissões.</p>
+                       </div>
+                     )}
+                  </div>
+               </div>
+             </div>
+           ) : (
+             <p className="text-gray-500 italic text-center py-8">Você não tem permissão para gerenciar funções e acessos.</p>
+           )}
+        </div>
+      )}
+
+      {/* --- TAB: JORNADA DE TRABALHO --- */}
+      {activeSubTab === 'jornada' && showJornada && (
+        <div className="animate-fadeIn">
+            {hasPermission('settings:schedule_templates') ? (
+              <>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                   <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-lg font-bold text-gray-800">{editingTemplateId ? 'Editar Modelo de Jornada' : 'Criar Modelo de Jornada'}</h2>
+                      {editingTemplateId && <button onClick={cancelEditTemplate} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
+                   </div>
+
+                   <div className={`mb-4 flex gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''}`}>
+                      <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" placeholder="Nome (Ex: Escala 12x36)..." value={templateName} onChange={e => setTemplateName(e.target.value)} />
+                      <button onClick={saveTemplate} className={`${editingTemplateId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors`}>
+                         {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Modelo'}
+                      </button>
+                   </div>
+                   
+                   <div className="space-y-2 max-w-2xl">
+                      {daysOrder.map(day => (
+                         <div key={day} className="flex items-center gap-4 bg-gray-50 p-2 rounded border border-gray-100">
+                            <label className="w-24 flex items-center gap-2 cursor-pointer">
+                               <input type="checkbox" checked={templateSchedule[day].enabled} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], enabled: e.target.checked}}))} className="rounded text-indigo-600" />
+                               <span className="capitalize text-sm font-medium">{day}</span>
+                            </label>
+                            <input type="time" disabled={!templateSchedule[day].enabled} value={templateSchedule[day].start} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], start: e.target.value}}))} className="border rounded p-1 text-sm bg-white" />
+                            <span className="text-gray-400">-</span>
+                            <input type="time" disabled={!templateSchedule[day].enabled} value={templateSchedule[day].end} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], end: e.target.value}}))} className="border rounded p-1 text-sm bg-white" />
+                            <label className="flex items-center gap-1 cursor-pointer ml-auto">
+                               <input type="checkbox" disabled={!templateSchedule[day].enabled} checked={templateSchedule[day].startsPreviousDay} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], startsPreviousDay: e.target.checked}}))} />
+                               <span className="text-[10px] text-gray-500">Inicia -1d</span>
+                            </label>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Lista de Modelos Salvos */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos de Jornada Salvos</h2>
+                    <div className="flex flex-col gap-2">
+                        {(settings.scheduleTemplates || []).map(t => (
+                          <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
+                              <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
+                                <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
                               </div>
-                          ))}
-                      </div>
+                          </div>
+                        ))}
+                        {(settings.scheduleTemplates || []).length === 0 && <p className="text-gray-400 text-sm">Nenhum modelo cadastrado.</p>}
+                    </div>
                   </div>
                   
-                  {/* Right: Permissions */}
-                  <div className="md:col-span-2">
-                      {selectedRoleForACL ? (
-                          <div>
-                              <div className="flex justify-between items-center mb-4">
-                                  <h3 className="font-bold text-gray-700 text-lg">Permissões para: <span className="text-indigo-600">{selectedRoleForACL}</span></h3>
-                                  
-                                  {/* Toggle Global View */}
-                                  <label className="flex items-center gap-2 cursor-pointer bg-blue-50 px-3 py-1 rounded border border-blue-100">
-                                      <input 
-                                        type="checkbox" 
-                                        checked={settings.roles.find(r => r.name === selectedRoleForACL)?.canViewAllSectors || false}
-                                        onChange={(e) => {
-                                            const updated = settings.roles.map(r => r.name === selectedRoleForACL ? {...r, canViewAllSectors: e.target.checked} : r);
-                                            saveSettings({...settings, roles: updated}, 'roles');
-                                        }}
-                                      />
-                                      <span className="text-xs font-bold text-blue-800">Visualizar Todos os Setores?</span>
-                                  </label>
-                              </div>
+                  {/* Lista de Escalas (A, B, C...) com Configuração de Domingos */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-bold text-gray-800 mb-4">Escalas de Revezamento</h2>
+                    <p className="text-sm text-gray-500 mb-4">Configure quais domingos do mês cada escala deve trabalhar (ex: regra de folga obrigatória após 3 domingos).</p>
+                    
+                    {/* Add Rotation Form */}
+                    <div className="bg-indigo-50 p-4 rounded-lg mb-4 border border-indigo-100">
+                        <div className="flex gap-2 mb-3">
+                           <input 
+                             type="text" 
+                             className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm outline-none" 
+                             placeholder="Nova Escala (ex: A, B)..." 
+                             value={newRotationId} 
+                             onChange={e => setNewRotationId(e.target.value)} 
+                           />
+                           <button onClick={addRotation} disabled={savingState['rotation'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Adicionar</button>
+                        </div>
+                        
+                        <div>
+                           <label className="text-xs font-bold text-gray-600 uppercase mb-2 block">Domingos Trabalhados no Mês:</label>
+                           <div className="flex flex-wrap gap-2">
+                              {[1, 2, 3, 4, 5].map(idx => (
+                                <button
+                                  key={idx}
+                                  onClick={() => toggleRotationSunday(idx)}
+                                  className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors ${rotationWorkSundays.includes(idx) ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-500 border-gray-300 hover:border-indigo-300'}`}
+                                >
+                                  {idx}º
+                                </button>
+                              ))}
+                           </div>
+                        </div>
+                    </div>
 
-                              {/* Manageable Profiles Config */}
-                              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Pode criar usuários dos perfis:</h4>
-                                 <div className="flex flex-wrap gap-2">
-                                     {settings.accessProfiles.map(p => {
-                                         const currentRole = settings.roles.find(r => r.name === selectedRoleForACL);
-                                         const isSelected = currentRole?.manageableProfiles?.includes(p.name);
-                                         return (
-                                             <button 
-                                               key={p.id}
-                                               onClick={() => {
-                                                   if(!currentRole) return;
-                                                   let currentList = currentRole.manageableProfiles || [];
-                                                   if (isSelected) currentList = currentList.filter(x => x !== p.name);
-                                                   else currentList = [...currentList, p.name];
-                                                   
-                                                   const updatedRoles = settings.roles.map(r => r.name === selectedRoleForACL ? {...r, manageableProfiles: currentList} : r);
-                                                   saveSettings({...settings, roles: updatedRoles}, 'roles');
-                                               }}
-                                               className={`px-2 py-1 text-xs rounded border ${isSelected ? 'bg-purple-100 text-purple-700 border-purple-300 font-bold' : 'bg-white text-gray-500 border-gray-200'}`}
-                                             >
-                                                 {p.name}
-                                             </button>
-                                         )
-                                     })}
+                    {/* List of Rotations */}
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {(settings.shiftRotations || []).map(r => (
+                          <div key={r.id} className="p-3 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
+                              <div>
+                                 <div className="font-bold text-gray-800">Escala {r.id}</div>
+                                 <div className="text-xs text-gray-500 mt-1 flex gap-1">
+                                    Trabalha: 
+                                    {r.workSundays.length > 0 
+                                      ? r.workSundays.map(s => <span key={s} className="bg-white border border-gray-200 px-1 rounded">{s}º</span>) 
+                                      : <span className="italic">Nenhum</span>
+                                    }
                                  </div>
                               </div>
-                              
-                              <div className="space-y-4">
-                                  {/* Group Permissions by Category */}
-                                  {Object.entries(SYSTEM_PERMISSIONS.reduce((acc, perm) => {
-                                      const cat = perm.category || 'Outros';
-                                      if (!acc[cat]) acc[cat] = [];
-                                      acc[cat].push(perm);
-                                      return acc;
-                                  }, {} as Record<string, typeof SYSTEM_PERMISSIONS>)).map(([category, perms]) => (
-                                      <div key={category} className="border border-gray-100 rounded-lg overflow-hidden">
-                                          <div className="bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide">
-                                              {category}
-                                          </div>
-                                          <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                              {perms.map(perm => {
-                                                  const currentRole = settings.roles.find(r => r.name === selectedRoleForACL);
-                                                  const hasPerm = currentRole?.permissions.includes(perm.id);
-                                                  return (
-                                                      <label key={perm.id} className={`flex items-center gap-2 text-sm p-2 rounded cursor-pointer transition-colors ${hasPerm ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-gray-50 border border-transparent'}`}>
-                                                          <input 
-                                                            type="checkbox"
-                                                            checked={hasPerm || false}
-                                                            onChange={(e) => {
-                                                                if(!currentRole) return;
-                                                                let newPerms = currentRole.permissions;
-                                                                if (e.target.checked) newPerms = [...newPerms, perm.id];
-                                                                else newPerms = newPerms.filter(p => p !== perm.id);
-                                                                
-                                                                const updatedRoles = settings.roles.map(r => r.name === selectedRoleForACL ? {...r, permissions: newPerms} : r);
-                                                                saveSettings({...settings, roles: updatedRoles}, 'roles');
-                                                            }}
-                                                            className="rounded text-indigo-600 focus:ring-indigo-500"
-                                                          />
-                                                          <span className={hasPerm ? 'text-indigo-900 font-medium' : 'text-gray-600'}>{perm.label}</span>
-                                                      </label>
-                                                  );
-                                              })}
-                                          </div>
-                                      </div>
-                                  ))}
-                              </div>
-
+                              <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
                           </div>
-                      ) : (
-                          <div className="h-full flex items-center justify-center text-gray-400 italic">
-                              Selecione uma função à esquerda para editar permissões.
-                          </div>
-                      )}
+                        ))}
+                    </div>
                   </div>
+                </div>
+              </>
+            ) : (
+               <p className="text-gray-500 italic text-center py-8">Você não tem permissão para gerenciar modelos de jornada.</p>
+            )}
+        </div>
+      )}
+      
+      {/* --- TAB: AVISOS DO SISTEMA --- */}
+      {activeSubTab === 'sistema' && showSistema && (
+        <div className="animate-fadeIn">
+          {hasPermission('settings:system_msg') ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-start mb-4">
+                 <div>
+                    <h2 className="text-lg font-bold text-gray-800">Comunicado em Tempo Real (Banner)</h2>
+                    <p className="text-sm text-gray-500">Exiba uma mensagem no topo da tela para todos os usuários logados. Ideal para avisos de manutenção ou deploy.</p>
+                 </div>
+                 <div className={`px-3 py-1 rounded text-xs font-bold uppercase ${sysMsgActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {sysMsgActive ? 'Ativo' : 'Inativo'}
+                 </div>
               </div>
-          </div>
-       )}
-
-       {/* TAB: AVISOS DO SISTEMA */}
-       {activeSubTab === 'sistema' && (
-         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fadeIn">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">Banner de Aviso Global</h2>
-            <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-4 text-sm text-amber-800">
-               Use esta ferramenta para exibir mensagens importantes no topo de todas as telas para todos os usuários.
-            </div>
-
-            <div className="space-y-4 max-w-lg">
-                <label className="flex items-center gap-2 cursor-pointer">
-                   <input type="checkbox" checked={sysMsgActive} onChange={e => setSysMsgActive(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded" />
-                   <span className="font-bold text-gray-700">Ativar Mensagem</span>
-                </label>
+              
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-6">
                 
-                <div>
-                   <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Tipo de Alerta</label>
-                   <select value={sysMsgLevel} onChange={e => setSysMsgLevel(e.target.value as any)} className="w-full border p-2 rounded">
-                      <option value="info">Informação (Azul)</option>
-                      <option value="warning">Atenção (Amarelo)</option>
-                      <option value="error">Crítico (Vermelho)</option>
-                   </select>
+                <div className="flex items-center gap-4">
+                   <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={sysMsgActive} onChange={e => setSysMsgActive(e.target.checked)} />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      <span className="ml-3 text-sm font-medium text-gray-900">Exibir Banner para Usuários</span>
+                   </label>
                 </div>
 
                 <div>
-                   <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Mensagem</label>
-                   <textarea 
-                     rows={3} 
-                     className="w-full border p-2 rounded"
-                     value={sysMsgContent}
-                     onChange={e => setSysMsgContent(e.target.value)}
-                     placeholder="Digite o comunicado aqui..."
-                   ></textarea>
+                  <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Nível de Urgência</label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border bg-white hover:bg-gray-50 transition-colors flex-1">
+                      <input type="radio" name="level" value="info" checked={sysMsgLevel === 'info'} onChange={() => setSysMsgLevel('info')} className="text-blue-600" />
+                      <span className="text-blue-600 font-bold">Informação (Azul)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border bg-white hover:bg-gray-50 transition-colors flex-1">
+                      <input type="radio" name="level" value="warning" checked={sysMsgLevel === 'warning'} onChange={() => setSysMsgLevel('warning')} className="text-amber-600" />
+                      <span className="text-amber-600 font-bold">Atenção (Amarelo)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border bg-white hover:bg-gray-50 transition-colors flex-1">
+                      <input type="radio" name="level" value="error" checked={sysMsgLevel === 'error'} onChange={() => setSysMsgLevel('error')} className="text-red-600" />
+                      <span className="text-red-600 font-bold">Manutenção (Vermelho)</span>
+                    </label>
+                  </div>
                 </div>
 
-                <button 
-                  onClick={() => saveSettings({
-                      ...settings,
-                      systemMessage: { active: sysMsgActive, level: sysMsgLevel, message: sysMsgContent }
-                  }, 'sysmsg')}
-                  disabled={savingState['sysmsg'] === 'saving'}
-                  className="bg-indigo-600 text-white font-bold py-2 px-6 rounded hover:bg-indigo-700 transition"
-                >
-                  {savingState['sysmsg'] === 'saving' ? 'Salvando...' : 'Atualizar Banner'}
-                </button>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Mensagem</label>
+                  <textarea 
+                    rows={3} 
+                    className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" 
+                    placeholder="Ex: O sistema passará por manutenção às 18:00. Salvem seus dados."
+                    value={sysMsgContent}
+                    onChange={e => setSysMsgContent(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button 
+                    onClick={saveSystemMessage} 
+                    disabled={savingState['system_msg'] === 'saving'}
+                    className={`px-6 py-2 rounded-lg font-bold text-white transition-all ${savingState['system_msg'] === 'success' ? 'bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                  >
+                    {savingState['system_msg'] === 'saving' ? 'Salvando...' : savingState['system_msg'] === 'success' ? 'Atualizado!' : 'Salvar Aviso'}
+                  </button>
+                </div>
+
+              </div>
             </div>
-         </div>
-       )}
-
-     </div>
+          ) : (
+             <p className="text-gray-500 italic text-center py-8">Você não tem permissão para gerenciar avisos do sistema.</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
