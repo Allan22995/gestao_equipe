@@ -1,6 +1,5 @@
 
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
 
@@ -29,6 +28,10 @@ export const Events: React.FC<EventsProps> = ({
   collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit, currentUserAllowedSectors, currentUserProfile, userColabId
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Helper para identificar se é um perfil de liderança/admin
+  const isManager = currentUserProfile !== 'colaborador';
+
   const [formData, setFormData] = useState({
     collaboratorId: '',
     type: '',
@@ -38,8 +41,22 @@ export const Events: React.FC<EventsProps> = ({
     status: 'pendente' as EventStatus
   });
 
-  // Helper para identificar se é um perfil de liderança/admin
-  const isManager = currentUserProfile !== 'colaborador';
+  // Efeito para garantir que, se for colaborador, o formulário já nasça preenchido corretamente
+  useEffect(() => {
+    if (!isManager && userColabId && !editingId) {
+      setFormData(prev => {
+        // Só atualiza se estiver diferente para evitar loop ou re-render desnecessário
+        if (prev.collaboratorId !== userColabId || prev.type !== 'folga') {
+          return {
+            ...prev,
+            collaboratorId: userColabId,
+            type: 'folga'
+          };
+        }
+        return prev;
+      });
+    }
+  }, [isManager, userColabId, editingId]);
 
   // Filter Collaborators for Dropdown
   const allowedCollaborators = useMemo(() => {
@@ -93,8 +110,8 @@ export const Events: React.FC<EventsProps> = ({
   const resetForm = () => {
     setEditingId(null);
     setFormData({
-      collaboratorId: (currentUserProfile === 'colaborador' && userColabId) ? userColabId : '',
-      type: (currentUserProfile === 'colaborador') ? 'folga' : '', // Default to Folga for collaborator
+      collaboratorId: (!isManager && userColabId) ? userColabId : '',
+      type: (!isManager) ? 'folga' : '', // Default to Folga for collaborator
       startDate: '',
       endDate: '',
       observation: '',
@@ -166,23 +183,37 @@ export const Events: React.FC<EventsProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.type) return;
+    
+    // Se for colaborador, garante que o tipo é folga e id é ele mesmo, mesmo que o form tenha falhado visualmente
+    let finalType = formData.type;
+    let finalColabId = formData.collaboratorId;
+    
+    if (!isManager) {
+        if (!finalType) finalType = 'folga';
+        if (!finalColabId && userColabId) finalColabId = userColabId;
+    }
 
-    // Se for colaborador, força tipo 'folga' e status 'pendente' (exceto se estiver editando status específico)
+    if (!finalType) {
+        showToast("Selecione o tipo de evento.", true);
+        return;
+    }
+    if (!finalColabId) {
+        showToast("Erro ao identificar colaborador.", true);
+        return;
+    }
+
+    // Se for colaborador, força status 'pendente' (exceto se estiver editando status específico)
     // Na verdade, se colaborador edita, volta para 'pendente' (nova solicitação/correção)
     let finalStatus: EventStatus = formData.status;
-    let finalType = formData.type;
     let acceptedFlag = false;
 
     if (!isManager) {
-        finalType = 'folga'; // Força Folga
         finalStatus = 'pendente'; // Sempre volta para pendente se o colaborador mexe
         acceptedFlag = false; // Reseta flag se ele editou
     } else {
         // Se for manager editando, mantém o status selecionado
         // Se manager muda para 'nova_opcao', reseta flag de aceite
         if (formData.status === 'nova_opcao') acceptedFlag = false;
-        // Se manager aprova e tinha flag de aceite, a flag pode ficar true ou false, tanto faz, evento ta aprovado.
     }
 
     const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
@@ -191,7 +222,7 @@ export const Events: React.FC<EventsProps> = ({
     if (!editingId) {
       const newEvent: EventRecord = {
         id: generateUUID(),
-        collaboratorId: formData.collaboratorId,
+        collaboratorId: finalColabId,
         type: finalType,
         typeLabel: label,
         startDate: formData.startDate,
@@ -206,11 +237,9 @@ export const Events: React.FC<EventsProps> = ({
       showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
       resetForm();
     } else {
-      // Se não for manager, e estiver editando, força pendente.
-      
       onUpdate({
         id: editingId,
-        collaboratorId: formData.collaboratorId,
+        collaboratorId: finalColabId,
         type: finalType,
         typeLabel: label,
         startDate: formData.startDate,
