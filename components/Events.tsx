@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
@@ -49,7 +50,7 @@ export const Events: React.FC<EventsProps> = ({
        filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
      }
      
-     return filtered;
+     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   // Filter Events History and Sort by Date Descending

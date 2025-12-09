@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { Collaborator, VacationRequest, VacationStatus, UserProfile } from '../types';
 import { generateUUID, formatDate } from '../utils/helpers';
@@ -50,7 +51,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
         filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
      }
 
-     return filtered;
+     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   // Filter Requests History

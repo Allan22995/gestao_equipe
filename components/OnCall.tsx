@@ -140,7 +140,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
         return filtered.filter(c => c.id === userColabId);
      }
      
-     return filtered;
+     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [collaborators, currentUserProfile, userColabId]);
 
   return (
