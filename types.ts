@@ -209,4 +209,9 @@ export const SYSTEM_PERMISSIONS = [
   { id: 'settings:access_control', label: 'Config: Controle de Acesso (Roles)', category: 'Configuração (Detalhes)' },
   { id: 'settings:schedule_templates', label: 'Config: Modelos de Jornada', category: 'Configuração (Detalhes)' },
   { id: 'settings:system_msg', label: 'Config: Avisos do Sistema', category: 'Configuração (Detalhes)' },
+  
+  // Permissões de Escalas de Revezamento
+  { id: 'create:rotations', label: 'Criar Escalas', category: 'Configuração (Jornada)' },
+  { id: 'edit:rotations', label: 'Editar Escalas', category: 'Configuração (Jornada)' },
+  { id: 'delete:rotations', label: 'Excluir Escalas', category: 'Configuração (Jornada)' },
 ];

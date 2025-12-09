@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -187,6 +189,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [sysMsgContent, setSysMsgContent] = useState(settings.systemMessage?.message || '');
 
   // Rotation Edit States
+  const [editingRotationId, setEditingRotationId] = useState<string | null>(null); // NEW: Track edit mode
   const [newRotationId, setNewRotationId] = useState('');
   const [rotationWorkSundays, setRotationWorkSundays] = useState<number[]>([]);
 
@@ -237,26 +240,52 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   
   // --- LOGIC: SHIFT ROTATIONS (ESCALAS) ---
   // Agora suporta objetos RotationRule
-  const addRotation = () => {
+  const saveRotation = () => {
     if (!newRotationId.trim()) { showToast('Defina um nome para a escala (ex: A, B).', true); return; }
     if (rotationWorkSundays.length === 0) { showToast('Selecione ao menos um domingo de trabalho.', true); return; }
     
-    // Check duplicate ID
-    if (settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) {
+    // Check duplicate ID (only if not editing)
+    if (!editingRotationId && settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) {
         showToast('Já existe uma escala com este ID.', true);
         return;
     }
 
-    const newRule: RotationRule = {
-       id: newRotationId.trim().toUpperCase(),
-       label: `Escala ${newRotationId.trim().toUpperCase()}`,
-       workSundays: rotationWorkSundays.sort((a, b) => a - b)
-    };
+    let updatedRotations = [...settings.shiftRotations];
+    
+    if (editingRotationId) {
+        // Update Mode
+        updatedRotations = updatedRotations.map(r => 
+           r.id === editingRotationId 
+             ? { ...r, label: `Escala ${newRotationId.trim().toUpperCase()}`, workSundays: rotationWorkSundays.sort((a, b) => a - b) }
+             : r
+        );
+    } else {
+        // Create Mode
+        const newRule: RotationRule = {
+          id: newRotationId.trim().toUpperCase(),
+          label: `Escala ${newRotationId.trim().toUpperCase()}`,
+          workSundays: rotationWorkSundays.sort((a, b) => a - b)
+        };
+        updatedRotations.push(newRule);
+    }
 
-    saveSettings({ ...settings, shiftRotations: [...settings.shiftRotations, newRule] }, 'rotation', () => {
+    saveSettings({ ...settings, shiftRotations: updatedRotations }, 'rotation', () => {
         setNewRotationId('');
         setRotationWorkSundays([]);
+        setEditingRotationId(null);
     });
+  };
+
+  const loadRotationForEdit = (r: RotationRule) => {
+    setEditingRotationId(r.id);
+    setNewRotationId(r.id);
+    setRotationWorkSundays(r.workSundays);
+  };
+
+  const cancelEditRotation = () => {
+    setEditingRotationId(null);
+    setNewRotationId('');
+    setRotationWorkSundays([]);
   };
 
   const removeRotation = (id: string) => {
@@ -868,20 +897,27 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   
                   {/* Lista de Escalas (A, B, C...) com Configuração de Domingos */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-bold text-gray-800 mb-4">Escalas de Revezamento</h2>
+                    <div className="flex justify-between items-center mb-4">
+                       <h2 className="text-lg font-bold text-gray-800">Escalas de Revezamento</h2>
+                       {editingRotationId && <button onClick={cancelEditRotation} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
+                    </div>
                     <p className="text-sm text-gray-500 mb-4">Configure quais domingos do mês cada escala deve trabalhar (ex: regra de folga obrigatória após 3 domingos).</p>
                     
-                    {/* Add Rotation Form */}
-                    <div className="bg-indigo-50 p-4 rounded-lg mb-4 border border-indigo-100">
+                    {/* Add/Edit Rotation Form */}
+                    {(hasPermission('create:rotations') || (hasPermission('edit:rotations') && editingRotationId)) ? (
+                    <div className={`p-4 rounded-lg mb-4 border transition-colors ${editingRotationId ? 'bg-blue-50 border-blue-200' : 'bg-indigo-50 border-indigo-100'}`}>
                         <div className="flex gap-2 mb-3">
                            <input 
                              type="text" 
-                             className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm outline-none" 
+                             className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-500" 
                              placeholder="Nova Escala (ex: A, B)..." 
                              value={newRotationId} 
-                             onChange={e => setNewRotationId(e.target.value)} 
+                             onChange={e => setNewRotationId(e.target.value)}
+                             disabled={!!editingRotationId} // ID cannot be changed during edit to maintain referential integrity
                            />
-                           <button onClick={addRotation} disabled={savingState['rotation'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Adicionar</button>
+                           <button onClick={saveRotation} disabled={savingState['rotation'] === 'saving'} className={`${editingRotationId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors disabled:opacity-50`}>
+                              {editingRotationId ? 'Atualizar' : 'Adicionar'}
+                           </button>
                         </div>
                         
                         <div>
@@ -899,11 +935,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            </div>
                         </div>
                     </div>
+                    ) : (
+                       <p className="text-xs text-gray-400 italic mb-4">Você não tem permissão para criar ou editar escalas.</p>
+                    )}
 
                     {/* List of Rotations */}
                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
                         {(settings.shiftRotations || []).map(r => (
-                          <div key={r.id} className="p-3 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
+                          <div key={r.id} className={`p-3 border rounded-lg flex justify-between items-center transition-colors ${editingRotationId === r.id ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200'}`}>
                               <div>
                                  <div className="font-bold text-gray-800">Escala {r.id}</div>
                                  <div className="text-xs text-gray-500 mt-1 flex gap-1">
@@ -914,9 +953,18 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                     }
                                  </div>
                               </div>
-                              <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              </button>
+                              <div className="flex gap-2">
+                                  {hasPermission('edit:rotations') && (
+                                     <button onClick={() => loadRotationForEdit(r)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded-full transition-colors" title="Editar">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                     </button>
+                                  )}
+                                  {hasPermission('delete:rotations') && (
+                                     <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors" title="Excluir">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                     </button>
+                                  )}
+                              </div>
                           </div>
                         ))}
                     </div>
