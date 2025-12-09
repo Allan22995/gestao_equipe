@@ -1,4 +1,5 @@
 
+
 export const generateUUID = () => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
@@ -71,6 +72,30 @@ export const getWeekOfMonth = (date: Date): number => {
     }
   }
   return count;
+};
+
+// Lógica de cálculo de folga de escala (3x1)
+// Se a data alvo cair em um domingo que é (StartDate + N * 28 dias), então é folga.
+// Ciclo: Folga (0), Trab (7), Trab (14), Trab (21), Folga (28)...
+export const isRotationOffDay = (targetDateStr: string, startDateStr?: string): boolean => {
+  if (!startDateStr) return false;
+  
+  // Normalizar datas para evitar problemas de fuso
+  const target = new Date(targetDateStr + 'T00:00:00');
+  const start = new Date(startDateStr + 'T00:00:00');
+
+  // Precisa ser domingo
+  if (target.getDay() !== 0) return false;
+
+  // Se a data alvo é anterior ao início da escala, não consideramos (ou poderíamos projetar para trás, mas seguro ignorar)
+  if (target.getTime() < start.getTime()) return false;
+
+  const diffTime = Math.abs(target.getTime() - start.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  // O ciclo é de 4 semanas (28 dias): 1 Folga + 3 Trabalhados.
+  // Se a diferença de dias for múltiplo de 28, cai exatamente no dia de folga do ciclo.
+  return diffDays % 28 === 0;
 };
 
 export const promptForUser = (action: string): string | null => {

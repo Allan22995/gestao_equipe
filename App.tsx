@@ -64,10 +64,10 @@ const DEFAULT_SETTINGS: SystemSettings = {
   ],
   scheduleTemplates: [],
   shiftRotations: [
-    { id: 'A', label: 'Escala A', workSundays: [1, 2, 3] }, // Padrão: 3x1
-    { id: 'B', label: 'Escala B', workSundays: [2, 3, 4] },
-    { id: 'C', label: 'Escala C', workSundays: [1, 3, 4] },
-    { id: 'D', label: 'Escala D', workSundays: [1, 2, 4] }
+    { id: 'A', label: 'Escala A' }, 
+    { id: 'B', label: 'Escala B' },
+    { id: 'C', label: 'Escala C' },
+    { id: 'D', label: 'Escala D' }
   ],
   spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781',
   systemMessage: { active: false, level: 'info', message: '' },
@@ -227,8 +227,8 @@ function App() {
              const legacyRotations = loadedSettings.shiftRotations as unknown as string[];
              loadedSettings.shiftRotations = legacyRotations.map(r => ({
                 id: r,
-                label: `Escala ${r}`,
-                workSundays: [1, 2, 3] // Default placeholder: trabalha os 3 primeiros
+                label: `Escala ${r}`
+                // workSundays removed in new version
              }));
           }
 
