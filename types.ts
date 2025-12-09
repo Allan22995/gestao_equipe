@@ -106,6 +106,8 @@ export interface SystemSettings {
 // Mantemos compatibilidade com string, mas o valor virá do config
 export type EventType = string; 
 
+export type EventStatus = 'pendente' | 'aprovado' | 'nova_opcao' | 'reprovado';
+
 export interface EventRecord {
   id: string;
   collaboratorId: string;
@@ -116,6 +118,8 @@ export interface EventRecord {
   observation: string;
   daysGained: number;
   daysUsed: number;
+  status?: EventStatus; // Novo: Status da solicitação (Eventos de Folga)
+  collaboratorAcceptedProposal?: boolean; // Novo: Se o colaborador aceitou a contraproposta
   createdAt: string;
   updatedBy?: string;
   lastUpdatedAt?: string;

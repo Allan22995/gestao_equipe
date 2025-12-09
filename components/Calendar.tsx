@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings, UserProfile } from '../types';
 import { getFeriados, getWeekOfMonth } from '../utils/helpers';
@@ -145,6 +146,9 @@ export const Calendar: React.FC<CalendarProps> = ({
 
     // 1. Database Events
     let dayEvents = events.filter(e => {
+      // Ocultar eventos reprovados
+      if (e.status === 'reprovado') return false;
+      
       const start = new Date(e.startDate + 'T00:00:00');
       const end = new Date(e.endDate + 'T00:00:00');
       return checkDate >= start && checkDate <= end;
@@ -290,16 +294,27 @@ export const Calendar: React.FC<CalendarProps> = ({
               } else if (item.kind === 'rotation_off') {
                  colorClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200'; // Folga de Escala
               } else if (item.kind === 'event') {
-                // Dynamic colors based on legacy type or default
-                if (item.type === 'ferias') colorClass = 'bg-blue-100 text-blue-800';
-                else if (item.type === 'folga') colorClass = 'bg-emerald-100 text-emerald-800';
-                else if (item.type === 'trabalhado') colorClass = 'bg-red-100 text-red-800';
-                else colorClass = 'bg-indigo-100 text-indigo-800'; // Default for custom
+                 // Check Status if exists (new feature)
+                 const isApproved = !item.status || item.status === 'aprovado';
+                 
+                 // Dynamic colors based on legacy type or default
+                 if (item.type === 'ferias') colorClass = 'bg-blue-100 text-blue-800';
+                 else if (item.type === 'folga') colorClass = 'bg-emerald-100 text-emerald-800';
+                 else if (item.type === 'trabalhado') colorClass = 'bg-red-100 text-red-800';
+                 else colorClass = 'bg-indigo-100 text-indigo-800'; // Default for custom
+
+                 // Apply Visual style for pending events
+                 if (!isApproved) {
+                    colorClass = 'bg-gray-100 text-gray-600 border border-dashed border-gray-400';
+                 }
               }
 
               const isReq = item.kind === 'vacation_req';
               const reqLabel = isReq ? (item.status === 'aprovado' ? '(Aprov.)' : item.status === 'nova_opcao' ? '(Opção)' : '(Prev.)') : '';
               
+              const isEvent = item.kind === 'event';
+              const eventLabel = isEvent && item.status && item.status !== 'aprovado' ? `(${item.status === 'nova_opcao' ? 'Opção' : 'Pend.'})` : '';
+
               // Simplifica label para virtual events
               const virtualLabel = (item.kind === 'rotation_off') ? '(Folga Escala)' : '';
 
@@ -307,7 +322,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 <div key={idx} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 truncate ${colorClass}`}>
                   <div className={`w-1.5 h-1.5 rounded-full bg-current shrink-0`}></div>
                   <span className="truncate font-medium">
-                    {getCollaboratorName(item.collaboratorId)} {reqLabel} {virtualLabel}
+                    {getCollaboratorName(item.collaboratorId)} {reqLabel} {eventLabel} {virtualLabel}
                   </span>
                 </div>
               );
@@ -415,7 +430,7 @@ export const Calendar: React.FC<CalendarProps> = ({
            <span className="w-3 h-3 rounded-full bg-orange-500"></span> Plantão
         </div>
         <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded border border-gray-400 border-dashed bg-gray-100"></span> Prev. Férias
+           <span className="w-3 h-3 rounded border border-gray-400 border-dashed bg-gray-100"></span> Pendente / Previsão
         </div>
         <div className="flex items-center gap-2">
            <span className="w-3 h-3 rounded bg-amber-200 border border-amber-500"></span> Feriado
@@ -458,10 +473,18 @@ export const Calendar: React.FC<CalendarProps> = ({
                  title = 'Folga de Escala (Domingo)';
               } else if (e.kind === 'event') {
                 title = getEventTypeLabel(e);
-                if (e.type === 'ferias') { borderClass = 'border-blue-400'; bgClass = 'bg-blue-50'; }
-                else if (e.type === 'folga') { borderClass = 'border-emerald-400'; bgClass = 'bg-emerald-50'; }
-                else if (e.type === 'trabalhado') { borderClass = 'border-red-400'; bgClass = 'bg-red-50'; }
-                else { borderClass = 'border-indigo-400'; bgClass = 'bg-indigo-50'; }
+                const isApproved = !e.status || e.status === 'aprovado';
+
+                if (!isApproved) {
+                    borderClass = 'border-gray-400 border-dashed'; 
+                    bgClass = 'bg-gray-50';
+                    title = `${title} (${e.status})`;
+                } else {
+                    if (e.type === 'ferias') { borderClass = 'border-blue-400'; bgClass = 'bg-blue-50'; }
+                    else if (e.type === 'folga') { borderClass = 'border-emerald-400'; bgClass = 'bg-emerald-50'; }
+                    else if (e.type === 'trabalhado') { borderClass = 'border-red-400'; bgClass = 'bg-red-50'; }
+                    else { borderClass = 'border-indigo-400'; bgClass = 'bg-indigo-50'; }
+                }
               }
 
               return (

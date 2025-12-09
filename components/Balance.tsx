@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -93,7 +94,11 @@ export const Balance: React.FC<BalanceProps> = ({
 
   // Then calculate balances for allowed collaborators
   const balances = allowedCollaborators.map(c => {
-    const userEvents = events.filter(e => e.collaboratorId === c.id);
+    // IMPORTANTE: Filtrar apenas eventos APROVADOS ou LEGADOS (sem status)
+    const userEvents = events.filter(e => 
+        e.collaboratorId === c.id && 
+        (e.status === 'aprovado' || e.status === undefined)
+    );
     const userAdjustments = adjustments.filter(a => a.collaboratorId === c.id);
     
     const totalGained = userEvents.reduce((acc, curr) => acc + curr.daysGained, 0);
@@ -113,7 +118,9 @@ export const Balance: React.FC<BalanceProps> = ({
   // Filter Log Items based on Sector, Search Term, and Profile
   const filteredLogItems = useMemo(() => {
      const allLogs = [
-        ...events.map(e => ({ ...e, logType: 'event', date: e.createdAt })),
+        ...events
+            .filter(e => e.status === 'aprovado' || e.status === undefined) // Mostrar apenas aprovados no log de saldo? Ou mostrar todos com indicação? Vamos mostrar todos, mas indicar status se não aprovado
+            .map(e => ({ ...e, logType: 'event', date: e.createdAt })),
         ...adjustments.map(a => ({ ...a, logType: 'adj', date: a.createdAt }))
      ];
 
@@ -279,6 +286,7 @@ export const Balance: React.FC<BalanceProps> = ({
 
              if (item.logType === 'event') {
                 const eventLabel = item.typeLabel || item.type;
+                const status = item.status || 'aprovado';
                 
                 // Lógica de exibição baseada no ganho/perda de dias, e não apenas no ID string
                 if (item.daysGained > 0) {
@@ -296,6 +304,12 @@ export const Balance: React.FC<BalanceProps> = ({
                    }
                    borderClass = 'border-blue-400';
                 }
+
+                if (status !== 'aprovado') {
+                     text += ` (Status: ${status})`;
+                     borderClass = 'border-gray-300 border-dashed opacity-75';
+                }
+
              } else {
                 text = `Ajuste Manual (${item.amount > 0 ? '+' : ''}${item.amount}): ${item.reason} (Resp: ${item.createdBy})`;
                 borderClass = 'border-purple-400';

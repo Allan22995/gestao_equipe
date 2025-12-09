@@ -150,8 +150,8 @@ function App() {
               if (foundColab.profile === 'noc') {
                   setCurrentUserPermissions(['tab:calendario', 'tab:dashboard', 'view:phones']);
               } else {
-                  // Default Colaborador: Vê Calendário, Dashboard
-                  setCurrentUserPermissions(['tab:calendario', 'tab:dashboard', 'tab:comunicados']);
+                  // Default Colaborador: Vê Calendário, Dashboard, Comunicados e PODE escrever Eventos (Folgas)
+                  setCurrentUserPermissions(['tab:calendario', 'tab:dashboard', 'tab:comunicados', 'tab:eventos', 'write:events', 'tab:previsao_ferias', 'write:vacation']);
               }
            }
         }
