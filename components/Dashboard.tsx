@@ -1,7 +1,8 @@
 
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
-import { weekDayMap, getWeekOfMonth } from '../utils/helpers';
+import { weekDayMap, getWeekOfMonth, checkRotationDay } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 import { MultiSelect } from './ui/MultiSelect';
 
@@ -117,7 +118,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const nextDayKey = getNextDayKey(currentDayIndex);
 
     const isSunday = currentDayIndex === 0;
-    const sundayOfMonthIndex = getWeekOfMonth(now); // 1, 2, 3, 4, 5
 
     let activeCount = 0;
     let inactiveCount = 0;
@@ -169,13 +169,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const isShiftActive = (scheduleDay: any, context: 'today' | 'yesterday' | 'tomorrow', colab: Collaborator) => {
          // --- LÓGICA DE ESCALA DE REVEZAMENTO (DOMINGO) ---
          if (isSunday && context === 'today' && colab.hasRotation && colab.rotationGroup) {
-             const rotationRule = settings.shiftRotations?.find(r => r.id === colab.rotationGroup);
-             if (rotationRule) {
-                 // Se o domingo atual NÃO estiver na lista de trabalho, força enabled = false (Folga)
-                 if (!rotationRule.workSundays.includes(sundayOfMonthIndex)) {
-                     return false; 
-                 }
-             }
+             const isOff = checkRotationDay(now, colab.rotationStartDate);
+             if (isOff) return false;
          }
 
          if (!scheduleDay.enabled) return false;
@@ -241,10 +236,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       // Check Rotation Off Day (Domingo de Folga pela Escala)
       let isRotationOff = false;
       if (isSunday && c.hasRotation && c.rotationGroup) {
-          const rotationRule = settings.shiftRotations?.find(r => r.id === c.rotationGroup);
-          if (rotationRule && !rotationRule.workSundays.includes(sundayOfMonthIndex)) {
-              isRotationOff = true;
-          }
+          isRotationOff = checkRotationDay(now, c.rotationStartDate);
       }
 
       if (approvedVacation) {
@@ -421,7 +413,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         
         // Only verify Sundays
         if (targetDate.getDay() === 0) {
-            const weekIndex = getWeekOfMonth(targetDate);
             
             collaborators.forEach(c => {
                 if (!c.hasRotation || !c.rotationGroup) return;
@@ -434,26 +425,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 if (filterRoles.length > 0 && !filterRoles.includes(c.role)) return;
                 if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return;
 
-                const rule = settings.shiftRotations?.find(r => r.id === c.rotationGroup);
-                if (rule) {
-                    const isWorking = rule.workSundays.includes(weekIndex);
-                    
+                // Nova Lógica 3x1
+                const isOff = checkRotationDay(targetDate, c.rotationStartDate);
+
+                if (isOff) {
                     // Check if explicit event overrides this
                     const hasExplicitEvent = events.some(e => e.collaboratorId === c.id && e.startDate <= dateStr && e.endDate >= dateStr);
                     const hasVacation = vacationRequests.some(v => v.collaboratorId === c.id && v.startDate <= dateStr && v.endDate >= dateStr && v.status === 'aprovado');
                     
                     if (!hasExplicitEvent && !hasVacation) {
-                         if (!isWorking) {
-                             // É Folga de Escala
-                             nextWeekEvents.push({
-                                 id: `rot-off-${c.id}-${dateStr}`,
-                                 colabName: `${c.name} [Escala ${c.rotationGroup}]`,
-                                 type: 'Folga de Escala',
-                                 desc: 'Folga de Revezamento',
-                                 date: dateStr,
-                                 day: i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : targetDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                             });
-                         }
+                         nextWeekEvents.push({
+                             id: `rot-off-${c.id}-${dateStr}`,
+                             colabName: `${c.name} [Escala ${c.rotationGroup}]`,
+                             type: 'Folga de Escala',
+                             desc: 'Folga de Revezamento',
+                             date: dateStr,
+                             day: i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : targetDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                         });
                     }
                 }
             });

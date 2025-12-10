@@ -28,7 +28,7 @@ export interface ScheduleTemplate {
 export interface RotationRule {
   id: string; // ex: 'A', 'B'
   label: string; // ex: 'Escala A'
-  workSundays: number[]; // [1, 2, 3] significa que trabalha no 1º, 2º e 3º domingo.
+  // workSundays removido na V4 - Lógica agora é baseada em data de referência (3x1)
 }
 
 // Configuração de Função (Role)
@@ -66,6 +66,7 @@ export interface Collaborator {
   schedule: Schedule;
   hasRotation?: boolean; // Novo: Indica se o funcionário trabalha em escala de revezamento
   rotationGroup?: string; // Novo: Indica qual a escala (A, B, C, D...)
+  rotationStartDate?: string; // Novo V4: Data de referência da última folga para cálculo 3x1
   createdAt: string;
 }
 

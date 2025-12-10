@@ -1,4 +1,5 @@
 
+
 export const generateUUID = () => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
@@ -71,6 +72,31 @@ export const getWeekOfMonth = (date: Date): number => {
     }
   }
   return count;
+};
+
+// Verifica se uma data é folga de escala baseada em uma data de referência
+// Regra: Trabalha 3 domingos, folga 1 (Ciclo de 4 semanas)
+// Se a data de referência for a ÚLTIMA folga, então +4 semanas é a próxima folga.
+export const checkRotationDay = (checkDate: Date, referenceDateStr?: string): boolean => {
+  if (!referenceDateStr) return false;
+  
+  // Só aplica para domingos
+  if (checkDate.getDay() !== 0) return false;
+
+  const refDate = new Date(referenceDateStr + 'T00:00:00');
+  
+  // Diferença em milissegundos
+  const diffTime = checkDate.getTime() - refDate.getTime();
+  
+  // Diferença em dias
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
+  // Diferença em semanas
+  const diffWeeks = Math.round(diffDays / 7);
+
+  // Se a diferença de semanas for múltipla de 4, é folga de escala
+  // (Ex: 0 semanas = mesma data, 4 semanas = próxima folga, 8 semanas = próxima...)
+  return diffWeeks % 4 === 0;
 };
 
 export const promptForUser = (action: string): string | null => {

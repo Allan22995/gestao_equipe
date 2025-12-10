@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings, UserProfile } from '../types';
-import { getFeriados, getWeekOfMonth } from '../utils/helpers';
+import { getFeriados, checkRotationDay } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 import { MultiSelect } from './ui/MultiSelect';
 
@@ -173,36 +173,27 @@ export const Calendar: React.FC<CalendarProps> = ({
     
     // Se for Domingo, verifica regras de escala
     if (checkDate.getDay() === 0) { 
-        const weekIndex = getWeekOfMonth(checkDate);
-        
         collaborators.forEach(c => {
             // Verifica filtros primeiro para não processar desnecessariamente
             if (!matchesFilters(c.id)) return;
             
             // Só aplica se o colaborador tem escala definida
             if (c.hasRotation && c.rotationGroup) {
-                const rule = settings?.shiftRotations.find(r => r.id === c.rotationGroup);
+                // Nova Lógica: Baseada na data de referência (rotationStartDate)
+                const isRotationOff = checkRotationDay(checkDate, c.rotationStartDate);
                 
-                // Se existe regra, verifica se é dia de trabalho ou folga
-                if (rule) {
-                    const isWorkingSunday = rule.workSundays.includes(weekIndex);
-                    
+                if (isRotationOff) {
                     // Verifica se já existe um evento explícito (ex: Férias, Atestado) que sobrepõe
-                    // Se houver, o evento explícito tem precedência visual
                     const hasExplicitEvent = [...dayEvents, ...dayVacationReqs].some(e => e.collaboratorId === c.id);
                     
                     if (!hasExplicitEvent) {
-                        if (!isWorkingSunday) {
-                            // É DOMINGO DE FOLGA PELA ESCALA
-                            virtualRotationEvents.push({
-                                id: `rot-off-${c.id}-${dateStr}`,
-                                collaboratorId: c.id,
-                                kind: 'rotation_off',
-                                typeLabel: 'Folga de Escala'
-                            });
-                        }
-                        // NOTA: Domingos trabalhados (isWorkingSunday === true) NÃO são adicionados 
-                        // para não poluir o calendário, conforme solicitado.
+                         virtualRotationEvents.push({
+                             id: `rot-off-${c.id}-${dateStr}`,
+                             collaboratorId: c.id,
+                             kind: 'rotation_off',
+                             typeLabel: 'Folga de Escala',
+                             rotationGroup: c.rotationGroup // Passar o nome do grupo para exibir
+                         });
                     }
                 }
             }
@@ -316,7 +307,7 @@ export const Calendar: React.FC<CalendarProps> = ({
               const eventLabel = isEvent && item.status && item.status !== 'aprovado' ? `(${item.status === 'nova_opcao' ? 'Opção' : 'Pend.'})` : '';
 
               // Simplifica label para virtual events
-              const virtualLabel = (item.kind === 'rotation_off') ? '(Folga Escala)' : '';
+              const virtualLabel = (item.kind === 'rotation_off') ? '(Folga)' : '';
 
               return (
                 <div key={idx} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 truncate ${colorClass}`}>
@@ -470,7 +461,7 @@ export const Calendar: React.FC<CalendarProps> = ({
               } else if (e.kind === 'rotation_off') {
                  borderClass = 'border-emerald-400';
                  bgClass = 'bg-emerald-50';
-                 title = 'Folga de Escala (Domingo)';
+                 title = `Folga de Escala (${e.rotationGroup})`;
               } else if (e.kind === 'event') {
                 title = getEventTypeLabel(e);
                 const isApproved = !e.status || e.status === 'aprovado';

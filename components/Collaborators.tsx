@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -47,6 +48,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     shiftType: '',
     hasRotation: false,
     rotationGroup: '',
+    rotationStartDate: '',
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
@@ -104,6 +106,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       shiftType: colab.shiftType,
       hasRotation: colab.hasRotation || false,
       rotationGroup: colab.rotationGroup || '',
+      rotationStartDate: colab.rotationStartDate || '',
     });
     
     const safeSchedule = JSON.parse(JSON.stringify(colab.schedule));
@@ -121,7 +124,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     setEditingId(null);
     setFormData({ 
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '', 
-      hasRotation: false, rotationGroup: '' 
+      hasRotation: false, rotationGroup: '', rotationStartDate: ''
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
@@ -171,9 +174,15 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     }
     
     // Validation for Rotation
-    if (formData.hasRotation && !formData.rotationGroup) {
-      showToast('Selecione um Grupo de Escala se o funcionário possui escala.', true);
-      return;
+    if (formData.hasRotation) {
+        if (!formData.rotationGroup) {
+            showToast('Selecione o Grupo de Escala.', true);
+            return;
+        }
+        if (!formData.rotationStartDate) {
+            showToast('Informe a data da última folga de escala para cálculo.', true);
+            return;
+        }
     }
 
     // Clean up allowedSectors if role is not restricted (optional but good for data hygiene)
@@ -181,6 +190,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     
     // Clean up rotation group if hasRotation is false
     const finalRotationGroup = formData.hasRotation ? formData.rotationGroup : '';
+    const finalRotationStart = formData.hasRotation ? formData.rotationStartDate : '';
 
     // Standardize Name (Title Case)
     const standardizedName = formatTitleCase(formData.name);
@@ -192,6 +202,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         name: standardizedName,
         allowedSectors: finalAllowedSectors,
         rotationGroup: finalRotationGroup,
+        rotationStartDate: finalRotationStart,
         schedule,
         createdAt: new Date().toISOString(),
       });
@@ -204,6 +215,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         name: standardizedName,
         allowedSectors: finalAllowedSectors,
         rotationGroup: finalRotationGroup,
+        rotationStartDate: finalRotationStart,
         schedule,
         createdAt: new Date().toISOString(),
       };
@@ -446,6 +458,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                  <option value="1º Turno">1º Turno</option>
                  <option value="2º Turno">2º Turno</option>
                  <option value="3º Turno">3º Turno</option>
+                 <option value="4º Turno">4º Turno</option>
                  <option value="ADM">ADM</option>
               </select>
             </div>
@@ -501,7 +514,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             
             {/* ESCALA DE REVEZAMENTO - SECTION */}
             <div className="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-               <div className="flex flex-col md:flex-row gap-6">
+               <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-3">
                      <label className="flex items-center gap-2 cursor-pointer">
                         <input 
@@ -515,21 +528,33 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                   </div>
 
                   {formData.hasRotation && (
-                     <div className="flex-1 animate-fadeIn">
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Grupo de Escala</label>
-                        <select 
-                           className="w-full border border-indigo-300 rounded-lg p-2 bg-white text-sm"
-                           value={formData.rotationGroup}
-                           onChange={e => setFormData({...formData, rotationGroup: e.target.value})}
-                        >
-                           <option value="">Selecione a Escala...</option>
-                           {rotationOptions.map(r => (
-                              <option key={r.id} value={r.id}>
-                                {r.label} (Domingos: {r.workSundays.join(', ')}º)
-                              </option>
-                           ))}
-                        </select>
-                        <p className="text-[10px] text-gray-500 mt-1">Selecione a escala para automatizar as folgas dominicais.</p>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Grupo de Escala (Label)</label>
+                            <select 
+                               className="w-full border border-indigo-300 rounded-lg p-2 bg-white text-sm"
+                               value={formData.rotationGroup}
+                               onChange={e => setFormData({...formData, rotationGroup: e.target.value})}
+                            >
+                               <option value="">Selecione a Escala...</option>
+                               {rotationOptions.map(r => (
+                                  <option key={r.id} value={r.id}>
+                                    {r.label || `Escala ${r.id}`}
+                                  </option>
+                               ))}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Última Folga Dominical (Start)</label>
+                            <input 
+                                type="date"
+                                className="w-full border border-indigo-300 rounded-lg p-2 bg-white text-sm"
+                                value={formData.rotationStartDate}
+                                onChange={e => setFormData({...formData, rotationStartDate: e.target.value})}
+                            />
+                            <p className="text-[10px] text-gray-500 mt-1">Informe um domingo que o colaborador folgou. O sistema calculará o ciclo 3x1 (Trabalha 3, Folga 1) a partir desta data.</p>
+                        </div>
                      </div>
                   )}
                </div>
