@@ -1,3 +1,4 @@
+
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { 
@@ -7,7 +8,9 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  signOut
+  signOut,
+  onAuthStateChanged,
+  User
 } from 'firebase/auth';
 
 // No Vite, as variáveis de ambiente DEVEM começar com VITE_
@@ -42,5 +45,8 @@ export {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   sendPasswordResetEmail,
-  signOut 
+  signOut,
+  onAuthStateChanged
 };
+
+export type { User };

@@ -1,8 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from './types';
 import { dbService } from './services/storage'; 
-import { auth } from './services/firebase'; 
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth, onAuthStateChanged, signOut, User } from './services/firebase'; 
 import { Calendar } from './components/Calendar';
 import { Dashboard } from './components/Dashboard';
 import { Collaborators } from './components/Collaborators';
@@ -176,14 +176,14 @@ function App() {
     const unsubVacation = dbService.subscribeToVacationRequests(setVacationRequests);
     
     const unsubSettings = dbService.subscribeToSettings(
-      (data) => {
+      (data: SystemSettings | null) => {
         if (data) {
           let loadedSettings = { ...DEFAULT_SETTINGS, ...data };
           
           // Migração de Roles Antigas (String -> Object)
           if (loadedSettings.roles.length > 0 && typeof loadedSettings.roles[0] === 'string') {
              const legacyRoles = loadedSettings.roles as unknown as string[];
-             loadedSettings.roles = legacyRoles.map(r => ({ 
+             loadedSettings.roles = legacyRoles.map((r: string) => ({ 
                name: r, 
                canViewAllSectors: true,
                permissions: SYSTEM_PERMISSIONS.map(p => p.id) // Default legacy to full? Or restrict?
@@ -212,7 +212,7 @@ function App() {
           if (loadedSettings.accessProfiles && loadedSettings.accessProfiles.length > 0 && typeof loadedSettings.accessProfiles[0] === 'string') {
              console.log("⚠️ Migrando perfis de acesso legado (string) para objetos...");
              const legacyProfiles = loadedSettings.accessProfiles as unknown as string[];
-             loadedSettings.accessProfiles = legacyProfiles.map(p => ({
+             loadedSettings.accessProfiles = legacyProfiles.map((p: string) => ({
                id: p,
                name: p,
                active: true // Default ativo para legados
@@ -223,7 +223,7 @@ function App() {
           if (loadedSettings.shiftRotations && loadedSettings.shiftRotations.length > 0 && typeof loadedSettings.shiftRotations[0] === 'string') {
              console.log("⚠️ Migrando escalas legadas (string) para objetos...");
              const legacyRotations = loadedSettings.shiftRotations as unknown as string[];
-             loadedSettings.shiftRotations = legacyRotations.map(r => ({
+             loadedSettings.shiftRotations = legacyRotations.map((r: string) => ({
                 id: r,
                 label: `Escala ${r}`
                 // workSundays removed from default migration logic
@@ -236,7 +236,7 @@ function App() {
           setSettings(DEFAULT_SETTINGS);
         }
       },
-      (errorMsg) => showToast(errorMsg, true)
+      (errorMsg: string) => showToast(errorMsg, true)
     );
 
     return () => {
