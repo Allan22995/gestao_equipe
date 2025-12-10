@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, SectorConfig } from './types';
 import { dbService } from './services/storage'; 
@@ -185,26 +186,26 @@ function App() {
       (data) => {
         if (data) {
           let loadedSettings = { ...DEFAULT_SETTINGS, ...data };
-          let hasMigration = false;
           
           // --- MIGRAÇÃO DE DADOS LEGADOS ---
 
-          // 1. Roles (String -> Object)
+          // Migração de Roles Antigas (String -> Object)
           if (loadedSettings.roles.length > 0 && typeof loadedSettings.roles[0] === 'string') {
              const legacyRoles = loadedSettings.roles as unknown as string[];
              loadedSettings.roles = legacyRoles.map(r => ({ 
                name: r, 
                canViewAllSectors: true,
-               permissions: SYSTEM_PERMISSIONS.map(p => p.id) 
+               permissions: SYSTEM_PERMISSIONS.map(p => p.id) // Default legacy to full? Or restrict?
              }));
-             hasMigration = true;
           }
           
-          // 2. Normalize Roles Permissions
+          // Migração de Roles sem permissões (Object sem array)
           loadedSettings.roles = loadedSettings.roles.map((r: any) => {
             if (!r.permissions) {
+                // Default Permissions for legacy objects
                 return { ...r, permissions: ['tab:calendario', 'tab:dashboard'] };
             }
+            // Migração de Permissão Legada
             if (r.permissions.includes('settings:lists')) {
                 const newPerms = r.permissions.filter((p: string) => p !== 'settings:lists');
                 if (!newPerms.includes('settings:branches')) newPerms.push('settings:branches');
@@ -214,49 +215,37 @@ function App() {
             return r;
           });
 
-          // 3. Sectors (String/Mixed -> SectorConfig[])
-          if (loadedSettings.sectors && loadedSettings.sectors.length > 0) {
-             const hasString = loadedSettings.sectors.some((s: any) => typeof s === 'string');
-             if (hasString) {
-                 console.log("⚠️ Migrando setores legados para objetos...");
-                 const defaultBranch = loadedSettings.branches[0] || 'Matriz';
-                 loadedSettings.sectors = loadedSettings.sectors.map((s: any) => {
-                    if (typeof s === 'string') return { name: s, branch: defaultBranch };
-                    return s;
-                 });
-                 hasMigration = true;
-             }
+          // Migração de Setores (String[] -> SectorConfig[])
+          if (loadedSettings.sectors && loadedSettings.sectors.length > 0 && typeof loadedSettings.sectors[0] === 'string') {
+             console.log("⚠️ Migrando setores legados (string) para objetos...");
+             const legacySectors = loadedSettings.sectors as unknown as string[];
+             const defaultBranch = loadedSettings.branches[0] || 'Matriz';
+             loadedSettings.sectors = legacySectors.map(s => ({
+               name: s,
+               branch: defaultBranch
+             }));
           }
 
-          // 4. Access Profiles (String -> Object)
+          // Migração de Perfis de Acesso Antigos (String[] -> AccessProfileConfig[])
           if (loadedSettings.accessProfiles && loadedSettings.accessProfiles.length > 0 && typeof loadedSettings.accessProfiles[0] === 'string') {
              const legacyProfiles = loadedSettings.accessProfiles as unknown as string[];
              loadedSettings.accessProfiles = legacyProfiles.map(p => ({
                id: p,
                name: p,
-               active: true
+               active: true // Default ativo para legados
              }));
-             hasMigration = true;
           }
 
-          // 5. Shift Rotations (String -> Object)
+          // Migração de ShiftRotations Antigos (String[] -> RotationRule[])
           if (loadedSettings.shiftRotations && loadedSettings.shiftRotations.length > 0 && typeof loadedSettings.shiftRotations[0] === 'string') {
              const legacyRotations = loadedSettings.shiftRotations as unknown as string[];
              loadedSettings.shiftRotations = legacyRotations.map(r => ({
                 id: r,
                 label: `Escala ${r}`
              }));
-             hasMigration = true;
           }
 
           setSettings(loadedSettings);
-
-          // Se houve migração, salva imediatamente no banco para persistir a estrutura nova
-          if (hasMigration) {
-             console.log("💾 Salvando migração de dados...");
-             dbService.saveSettings(loadedSettings).catch(console.error);
-          }
-
         } else {
           dbService.saveSettings(DEFAULT_SETTINGS).catch(console.error);
           setSettings(DEFAULT_SETTINGS);
