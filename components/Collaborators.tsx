@@ -309,10 +309,31 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   // --- LOGIC: POTENTIAL LEADERS ---
   const potentialLeaders = useMemo(() => {
+    // Palavras-chave que indicam cargo de liderança
+    const leadershipKeywords = ['líder', 'lider', 'supervisor', 'coordenador', 'gerente', 'diretor', 'head', 'encarregado', 'ceo', 'presidência'];
+
     return collaborators
-      .filter(c => c.active !== false && c.id !== editingId) // Exclude inactive and self
+      .filter(c => {
+         // 1. Deve ser ativo
+         if (c.active === false) return false;
+         // 2. Não pode ser ele mesmo
+         if (c.id === editingId) return false;
+
+         // 3. FILTRO DE FILIAL: O Líder deve pertencer à mesma filial selecionada no formulário
+         // Isso evita líderes de outras unidades aparecerem na lista
+         if (formData.branch && c.branch !== formData.branch) return false;
+
+         // 4. FILTRO DE CARGO (ROLE): Deve conter palavra-chave de liderança
+         const roleName = c.role.toLowerCase();
+         const isLeaderRole = leadershipKeywords.some(k => roleName.includes(k));
+         
+         // Permitir também quem tem role 'Admin' ou 'Gerente' explícito
+         const isAdminOrManager = ['admin', 'gerente'].includes(roleName);
+
+         return isLeaderRole || isAdminOrManager;
+      })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, editingId]);
+  }, [collaborators, editingId, formData.branch]);
 
   const getLeaderName = (leaderId?: string) => {
     if (!leaderId) return null;
@@ -451,7 +472,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             {/* Branch Select */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Filial *</label>
-              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})}>
+              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value, leaderId: ''})}>
                  <option value="">Selecione...</option>
                  {settings.branches.map(b => (
                    <option key={b} value={b}>{b}</option>
@@ -505,13 +526,18 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                  className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
                  value={formData.leaderId} 
                  onChange={e => setFormData({...formData, leaderId: e.target.value})}
+                 disabled={!formData.branch}
               >
                  <option value="">Sem Líder (Topo Hierarquia)</option>
                  {potentialLeaders.map(l => (
-                   <option key={l.id} value={l.id}>{l.name} - {l.role}</option>
+                   <option key={l.id} value={l.id}>{l.name} - {l.role} {l.sector ? `(${l.sector})` : ''}</option>
                  ))}
               </select>
-              <span className="text-[10px] text-gray-400">Defina quem é o gestor direto deste colaborador.</span>
+              <span className="text-[10px] text-gray-400">
+                 {!formData.branch 
+                    ? "Selecione a Filial para carregar os líderes." 
+                    : "Exibindo apenas líderes da mesma filial."}
+              </span>
             </div>
             
              {/* Permissões de Visualização (Se a função for restrita) */}
