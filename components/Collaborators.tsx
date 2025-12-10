@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -345,22 +344,24 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         
         <form onSubmit={handleSubmit}>
           
-          {/* Status Toggle (Ativo/Inativo) */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between">
-            <span className="text-sm font-bold text-gray-700">Status do Colaborador</span>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.active}
-                onChange={e => setFormData({...formData, active: e.target.checked})}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-              <span className={`ml-3 text-sm font-bold ${formData.active ? 'text-green-600' : 'text-gray-500'}`}>
-                {formData.active ? 'Ativo' : 'Inativo'}
-              </span>
-            </label>
-          </div>
+          {/* Status Toggle (Ativo/Inativo) - Exibir apenas na edição */}
+          {editingId && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between animate-fadeIn">
+              <span className="text-sm font-bold text-gray-700">Status do Colaborador</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.active}
+                  onChange={e => setFormData({...formData, active: e.target.checked})}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                <span className={`ml-3 text-sm font-bold ${formData.active ? 'text-green-600' : 'text-gray-500'}`}>
+                  {formData.active ? 'Ativo' : 'Inativo'}
+                </span>
+              </label>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {/* ID */}
