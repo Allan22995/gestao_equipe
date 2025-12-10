@@ -9,6 +9,7 @@ interface SettingsProps {
   setSettings: (s: SystemSettings) => Promise<void>;
   showToast: (msg: string, isError?: boolean) => void;
   hasPermission: (perm: string) => boolean;
+  availableBranches: string[]; // Nova prop para filtrar visualização
 }
 
 // Initial state for schedule logic
@@ -123,7 +124,7 @@ const ManageBranchList = ({
   );
 };
 
-export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
+export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission, availableBranches }) => {
   // Determine tab visibility based on permissions
   const showGeral = hasPermission('settings:integration') || hasPermission('settings:branches') || hasPermission('settings:sectors') || hasPermission('settings:profiles') || hasPermission('settings:event_types') || hasPermission('settings:schedule_templates');
   const showAcesso = hasPermission('settings:access_control');
@@ -156,7 +157,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   
   // States Setores (Nova Lógica)
   const [newSectorName, setNewSectorName] = useState('');
-  const [newSectorBranch, setNewSectorBranch] = useState(settings.branches[0] || '');
+  const [newSectorBranch, setNewSectorBranch] = useState(availableBranches[0] || ''); // Default to first available
 
   // States Eventos
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -589,7 +590,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                 {hasPermission('settings:branches') && (
                     <ManageBranchList 
                       title="Filiais" 
-                      items={settings.branches} 
+                      items={settings.branches.filter(b => availableBranches.includes(b))} // FILTERED DISPLAY
                       onAdd={addBranch} 
                       onEdit={editBranch}
                       onRemove={removeBranch} 
@@ -617,7 +618,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            value={newSectorBranch}
                            onChange={e => setNewSectorBranch(e.target.value)}
                         >
-                            {settings.branches.map(b => (
+                            {settings.branches
+                                .filter(b => availableBranches.includes(b)) // FILTERED SELECT
+                                .map(b => (
                                 <option key={b} value={b}>{b}</option>
                             ))}
                         </select>
@@ -632,7 +635,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
                       {/* Lista de Setores Agrupada por Filial */}
                       <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                         {settings.branches.map(branch => {
+                         {settings.branches
+                             .filter(b => availableBranches.includes(b)) // FILTERED DISPLAY
+                             .map(branch => {
                              const branchSectors = (settings.sectors || []).filter(s => s.branch === branch);
                              if (branchSectors.length === 0) return null;
 
@@ -746,7 +751,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   <div>
                       <MultiSelect 
                         label="Restringir Visibilidade a Filiais (Opcional)"
-                        options={settings.branches}
+                        options={settings.branches.filter(b => availableBranches.includes(b))} // FILTERED
                         selected={newEventBranches}
                         onChange={setNewEventBranches}
                         placeholder="Visível para Todas"
@@ -798,7 +803,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                             onChange={e => setTemplateBranch(e.target.value)}
                           >
                              <option value="">Todas as Filiais (Global)</option>
-                             {settings.branches.map(b => (
+                             {settings.branches
+                                 .filter(b => availableBranches.includes(b)) // FILTERED
+                                 .map(b => (
                                 <option key={b} value={b}>{b}</option>
                              ))}
                           </select>
@@ -833,7 +840,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos de Jornada Salvos</h2>
                     <div className="flex flex-col gap-2">
-                        {(settings.scheduleTemplates || []).map(t => (
+                        {(settings.scheduleTemplates || [])
+                          .filter(t => !t.branch || availableBranches.includes(t.branch)) // FILTERED DISPLAY
+                          .map(t => (
                           <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
                               <div>
                                  <div className="font-bold text-gray-700 truncate mr-2">{t.name}</div>
