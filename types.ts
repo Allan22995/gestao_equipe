@@ -69,6 +69,7 @@ export interface Collaborator {
   rotationStartDate?: string; // Novo V4: Data de referência da última folga para cálculo 3x1
   createdAt: string;
   active?: boolean; // Novo: Status do colaborador (Ativo/Inativo)
+  leaderId?: string; // Novo: ID do Líder Imediato (Hierarquia)
 }
 
 export type EventBehavior = 'neutral' | 'debit' | 'credit_1x' | 'credit_2x';

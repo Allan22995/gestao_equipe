@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
 
@@ -42,6 +42,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     branch: '',
     role: '',
     sector: '',
+    leaderId: '', // Novo: Hierarquia
     allowedSectors: [] as string[],
     login: '',
     shiftType: '',
@@ -101,6 +102,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       branch: colab.branch,
       role: colab.role,
       sector: colab.sector || '',
+      leaderId: colab.leaderId || '', // Load leader
       allowedSectors: colab.allowedSectors || [],
       login: colab.login,
       shiftType: colab.shiftType,
@@ -124,7 +126,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const handleCancelEdit = () => {
     setEditingId(null);
     setFormData({ 
-      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '', 
+      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
       hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
@@ -305,6 +307,18 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   }, [settings.accessProfiles, settings.roles, currentUserRole, currentUserProfile]);
 
+  // --- LOGIC: POTENTIAL LEADERS ---
+  const potentialLeaders = useMemo(() => {
+    return collaborators
+      .filter(c => c.active !== false && c.id !== editingId) // Exclude inactive and self
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [collaborators, editingId]);
+
+  const getLeaderName = (leaderId?: string) => {
+    if (!leaderId) return null;
+    const leader = collaborators.find(c => c.id === leaderId);
+    return leader ? leader.name : 'Não encontrado';
+  };
 
   const sectorOptions = settings.sectors || [];
   const scheduleTemplates = settings.scheduleTemplates || [];
@@ -482,6 +496,22 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                  <option value="4º Turno">4º Turno</option>
                  <option value="ADM">ADM</option>
               </select>
+            </div>
+
+            {/* Leader Select (Hierarquia) */}
+            <div className="flex flex-col md:col-span-1">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Líder Imediato</label>
+              <select 
+                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
+                 value={formData.leaderId} 
+                 onChange={e => setFormData({...formData, leaderId: e.target.value})}
+              >
+                 <option value="">Sem Líder (Topo Hierarquia)</option>
+                 {potentialLeaders.map(l => (
+                   <option key={l.id} value={l.id}>{l.name} - {l.role}</option>
+                 ))}
+              </select>
+              <span className="text-[10px] text-gray-400">Defina quem é o gestor direto deste colaborador.</span>
             </div>
             
              {/* Permissões de Visualização (Se a função for restrita) */}
@@ -717,7 +747,9 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredCollaborators.length === 0 && <p className="text-gray-400 col-span-full text-center py-8">Nenhum colaborador encontrado.</p>}
           
-          {filteredCollaborators.map(c => (
+          {filteredCollaborators.map(c => {
+            const leaderName = getLeaderName(c.leaderId);
+            return (
             <div key={c.id} className={`border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all bg-white group relative overflow-hidden ${c.active === false ? 'opacity-60 bg-gray-50' : ''}`}>
               <div className={`absolute top-0 left-0 w-1 h-full ${c.active === false ? 'bg-gray-400' : 'bg-gradient-to-b from-indigo-400 to-purple-500'}`}></div>
               
@@ -756,6 +788,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                       <span className="text-gray-400">Setor:</span> {c.sector}
                    </div>
                  )}
+                 {leaderName && (
+                   <div className="text-xs text-gray-600 flex items-center gap-2">
+                      <span className="text-gray-400">Líder:</span> <span className="font-medium text-indigo-600">{leaderName}</span>
+                   </div>
+                 )}
                  <div className="text-xs text-gray-600 flex items-center gap-2">
                     <span className="text-gray-400">Email:</span> {c.email}
                  </div>
@@ -772,7 +809,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                  {c.role === 'admin' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-bold">Admin</span>}
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
     </div>
