@@ -1,8 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from './types';
 import { dbService } from './services/storage'; 
-import { auth } from './services/firebase'; 
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth, onAuthStateChanged, signOut, User } from './services/firebase'; 
 import { Calendar } from './components/Calendar';
 import { Dashboard } from './components/Dashboard';
 import { Collaborators } from './components/Collaborators';

@@ -31,3 +31,26 @@ body {
    -1px  1px 0 #000,
     1px  1px 0 #000;
 }
+
+/* Barra de rolagem personalizada para o menu de abas (Horizontal) */
+.custom-scrollbar {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.4) transparent; /* Firefox */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px; /* Altura da barra horizontal */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.6);
+}
