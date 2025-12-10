@@ -213,20 +213,63 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     try { await setSettings(newSettings); setSaving(key, 'success'); if (callback) callback(); } catch (e) { console.error(e); setSaving(key, 'idle'); }
   };
 
-  // --- LOGIC: BRANCHES (Simple String List) ---
-  const updateList = (listKey: keyof SystemSettings, oldVal: string, newVal: string, saveKey: string) => {
-      const currentList = settings[listKey] as string[];
-      if (currentList.includes(newVal)) {
-          showToast('Este valor já existe na lista.', true);
-          return;
-      }
-      const newList = currentList.map(item => item === oldVal ? newVal : item);
-      saveSettings({ ...settings, [listKey]: newList }, saveKey);
+  // --- LOGIC: BRANCHES (Cascading Update) ---
+  const addBranch = (v: string) => { if (settings.branches.includes(v)) return; saveSettings({ ...settings, branches: [...settings.branches, v] }, 'branch'); };
+
+  const editBranch = (oldVal: string, newVal: string) => {
+    if (settings.branches.includes(newVal)) {
+        showToast('Esta filial já existe.', true);
+        return;
+    }
+    const newBranches = settings.branches.map(b => b === oldVal ? newVal : b);
+    
+    // Cascade Update: Sectors
+    const newSectors = (settings.sectors || []).map(s => s.branch === oldVal ? { ...s, branch: newVal } : s);
+    
+    // Cascade Update: Templates
+    const newTemplates = (settings.scheduleTemplates || []).map(t => t.branch === oldVal ? { ...t, branch: newVal } : t);
+    
+    // Cascade Update: Event Types
+    const newEventTypes = (settings.eventTypes || []).map(e => {
+        if (!e.allowedBranches) return e;
+        const newAllowed = e.allowedBranches.map(b => b === oldVal ? newVal : b);
+        return { ...e, allowedBranches: newAllowed };
+    });
+
+    saveSettings({ 
+        ...settings, 
+        branches: newBranches,
+        sectors: newSectors,
+        scheduleTemplates: newTemplates,
+        eventTypes: newEventTypes
+    }, 'branch');
   };
 
-  const addBranch = (v: string) => { if (settings.branches.includes(v)) return; saveSettings({ ...settings, branches: [...settings.branches, v] }, 'branch'); };
-  const editBranch = (oldVal: string, newVal: string) => updateList('branches', oldVal, newVal, 'branch');
-  const removeBranch = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, branches: settings.branches.filter(b => b !== v) }, 'branch'); };
+  const removeBranch = (v: string) => { 
+    if (window.confirm(`Excluir a filial ${v}? Isso também removerá os setores vinculados a ela.`)) {
+        const newBranches = settings.branches.filter(b => b !== v);
+        
+        // Cascade Delete: Sectors
+        const newSectors = (settings.sectors || []).filter(s => s.branch !== v);
+        
+        // Cascade Clean: Templates (Remove restriction)
+        const newTemplates = (settings.scheduleTemplates || []).map(t => t.branch === v ? { ...t, branch: '' } : t);
+        
+        // Cascade Clean: Event Types (Remove from allowed list)
+        const newEventTypes = (settings.eventTypes || []).map(e => {
+           if (!e.allowedBranches) return e;
+           return { ...e, allowedBranches: e.allowedBranches.filter(b => b !== v) };
+        });
+
+        saveSettings({ 
+            ...settings, 
+            branches: newBranches, 
+            sectors: newSectors,
+            scheduleTemplates: newTemplates,
+            eventTypes: newEventTypes
+        }, 'branch'); 
+    }
+  };
   
   // --- LOGIC: SECTORS (Object List: Name + Branch) ---
   const addSector = () => {

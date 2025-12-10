@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -468,7 +467,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             {/* Branch Select */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Filial *</label>
-              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value, leaderId: ''})}>
+              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value, leaderId: '', sector: ''})}>
                  <option value="">Selecione...</option>
                  {settings.branches.map(b => (
                    <option key={b} value={b}>{b}</option>
