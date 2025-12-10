@@ -32,6 +32,11 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [filterRoles, setFilterRoles] = useState<string[]>([]);
   const [filterSectors, setFilterSectors] = useState<string[]>([]);
 
+  // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
+  const activeCollaborators = useMemo(() => {
+     return collaborators.filter(c => c.active !== false);
+  }, [collaborators]);
+
   // If user is restricted to only 1 sector, force filter.
   useEffect(() => {
     if (currentUserAllowedSectors.length === 1) {
@@ -56,7 +61,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   // --- Lógica Dinâmica de Funções (Roles) ---
   // Filtra as funções disponíveis baseando-se nos setores e filiais selecionados
   const availableRoles = useMemo(() => {
-    let filtered = collaborators;
+    let filtered = activeCollaborators;
 
     // 1. Aplica restrições de segurança de Setor
     if (currentUserAllowedSectors.length > 0) {
@@ -84,7 +89,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
     // Caso contrário, retorna todas as roles configuradas
     return settings?.roles.map(r => r.name).sort() || [];
-  }, [collaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings?.roles, availableBranches]);
+  }, [activeCollaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings?.roles, availableBranches]);
 
   // Limpa filtro de roles se a role selecionada não estiver mais disponível na lista dinâmica
   useEffect(() => {
@@ -117,7 +122,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         if (colabId !== userColabId) return false;
     }
 
-    const colab = collaborators.find(c => c.id === colabId);
+    const colab = activeCollaborators.find(c => c.id === colabId);
     if (!colab) return false;
 
     // First check restriction permission (Sector)
@@ -173,7 +178,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     
     // Se for Domingo, verifica regras de escala
     if (checkDate.getDay() === 0) { 
-        collaborators.forEach(c => {
+        activeCollaborators.forEach(c => {
             // Verifica filtros primeiro para não processar desnecessariamente
             if (!matchesFilters(c.id)) return;
             
@@ -216,19 +221,19 @@ export const Calendar: React.FC<CalendarProps> = ({
   };
 
   const getCollaboratorName = (id: string) => {
-    return collaborators.find(c => c.id === id)?.name || 'Desconhecido';
+    return activeCollaborators.find(c => c.id === id)?.name || 'Desconhecido';
   };
   
   const getCollaboratorPhone = (id: string) => {
-    return collaborators.find(c => c.id === id)?.phone || null;
+    return activeCollaborators.find(c => c.id === id)?.phone || null;
   };
 
   const getCollaboratorOtherContact = (id: string) => {
-    return collaborators.find(c => c.id === id)?.otherContact || null;
+    return activeCollaborators.find(c => c.id === id)?.otherContact || null;
   };
   
   const getCollaboratorScaleInfo = (id: string) => {
-    const c = collaborators.find(c => c.id === id);
+    const c = activeCollaborators.find(c => c.id === id);
     if (c?.hasRotation && c?.rotationGroup) return `[Escala ${c.rotationGroup}]`;
     return null;
   };

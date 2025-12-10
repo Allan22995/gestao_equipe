@@ -49,6 +49,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     hasRotation: false,
     rotationGroup: '',
     rotationStartDate: '',
+    active: true, // Padrão Ativo
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
@@ -107,6 +108,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       hasRotation: colab.hasRotation || false,
       rotationGroup: colab.rotationGroup || '',
       rotationStartDate: colab.rotationStartDate || '',
+      active: colab.active ?? true,
     });
     
     const safeSchedule = JSON.parse(JSON.stringify(colab.schedule));
@@ -124,7 +126,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     setEditingId(null);
     setFormData({ 
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', allowedSectors: [], login: '', shiftType: '', 
-      hasRotation: false, rotationGroup: '', rotationStartDate: ''
+      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
@@ -162,8 +164,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
     // Validation for Schedule (Not required for NOC)
     const hasWorkDays = (Object.values(schedule) as DaySchedule[]).some(day => day.enabled && day.start && day.end);
-    if (!hasWorkDays && !isNoc) {
-      showToast('Defina pelo menos um dia de trabalho com horários', true);
+    if (!hasWorkDays && !isNoc && formData.active) {
+      showToast('Defina pelo menos um dia de trabalho com horários (ou inative o colaborador).', true);
       return;
     }
 
@@ -342,6 +344,24 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         </div>
         
         <form onSubmit={handleSubmit}>
+          
+          {/* Status Toggle (Ativo/Inativo) */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between">
+            <span className="text-sm font-bold text-gray-700">Status do Colaborador</span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.active}
+                onChange={e => setFormData({...formData, active: e.target.checked})}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+              <span className={`ml-3 text-sm font-bold ${formData.active ? 'text-green-600' : 'text-gray-500'}`}>
+                {formData.active ? 'Ativo' : 'Inativo'}
+              </span>
+            </label>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {/* ID */}
             <div className="flex flex-col">
@@ -697,8 +717,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
           {filteredCollaborators.length === 0 && <p className="text-gray-400 col-span-full text-center py-8">Nenhum colaborador encontrado.</p>}
           
           {filteredCollaborators.map(c => (
-            <div key={c.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all bg-white group relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-400 to-purple-500"></div>
+            <div key={c.id} className={`border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all bg-white group relative overflow-hidden ${c.active === false ? 'opacity-60 bg-gray-50' : ''}`}>
+              <div className={`absolute top-0 left-0 w-1 h-full ${c.active === false ? 'bg-gray-400' : 'bg-gradient-to-b from-indigo-400 to-purple-500'}`}></div>
               
               <div className="flex justify-between items-start mb-2 pl-2">
                 <div>
@@ -707,6 +727,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                       <span className="font-mono bg-gray-100 px-1 rounded">#{c.colabId}</span>
                       <span>•</span>
                       <span>{c.role}</span>
+                      {c.active === false && (
+                          <span className="ml-1 px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 font-bold text-[10px] uppercase">
+                             Inativo
+                          </span>
+                      )}
                    </div>
                 </div>
                 {canEdit && (

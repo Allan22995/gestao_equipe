@@ -68,6 +68,7 @@ export interface Collaborator {
   rotationGroup?: string; // Novo: Indica qual a escala (A, B, C, D...)
   rotationStartDate?: string; // Novo V4: Data de referência da última folga para cálculo 3x1
   createdAt: string;
+  active?: boolean; // Novo: Status do colaborador (Ativo/Inativo)
 }
 
 export type EventBehavior = 'neutral' | 'debit' | 'credit_1x' | 'credit_2x';

@@ -1,6 +1,8 @@
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, SystemSettings, Schedule, CoverageRule } from '../types';
-import { getFeriados, weekDayMap } from '../utils/helpers';
+import { getFeriados, weekDayMap, checkRotationDay } from '../utils/helpers';
 import { MultiSelect } from './ui/MultiSelect';
 
 interface SimulatorProps {
@@ -65,6 +67,11 @@ export const Simulator: React.FC<SimulatorProps> = ({
       setLocalRules(settings.coverageRules || []);
   }, [settings.coverageRules]);
 
+  // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
+  const activeCollaborators = useMemo(() => {
+     return collaborators.filter(c => c.active !== false);
+  }, [collaborators]);
+
   // Force Sector Filter if Restricted (single sector)
   useEffect(() => {
     if (currentUserAllowedSectors.length === 1) {
@@ -89,7 +96,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   // --- Calculate Available Roles based on Sector ---
   const availableRolesOptions = useMemo(() => {
     // 1. Base list of collaborators allowed for the user
-    let filteredColabs = collaborators;
+    let filteredColabs = activeCollaborators;
     if (currentUserAllowedSectors.length > 0) {
         filteredColabs = filteredColabs.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
     }
@@ -110,7 +117,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
     // 3. If no sector selected, show all configured roles
     return settings.roles.map(r => r.name).sort();
-  }, [filterSectors, collaborators, settings.roles, currentUserAllowedSectors, availableBranches]);
+  }, [filterSectors, activeCollaborators, settings.roles, currentUserAllowedSectors, availableBranches]);
 
   // --- Reset filterRoles if they are not valid for the new sector ---
   useEffect(() => {
@@ -166,7 +173,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     }
 
     // 2. Filter Collaborators (Security + Role Filter + Sector Filter)
-    const activeCollaborators = collaborators.filter(c => {
+    const activeCollaboratorsFiltered = activeCollaborators.filter(c => {
         // Sector Permission (Security)
         if (currentUserAllowedSectors.length > 0) {
             if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
@@ -193,7 +200,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     // Filter Optimization: If a specific sector is selected, only show roles present in that sector
     // This avoids showing irrelevant roles (with 0 data) in the matrix
     if (filterRoles.length === 0 && filterSectors.length > 0) {
-        const rolesInSector = new Set(activeCollaborators.map(c => c.role));
+        const rolesInSector = new Set(activeCollaboratorsFiltered.map(c => c.role));
         rolesToSimulate = rolesToSimulate.filter(r => rolesInSector.has(r));
     } else if (filterRoles.length === 0) {
         // If no filter, restrict to available roles in the general context to avoid noise
@@ -211,7 +218,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     rolesToSimulate.forEach(role => {
         results[role] = {};
         const roleMin = getRuleForRole(role);
-        const roleColabs = activeCollaborators.filter(c => c.role === role);
+        const roleColabs = activeCollaboratorsFiltered.filter(c => c.role === role);
 
         days.forEach(day => {
             const dateObj = new Date(day.date + 'T00:00:00');
@@ -223,6 +230,12 @@ export const Simulator: React.FC<SimulatorProps> = ({
             roleColabs.forEach(colab => {
                 // A. Check if standard schedule enables work this day
                 if (!colab.schedule[scheduleKey]?.enabled) return;
+
+                // A.5 Check Rotation Off Day (New 3x1 Logic)
+                if (dayOfWeek === 0 && colab.hasRotation && checkRotationDay(dateObj, colab.rotationStartDate)) {
+                    // It's an off day due to rotation -> Absent
+                    return; 
+                }
 
                 // B. Check Historical Events (Absences)
                 const hasHistoryEvent = events.some(e => {
@@ -287,7 +300,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     });
 
     return { days, results, grandTotals };
-  }, [simStartDate, simEndDate, filterRoles, filterSectors, collaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions, availableBranches]);
+  }, [simStartDate, simEndDate, filterRoles, filterSectors, activeCollaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions, availableBranches]);
 
 
   // --- HANDLERS ---
@@ -435,7 +448,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                 className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white"
                               >
                                   <option value="">Selecione...</option>
-                                  {collaborators
+                                  {activeCollaborators
                                     .filter(c => {
                                       // 1. Restriction Check
                                       if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return false;

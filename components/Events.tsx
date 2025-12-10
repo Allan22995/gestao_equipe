@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
@@ -58,9 +59,14 @@ export const Events: React.FC<EventsProps> = ({
     }
   }, [isManager, userColabId, editingId]);
 
+  // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
+  const activeCollaborators = useMemo(() => {
+     return collaborators.filter(c => c.active !== false);
+  }, [collaborators]);
+
   // Filter Collaborators for Dropdown
   const allowedCollaborators = useMemo(() => {
-     let filtered = collaborators;
+     let filtered = activeCollaborators;
      
      // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
@@ -72,12 +78,18 @@ export const Events: React.FC<EventsProps> = ({
      }
      
      return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
+  }, [activeCollaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   // Filter Events History and Sort by Date Descending
   const allowedEvents = useMemo(() => {
      let filtered = events;
      
+     // Filter out inactive users events
+     filtered = filtered.filter(e => {
+        const colab = collaborators.find(c => c.id === e.collaboratorId);
+        return colab && colab.active !== false;
+     });
+
      // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
          filtered = filtered.filter(e => e.collaboratorId === userColabId);

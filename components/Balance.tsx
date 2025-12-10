@@ -79,6 +79,9 @@ export const Balance: React.FC<BalanceProps> = ({
   const allowedCollaborators = useMemo(() => {
      let filtered = collaborators;
 
+     // 0. Filter Active
+     filtered = filtered.filter(c => c.active !== false);
+
      // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
         return filtered.filter(c => c.id === userColabId);
@@ -128,6 +131,9 @@ export const Balance: React.FC<BalanceProps> = ({
       .filter(item => {
           const colab = collaborators.find(c => c.id === item.collaboratorId);
           if (!colab) return false;
+
+          // 0. Active Check (Exclude logs from inactive users)
+          if (colab.active === false) return false;
 
           // 1. Strict Privacy Check for Log
           if (currentUserProfile === 'colaborador' && userColabId) {

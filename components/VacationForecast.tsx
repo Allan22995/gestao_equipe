@@ -38,9 +38,14 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
     notes: ''
   });
 
+  // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
+  const activeCollaborators = useMemo(() => {
+     return collaborators.filter(c => c.active !== false);
+  }, [collaborators]);
+
   // Filter Collaborators for Dropdown
   const allowedCollaborators = useMemo(() => {
-     let filtered = collaborators;
+     let filtered = activeCollaborators;
      
      // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
@@ -52,11 +57,17 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
      }
 
      return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
+  }, [activeCollaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   // Filter Requests History
   const allowedRequests = useMemo(() => {
      let filtered = requests;
+
+     // Filter out inactive users events
+     filtered = filtered.filter(r => {
+        const colab = collaborators.find(c => c.id === r.collaboratorId);
+        return colab && colab.active !== false;
+     });
 
      // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {

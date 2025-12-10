@@ -36,6 +36,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [filterRoles, setFilterRoles] = useState<string[]>([]);
   const [filterSectors, setFilterSectors] = useState<string[]>([]);
 
+  // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
+  const activeCollaborators = useMemo(() => {
+     return collaborators.filter(c => c.active !== false);
+  }, [collaborators]);
+
   // Force Sector Filter if Restricted (single sector)
   useEffect(() => {
     if (currentUserAllowedSectors.length === 1) {
@@ -59,7 +64,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // --- Lógica de Funções Dinâmicas ---
   const availableRoles = useMemo(() => {
-    let filtered = collaborators;
+    let filtered = activeCollaborators;
 
     if (currentUserAllowedSectors.length > 0) {
       filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
@@ -82,7 +87,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
 
     return settings.roles.map(r => r.name).sort();
-  }, [collaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings.roles, availableBranches]);
+  }, [activeCollaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings.roles, availableBranches]);
 
   useEffect(() => {
      if (filterRoles.length > 0) {
@@ -123,7 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     let inactiveCount = 0;
     const tempDetails: any[] = [];
 
-    const filteredCollaborators = collaborators.filter(c => {
+    const filteredCollaborators = activeCollaborators.filter(c => {
       if (currentUserAllowedSectors.length > 0) {
         if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
       }
@@ -348,7 +353,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays >= 0 && diffDays <= 7) {
-             const colab = collaborators.find(c => c.id === e.collaboratorId);
+             const colab = activeCollaborators.find(c => c.id === e.collaboratorId);
              if (colab) {
                  if (currentUserAllowedSectors.length > 0 && (!colab.sector || !currentUserAllowedSectors.includes(colab.sector))) return;
                  if (availableBranches.length > 0 && !availableBranches.includes(colab.branch)) return;
@@ -385,7 +390,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays >= 0 && diffDays <= 7) {
-             const colab = collaborators.find(c => c.id === v.collaboratorId);
+             const colab = activeCollaborators.find(c => c.id === v.collaboratorId);
              if (colab) {
                  if (currentUserAllowedSectors.length > 0 && (!colab.sector || !currentUserAllowedSectors.includes(colab.sector))) return;
                  if (availableBranches.length > 0 && !availableBranches.includes(colab.branch)) return;
@@ -414,7 +419,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         // Only verify Sundays
         if (targetDate.getDay() === 0) {
             
-            collaborators.forEach(c => {
+            activeCollaborators.forEach(c => {
                 if (!c.hasRotation || !c.rotationGroup) return;
 
                 // Apply Filters
@@ -450,7 +455,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     setUpcoming(nextWeekEvents.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
 
-  }, [collaborators, events, onCalls, vacationRequests, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors, settings.eventTypes, settings.roles, availableBranches, settings.shiftRotations]);
+  }, [activeCollaborators, events, onCalls, vacationRequests, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors, settings.eventTypes, settings.roles, availableBranches, settings.shiftRotations]);
 
   const summaryData = useMemo(() => {
     if (!showSummary) return null;
@@ -469,7 +474,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return d.toLocaleDateString('pt-BR') === todayLocale;
     };
 
-    const newColabs = collaborators.filter(c => isToday(c.createdAt));
+    const newColabs = activeCollaborators.filter(c => isToday(c.createdAt));
     const newEvents = events.filter(e => isToday(e.createdAt));
     const newOnCalls = onCalls.filter(o => isToday(o.createdAt));
     const newVacations = vacationRequests.filter(v => isToday(v.createdAt));
@@ -482,7 +487,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         vacations: newVacations,
         total: newColabs.length + newEvents.length + newOnCalls.length + newVacations.length
     };
-  }, [showSummary, collaborators, events, onCalls, vacationRequests]);
+  }, [showSummary, activeCollaborators, events, onCalls, vacationRequests]);
 
   const copySummaryToClipboard = () => {
      if (!summaryData) return;

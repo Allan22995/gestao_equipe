@@ -35,6 +35,11 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
     observation: ''
   });
 
+  // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
+  const activeCollaborators = useMemo(() => {
+     return collaborators.filter(c => c.active !== false);
+  }, [collaborators]);
+
   const sortedOnCalls = useMemo(() => {
     let filtered = onCalls;
 
@@ -133,7 +138,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
 
   // Filter Collaborators for Dropdown
   const allowedCollaborators = useMemo(() => {
-     let filtered = collaborators;
+     let filtered = activeCollaborators;
      
      // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
@@ -141,7 +146,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
      }
      
      return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, currentUserProfile, userColabId]);
+  }, [activeCollaborators, currentUserProfile, userColabId]);
 
   return (
     <div className="space-y-8">
