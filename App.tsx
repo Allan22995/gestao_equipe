@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from './types';
 import { dbService } from './services/storage'; 

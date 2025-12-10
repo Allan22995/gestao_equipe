@@ -1,4 +1,3 @@
-
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { 
@@ -9,9 +8,9 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut,
-  onAuthStateChanged,
-  User
+  onAuthStateChanged
 } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 
 // No Vite, as variáveis de ambiente DEVEM começar com VITE_
 const firebaseConfig = {
