@@ -235,19 +235,27 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        showToast('Nome e Filial são obrigatórios.', true);
        return;
     }
+    
+    // Normalize existing sectors first (Defensive Coding)
+    const currentSectors = (settings.sectors || []).map(s => typeof s === 'string' ? { name: s, branch: 'Matriz' } : s);
+
     // Check duplicates in same branch
-    if (settings.sectors?.some(s => s.name.toLowerCase() === name.toLowerCase() && s.branch === newSectorBranch)) {
+    if (currentSectors.some(s => s.name.toLowerCase() === name.toLowerCase() && s.branch === newSectorBranch)) {
        showToast('Este setor já existe nesta filial.', true);
        return;
     }
     
     const newSector: SectorConfig = { name, branch: newSectorBranch };
-    saveSettings({ ...settings, sectors: [...(settings.sectors || []), newSector] }, 'sector', () => setNewSectorName(''));
+    saveSettings({ ...settings, sectors: [...currentSectors, newSector] }, 'sector', () => setNewSectorName(''));
   };
 
   const removeSector = (sectorName: string, branchName: string) => {
       if (window.confirm(`Excluir setor ${sectorName} da filial ${branchName}?`)) {
-          const newSectors = settings.sectors.filter(s => !(s.name === sectorName && s.branch === branchName));
+          // Robust filter: handle string items just in case
+          const newSectors = (settings.sectors || []).filter(s => {
+              if (typeof s === 'string') return s !== sectorName; // Only removes if string matches and user intended (assumes legacy is mapped elsewhere, but safe here)
+              return !(s.name === sectorName && s.branch === branchName);
+          });
           saveSettings({ ...settings, sectors: newSectors }, 'sector');
       }
   };
@@ -590,7 +598,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                       {/* Lista de Setores Agrupada por Filial */}
                       <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
                          {settings.branches.map(branch => {
-                             const branchSectors = (settings.sectors || []).filter(s => s.branch === branch);
+                             // Robust filter for legacy strings and new objects
+                             const branchSectors = (settings.sectors || []).filter(s => {
+                                if (typeof s === 'string') return branch === settings.branches[0]; // Fallback legacy to first branch
+                                return s.branch === branch;
+                             });
+                             
                              if (branchSectors.length === 0) return null;
 
                              return (
@@ -598,18 +611,21 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                      <div className="bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-600 uppercase border-b border-gray-200 sticky top-0">
                                          {branch}
                                      </div>
-                                     {branchSectors.map(s => (
-                                         <div key={`${s.branch}-${s.name}`} className="flex justify-between items-center p-2 border-b border-gray-50 hover:bg-gray-50">
-                                             <span className="text-sm text-gray-700">{s.name}</span>
+                                     {branchSectors.map(s => {
+                                         const sName = typeof s === 'string' ? s : s.name;
+                                         return (
+                                         <div key={`${branch}-${sName}`} className="flex justify-between items-center p-2 border-b border-gray-50 hover:bg-gray-50">
+                                             <span className="text-sm text-gray-700">{sName}</span>
                                              <button 
-                                                onClick={() => removeSector(s.name, s.branch)}
+                                                onClick={() => removeSector(sName, branch)}
                                                 className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50"
                                                 title="Excluir"
                                              >
                                                 ✕
                                              </button>
                                          </div>
-                                     ))}
+                                         );
+                                     })}
                                  </div>
                              );
                          })}
