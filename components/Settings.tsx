@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -125,17 +123,15 @@ const ManageList = ({
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
   // Determine tab visibility based on permissions
-  const showGeral = hasPermission('settings:integration') || hasPermission('settings:branches') || hasPermission('settings:sectors') || hasPermission('settings:profiles') || hasPermission('settings:event_types');
+  const showGeral = hasPermission('settings:integration') || hasPermission('settings:branches') || hasPermission('settings:sectors') || hasPermission('settings:profiles') || hasPermission('settings:event_types') || hasPermission('settings:schedule_templates');
   const showAcesso = hasPermission('settings:access_control');
-  const showJornada = hasPermission('settings:schedule_templates');
   const showSistema = hasPermission('settings:system_msg');
 
   // Tabs Internas (Initialize based on permissions)
-  const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'jornada' | 'sistema'>(() => {
-    if (hasPermission('settings:integration') || hasPermission('settings:branches') || hasPermission('settings:sectors') || hasPermission('settings:profiles') || hasPermission('settings:event_types')) return 'geral';
-    if (hasPermission('settings:access_control')) return 'acesso';
-    if (hasPermission('settings:schedule_templates')) return 'jornada';
-    if (hasPermission('settings:system_msg')) return 'sistema';
+  const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'sistema'>(() => {
+    if (showGeral) return 'geral';
+    if (showAcesso) return 'acesso';
+    if (showSistema) return 'sistema';
     return 'geral';
   });
 
@@ -143,22 +139,15 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   useEffect(() => {
     if (activeSubTab === 'geral' && !showGeral) {
         if (showAcesso) setActiveSubTab('acesso');
-        else if (showJornada) setActiveSubTab('jornada');
         else if (showSistema) setActiveSubTab('sistema');
     } else if (activeSubTab === 'acesso' && !showAcesso) {
         if (showGeral) setActiveSubTab('geral');
-        else if (showJornada) setActiveSubTab('jornada');
         else if (showSistema) setActiveSubTab('sistema');
-    } else if (activeSubTab === 'jornada' && !showJornada) {
-         if (showGeral) setActiveSubTab('geral');
-         else if (showAcesso) setActiveSubTab('acesso');
-         else if (showSistema) setActiveSubTab('sistema');
     } else if (activeSubTab === 'sistema' && !showSistema) {
          if (showGeral) setActiveSubTab('geral');
          else if (showAcesso) setActiveSubTab('acesso');
-         else if (showJornada) setActiveSubTab('jornada');
     }
-  }, [activeSubTab, showGeral, showAcesso, showJornada, showSistema]);
+  }, [activeSubTab, showGeral, showAcesso, showSistema]);
 
   // States Geral
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
@@ -171,7 +160,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // States Profiles
   const [newProfileName, setNewProfileName] = useState('');
 
-  // States Jornada
+  // States Jornada (Agora dentro de Geral)
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState('');
   const [templateSchedule, setTemplateSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
@@ -477,11 +466,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
             Controle de Acesso
           </button>
         )}
-        {showJornada && (
-          <button onClick={() => setActiveSubTab('jornada')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'jornada' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            Jornada de Trabalho
-          </button>
-        )}
         {showSistema && (
           <button onClick={() => setActiveSubTab('sistema')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'sistema' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             Avisos do Sistema
@@ -489,7 +473,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         )}
       </div>
 
-      {(!showGeral && !showAcesso && !showJornada && !showSistema) && (
+      {(!showGeral && !showAcesso && !showSistema) && (
           <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg border border-gray-200 mt-6">
               Você não possui permissões para acessar as configurações.
           </div>
@@ -634,7 +618,101 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            )}
 
-           {!hasPermission('settings:integration') && !hasPermission('settings:branches') && !hasPermission('settings:sectors') && !hasPermission('settings:profiles') && !hasPermission('settings:event_types') && (
+            {/* SEÇÃO JORNADA DE TRABALHO CONSOLIDADA */}
+            {hasPermission('settings:schedule_templates') && (
+              <>
+                <div className="border-t border-gray-200 my-8"></div>
+                <h2 className="text-xl font-bold text-gray-800 mb-6">Modelos de Jornada & Escalas</h2>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                   <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-lg font-bold text-gray-800">{editingTemplateId ? 'Editar Modelo de Jornada' : 'Criar Modelo de Jornada'}</h2>
+                      {editingTemplateId && <button onClick={cancelEditTemplate} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
+                   </div>
+
+                   <div className={`mb-4 flex gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''}`}>
+                      <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" placeholder="Nome (Ex: Escala 12x36)..." value={templateName} onChange={e => setTemplateName(e.target.value)} />
+                      <button onClick={saveTemplate} className={`${editingTemplateId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors`}>
+                         {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Modelo'}
+                      </button>
+                   </div>
+                   
+                   <div className="space-y-2 max-w-2xl">
+                      {daysOrder.map(day => (
+                         <div key={day} className="flex items-center gap-4 bg-gray-50 p-2 rounded border border-gray-100">
+                            <label className="w-24 flex items-center gap-2 cursor-pointer">
+                               <input type="checkbox" checked={templateSchedule[day].enabled} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], enabled: e.target.checked}}))} className="rounded text-indigo-600" />
+                               <span className="capitalize text-sm font-medium">{day}</span>
+                            </label>
+                            <input type="time" disabled={!templateSchedule[day].enabled} value={templateSchedule[day].start} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], start: e.target.value}}))} className="border rounded p-1 text-sm bg-white" />
+                            <span className="text-gray-400">-</span>
+                            <input type="time" disabled={!templateSchedule[day].enabled} value={templateSchedule[day].end} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], end: e.target.value}}))} className="border rounded p-1 text-sm bg-white" />
+                            <label className="flex items-center gap-1 cursor-pointer ml-auto">
+                               <input type="checkbox" disabled={!templateSchedule[day].enabled} checked={templateSchedule[day].startsPreviousDay} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], startsPreviousDay: e.target.checked}}))} />
+                               <span className="text-[10px] text-gray-500">Inicia -1d</span>
+                            </label>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Lista de Modelos Salvos */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos de Jornada Salvos</h2>
+                    <div className="flex flex-col gap-2">
+                        {(settings.scheduleTemplates || []).map(t => (
+                          <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
+                              <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
+                                <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
+                              </div>
+                          </div>
+                        ))}
+                        {(settings.scheduleTemplates || []).length === 0 && <p className="text-gray-400 text-sm">Nenhum modelo cadastrado.</p>}
+                    </div>
+                  </div>
+                  
+                  {/* Lista de Escalas (A, B, C...) Simplificada */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-bold text-gray-800 mb-2">Escalas de Revezamento</h2>
+                    <p className="text-sm text-gray-500 mb-4">Cadastre os nomes das escalas disponíveis para seleção (Ex: Escala A, Azul, Impar).</p>
+                    
+                    {/* Add Rotation Form */}
+                    <div className="bg-indigo-50 p-4 rounded-lg mb-4 border border-indigo-100">
+                        <div className="flex gap-2">
+                           <input 
+                             type="text" 
+                             className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm outline-none" 
+                             placeholder="Nova Escala (ex: A, B)..." 
+                             value={newRotationId} 
+                             onChange={e => setNewRotationId(e.target.value)} 
+                           />
+                           <button onClick={addRotation} disabled={savingState['rotation'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Adicionar</button>
+                        </div>
+                    </div>
+
+                    {/* List of Rotations */}
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {(settings.shiftRotations || []).map(r => (
+                          <div key={r.id} className="p-3 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
+                              <div>
+                                 <div className="font-bold text-gray-800">{r.label || `Escala ${r.id}`}</div>
+                                 <div className="text-xs text-gray-500 mt-0.5">ID: {r.id}</div>
+                              </div>
+                              <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+           {!hasPermission('settings:integration') && !hasPermission('settings:branches') && !hasPermission('settings:sectors') && !hasPermission('settings:profiles') && !hasPermission('settings:event_types') && !hasPermission('settings:schedule_templates') && (
               <p className="text-gray-500 italic text-center py-8">Você não tem permissão para visualizar itens desta seção.</p>
            )}
         </div>
@@ -798,103 +876,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            ) : (
              <p className="text-gray-500 italic text-center py-8">Você não tem permissão para gerenciar funções e acessos.</p>
            )}
-        </div>
-      )}
-
-      {/* --- TAB: JORNADA DE TRABALHO --- */}
-      {activeSubTab === 'jornada' && showJornada && (
-        <div className="animate-fadeIn">
-            {hasPermission('settings:schedule_templates') ? (
-              <>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-                   <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-lg font-bold text-gray-800">{editingTemplateId ? 'Editar Modelo de Jornada' : 'Criar Modelo de Jornada'}</h2>
-                      {editingTemplateId && <button onClick={cancelEditTemplate} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
-                   </div>
-
-                   <div className={`mb-4 flex gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''}`}>
-                      <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" placeholder="Nome (Ex: Escala 12x36)..." value={templateName} onChange={e => setTemplateName(e.target.value)} />
-                      <button onClick={saveTemplate} className={`${editingTemplateId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors`}>
-                         {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Modelo'}
-                      </button>
-                   </div>
-                   
-                   <div className="space-y-2 max-w-2xl">
-                      {daysOrder.map(day => (
-                         <div key={day} className="flex items-center gap-4 bg-gray-50 p-2 rounded border border-gray-100">
-                            <label className="w-24 flex items-center gap-2 cursor-pointer">
-                               <input type="checkbox" checked={templateSchedule[day].enabled} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], enabled: e.target.checked}}))} className="rounded text-indigo-600" />
-                               <span className="capitalize text-sm font-medium">{day}</span>
-                            </label>
-                            <input type="time" disabled={!templateSchedule[day].enabled} value={templateSchedule[day].start} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], start: e.target.value}}))} className="border rounded p-1 text-sm bg-white" />
-                            <span className="text-gray-400">-</span>
-                            <input type="time" disabled={!templateSchedule[day].enabled} value={templateSchedule[day].end} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], end: e.target.value}}))} className="border rounded p-1 text-sm bg-white" />
-                            <label className="flex items-center gap-1 cursor-pointer ml-auto">
-                               <input type="checkbox" disabled={!templateSchedule[day].enabled} checked={templateSchedule[day].startsPreviousDay} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], startsPreviousDay: e.target.checked}}))} />
-                               <span className="text-[10px] text-gray-500">Inicia -1d</span>
-                            </label>
-                         </div>
-                      ))}
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Lista de Modelos Salvos */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos de Jornada Salvos</h2>
-                    <div className="flex flex-col gap-2">
-                        {(settings.scheduleTemplates || []).map(t => (
-                          <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
-                              <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
-                              <div className="flex gap-2 shrink-0">
-                                <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
-                                <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
-                              </div>
-                          </div>
-                        ))}
-                        {(settings.scheduleTemplates || []).length === 0 && <p className="text-gray-400 text-sm">Nenhum modelo cadastrado.</p>}
-                    </div>
-                  </div>
-                  
-                  {/* Lista de Escalas (A, B, C...) Simplificada */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-bold text-gray-800 mb-2">Escalas de Revezamento</h2>
-                    <p className="text-sm text-gray-500 mb-4">Cadastre os nomes das escalas disponíveis para seleção (Ex: Escala A, Azul, Impar).</p>
-                    
-                    {/* Add Rotation Form */}
-                    <div className="bg-indigo-50 p-4 rounded-lg mb-4 border border-indigo-100">
-                        <div className="flex gap-2">
-                           <input 
-                             type="text" 
-                             className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm outline-none" 
-                             placeholder="Nova Escala (ex: A, B)..." 
-                             value={newRotationId} 
-                             onChange={e => setNewRotationId(e.target.value)} 
-                           />
-                           <button onClick={addRotation} disabled={savingState['rotation'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Adicionar</button>
-                        </div>
-                    </div>
-
-                    {/* List of Rotations */}
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {(settings.shiftRotations || []).map(r => (
-                          <div key={r.id} className="p-3 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
-                              <div>
-                                 <div className="font-bold text-gray-800">{r.label || `Escala ${r.id}`}</div>
-                                 <div className="text-xs text-gray-500 mt-0.5">ID: {r.id}</div>
-                              </div>
-                              <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              </button>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-               <p className="text-gray-500 italic text-center py-8">Você não tem permissão para gerenciar modelos de jornada.</p>
-            )}
         </div>
       )}
       
