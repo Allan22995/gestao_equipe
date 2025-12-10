@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -276,58 +277,40 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
   // --- LOGIC: PROFILE OPTIONS ---
-  // 1. Get all active profiles from settings
-  // 2. Filter by currentUserRole restrictions (if any)
   const profileOptions = React.useMemo(() => {
-    // A. Base list: All ACTIVE profiles in settings
     let available = (settings.accessProfiles || [])
        .filter(p => p.active)
        .map(p => p.name);
 
     if (available.length === 0) {
-        // Fallback safety if config is empty
         available = ['colaborador']; 
     }
 
-    // B. Apply Restriction based on Logged User Role
-    // If user is Admin (firebase profile), allow all active.
     if (currentUserProfile === 'admin') {
        return available;
     }
 
-    // Otherwise, check RoleConfig for manageableProfiles
     const currentRoleConfig = settings.roles.find(r => r.name === currentUserRole);
     if (currentRoleConfig && currentRoleConfig.manageableProfiles && currentRoleConfig.manageableProfiles.length > 0) {
-       // Filter: Only show profiles that are BOTH active AND manageable by this role
        return available.filter(p => currentRoleConfig.manageableProfiles!.includes(p));
     }
 
-    // Default: If no restriction defined for role, show all active (or restrict to basic? let's show all active for backward compat)
     return available;
 
   }, [settings.accessProfiles, settings.roles, currentUserRole, currentUserProfile]);
 
   // --- LOGIC: POTENTIAL LEADERS ---
   const potentialLeaders = useMemo(() => {
-    // Palavras-chave que indicam cargo de liderança
     const leadershipKeywords = ['líder', 'lider', 'supervisor', 'coordenador', 'gerente', 'diretor', 'head', 'encarregado', 'ceo', 'presidência'];
 
     return collaborators
       .filter(c => {
-         // 1. Deve ser ativo
          if (c.active === false) return false;
-         // 2. Não pode ser ele mesmo
          if (c.id === editingId) return false;
-
-         // 3. FILTRO DE FILIAL: O Líder deve pertencer à mesma filial selecionada no formulário
-         // Isso evita líderes de outras unidades aparecerem na lista
          if (formData.branch && c.branch !== formData.branch) return false;
 
-         // 4. FILTRO DE CARGO (ROLE): Deve conter palavra-chave de liderança
          const roleName = c.role.toLowerCase();
          const isLeaderRole = leadershipKeywords.some(k => roleName.includes(k));
-         
-         // Permitir também quem tem role 'Admin' ou 'Gerente' explícito
          const isAdminOrManager = ['admin', 'gerente'].includes(roleName);
 
          return isLeaderRole || isAdminOrManager;
@@ -341,14 +324,27 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     return leader ? leader.name : 'Não encontrado';
   };
 
-  const sectorOptions = settings.sectors || [];
-  const scheduleTemplates = settings.scheduleTemplates || [];
+  // --- LOGIC: SECTOR OPTIONS (FILTER BY BRANCH) ---
+  const filteredSectorOptions = useMemo(() => {
+      // Se não tiver filial selecionada, não mostra setores (ou mostra todos? melhor filtrar)
+      if (!formData.branch) return [];
+      return (settings.sectors || [])
+        .filter(s => s.branch === formData.branch)
+        .map(s => s.name)
+        .sort();
+  }, [settings.sectors, formData.branch]);
+
+  // --- LOGIC: TEMPLATE OPTIONS (FILTER BY BRANCH) ---
+  const filteredTemplates = useMemo(() => {
+      if (!formData.branch) return settings.scheduleTemplates || [];
+      return (settings.scheduleTemplates || []).filter(t => !t.branch || t.branch === formData.branch);
+  }, [settings.scheduleTemplates, formData.branch]);
+
   const rotationOptions = settings.shiftRotations || [];
 
   const filteredCollaborators = collaborators.filter(c => {
     // Security Filter (Respect Restricted View)
     if (currentUserAllowedSectors.length > 0) {
-      // If user has allowed sectors, the colab MUST belong to one of them
       if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) {
         return false;
       }
@@ -491,16 +487,19 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </select>
             </div>
 
-            {/* Sector / Squad Select */}
+            {/* Sector / Squad Select (FILTERED BY BRANCH) */}
             <div className="flex flex-col md:col-span-2">
               <label className="text-xs font-semibold text-gray-600 mb-1">Setor Principal (Lotação)</label>
               <select 
-                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-gray-100"
                  value={formData.sector} 
                  onChange={e => setFormData({...formData, sector: e.target.value})}
+                 disabled={!formData.branch}
               >
-                 <option value="">Selecione (Opcional)...</option>
-                 {sectorOptions.map(s => (
+                 <option value="">
+                    {!formData.branch ? 'Selecione a Filial primeiro...' : 'Selecione (Opcional)...'}
+                 </option>
+                 {filteredSectorOptions.map(s => (
                    <option key={s} value={s}>{s}</option>
                  ))}
               </select>
@@ -551,7 +550,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    
                    <div className="flex flex-wrap gap-2">
                       {/* FIX: Use combined set of active sectors AND user's existing sectors to show legacy ones */}
-                      {Array.from(new Set([...sectorOptions, ...(formData.allowedSectors || [])]))
+                      {Array.from(new Set([...filteredSectorOptions, ...(formData.allowedSectors || [])]))
                         .sort()
                         .map(sector => (
                         <button
@@ -638,7 +637,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             </div>
 
             {/* Template Selector */}
-            {scheduleTemplates.length > 0 && (
+            {filteredTemplates.length > 0 && (
               <div className="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-3">
                  <span className="text-xs font-bold text-blue-800">Carregar Modelo:</span>
                  <select 
@@ -647,7 +646,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white"
                  >
                     <option value="">Selecione um modelo...</option>
-                    {scheduleTemplates.map(t => (
+                    {filteredTemplates.map(t => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                  </select>

@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from './types';
+import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, SectorConfig } from './types';
 import { dbService } from './services/storage'; 
 import { auth } from './services/firebase'; 
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -50,7 +50,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
       permissions: ['tab:calendario', 'tab:dashboard', 'view:phones'] 
     }
   ],
-  sectors: ['Logística', 'TI', 'Vendas', 'RH'],
+  sectors: [
+    { name: 'Logística', branch: 'Matriz' },
+    { name: 'TI', branch: 'Matriz' },
+    { name: 'Vendas', branch: 'Matriz' },
+    { name: 'RH', branch: 'Matriz' }
+  ],
   accessProfiles: [
     { id: 'admin', name: 'admin', active: true },
     { id: 'colaborador', name: 'colaborador', active: true },
@@ -182,6 +187,8 @@ function App() {
         if (data) {
           let loadedSettings = { ...DEFAULT_SETTINGS, ...data };
           
+          // --- MIGRAÇÃO DE DADOS LEGADOS ---
+
           // Migração de Roles Antigas (String -> Object)
           if (loadedSettings.roles.length > 0 && typeof loadedSettings.roles[0] === 'string') {
              const legacyRoles = loadedSettings.roles as unknown as string[];
@@ -198,11 +205,9 @@ function App() {
                 // Default Permissions for legacy objects
                 return { ...r, permissions: ['tab:calendario', 'tab:dashboard'] };
             }
-            // Migração de Permissão Legada (settings:lists -> settings:branches & settings:sectors)
+            // Migração de Permissão Legada
             if (r.permissions.includes('settings:lists')) {
-                console.log(`⚠️ Migrando permissão 'settings:lists' para 'settings:branches' e 'settings:sectors' na role: ${r.name}`);
                 const newPerms = r.permissions.filter((p: string) => p !== 'settings:lists');
-                // Adiciona as novas se já não existirem
                 if (!newPerms.includes('settings:branches')) newPerms.push('settings:branches');
                 if (!newPerms.includes('settings:sectors')) newPerms.push('settings:sectors');
                 return { ...r, permissions: newPerms };
@@ -210,9 +215,19 @@ function App() {
             return r;
           });
 
+          // Migração de Setores (String[] -> SectorConfig[])
+          if (loadedSettings.sectors && loadedSettings.sectors.length > 0 && typeof loadedSettings.sectors[0] === 'string') {
+             console.log("⚠️ Migrando setores legados (string) para objetos...");
+             const legacySectors = loadedSettings.sectors as unknown as string[];
+             const defaultBranch = loadedSettings.branches[0] || 'Matriz';
+             loadedSettings.sectors = legacySectors.map(s => ({
+               name: s,
+               branch: defaultBranch
+             }));
+          }
+
           // Migração de Perfis de Acesso Antigos (String[] -> AccessProfileConfig[])
           if (loadedSettings.accessProfiles && loadedSettings.accessProfiles.length > 0 && typeof loadedSettings.accessProfiles[0] === 'string') {
-             console.log("⚠️ Migrando perfis de acesso legado (string) para objetos...");
              const legacyProfiles = loadedSettings.accessProfiles as unknown as string[];
              loadedSettings.accessProfiles = legacyProfiles.map(p => ({
                id: p,
@@ -223,12 +238,10 @@ function App() {
 
           // Migração de ShiftRotations Antigos (String[] -> RotationRule[])
           if (loadedSettings.shiftRotations && loadedSettings.shiftRotations.length > 0 && typeof loadedSettings.shiftRotations[0] === 'string') {
-             console.log("⚠️ Migrando escalas legadas (string) para objetos...");
              const legacyRotations = loadedSettings.shiftRotations as unknown as string[];
              loadedSettings.shiftRotations = legacyRotations.map(r => ({
                 id: r,
                 label: `Escala ${r}`
-                // workSundays removed from default migration logic
              }));
           }
 

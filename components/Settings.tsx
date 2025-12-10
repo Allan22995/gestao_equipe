@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
-import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from '../types';
+import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, DaySchedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, SectorConfig } from '../types';
 import { generateUUID } from '../utils/helpers';
+import { MultiSelect } from './ui/MultiSelect';
 
 interface SettingsProps {
   settings: SystemSettings;
@@ -20,8 +22,8 @@ const initialSchedule: Schedule = {
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
 };
 
-// --- COMPONENTE INTERNO: LISTAS SIMPLES COM EDIÇÃO ---
-const ManageList = ({ 
+// --- COMPONENTE INTERNO: LISTAS SIMPLES COM EDIÇÃO (APENAS PARA FILIAIS) ---
+const ManageBranchList = ({ 
   title, items, onAdd, onEdit, onRemove, saving, removingId, placeholder 
 }: {
   title: string; 
@@ -151,11 +153,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   // States Geral
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
+  
+  // States Setores (Nova Lógica)
+  const [newSectorName, setNewSectorName] = useState('');
+  const [newSectorBranch, setNewSectorBranch] = useState(settings.branches[0] || '');
 
   // States Eventos
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
+  const [newEventBranches, setNewEventBranches] = useState<string[]>([]); // MultiSelect Branches
   
   // States Profiles
   const [newProfileName, setNewProfileName] = useState('');
@@ -163,6 +170,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // States Jornada (Agora dentro de Geral)
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState('');
+  const [templateBranch, setTemplateBranch] = useState(''); // Optional Branch restriction
   const [templateSchedule, setTemplateSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   
   // States Roles
@@ -205,7 +213,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     try { await setSettings(newSettings); setSaving(key, 'success'); if (callback) callback(); } catch (e) { console.error(e); setSaving(key, 'idle'); }
   };
 
-  // --- LOGIC: BRANCHES, SECTORS ---
+  // --- LOGIC: BRANCHES (Simple String List) ---
   const updateList = (listKey: keyof SystemSettings, oldVal: string, newVal: string, saveKey: string) => {
       const currentList = settings[listKey] as string[];
       if (currentList.includes(newVal)) {
@@ -220,9 +228,29 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const editBranch = (oldVal: string, newVal: string) => updateList('branches', oldVal, newVal, 'branch');
   const removeBranch = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, branches: settings.branches.filter(b => b !== v) }, 'branch'); };
   
-  const addSector = (v: string) => { if (settings.sectors?.includes(v)) return; saveSettings({ ...settings, sectors: [...(settings.sectors || []), v] }, 'sector'); };
-  const editSector = (oldVal: string, newVal: string) => updateList('sectors', oldVal, newVal, 'sector');
-  const removeSector = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, sectors: (settings.sectors || []).filter(s => s !== v) }, 'sector'); };
+  // --- LOGIC: SECTORS (Object List: Name + Branch) ---
+  const addSector = () => {
+    const name = newSectorName.trim();
+    if (!name || !newSectorBranch) {
+       showToast('Nome e Filial são obrigatórios.', true);
+       return;
+    }
+    // Check duplicates in same branch
+    if (settings.sectors?.some(s => s.name.toLowerCase() === name.toLowerCase() && s.branch === newSectorBranch)) {
+       showToast('Este setor já existe nesta filial.', true);
+       return;
+    }
+    
+    const newSector: SectorConfig = { name, branch: newSectorBranch };
+    saveSettings({ ...settings, sectors: [...(settings.sectors || []), newSector] }, 'sector', () => setNewSectorName(''));
+  };
+
+  const removeSector = (sectorName: string, branchName: string) => {
+      if (window.confirm(`Excluir setor ${sectorName} da filial ${branchName}?`)) {
+          const newSectors = settings.sectors.filter(s => !(s.name === sectorName && s.branch === branchName));
+          saveSettings({ ...settings, sectors: newSectors }, 'sector');
+      }
+  };
   
   // --- LOGIC: SHIFT ROTATIONS (ESCALAS) ---
   const addRotation = () => {
@@ -359,18 +387,25 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const saveEvent = () => {
     if (!newEventLabel.trim()) return;
     
+    // Convert newEventBranches (MultiSelect) to undefined if empty (means Global)
+    const allowedBranches = newEventBranches.length > 0 ? newEventBranches : undefined;
+
     if (editingEventId) {
        // Update existing
-       const updatedEvents = settings.eventTypes.map(e => e.id === editingEventId ? { ...e, label: newEventLabel.trim(), behavior: newEventBehavior } : e);
+       const updatedEvents = settings.eventTypes.map(e => e.id === editingEventId ? { ...e, label: newEventLabel.trim(), behavior: newEventBehavior, allowedBranches } : e);
        saveSettings({ ...settings, eventTypes: updatedEvents }, 'event', () => {
           setNewEventLabel('');
           setNewEventBehavior('neutral');
+          setNewEventBranches([]);
           setEditingEventId(null);
        });
     } else {
        // Add new
-       const newType: EventTypeConfig = { id: generateUUID(), label: newEventLabel.trim(), behavior: newEventBehavior };
-       saveSettings({ ...settings, eventTypes: [...settings.eventTypes, newType] }, 'event', () => setNewEventLabel(''));
+       const newType: EventTypeConfig = { id: generateUUID(), label: newEventLabel.trim(), behavior: newEventBehavior, allowedBranches };
+       saveSettings({ ...settings, eventTypes: [...settings.eventTypes, newType] }, 'event', () => {
+          setNewEventLabel('');
+          setNewEventBranches([]);
+       });
     }
   };
 
@@ -378,6 +413,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       setEditingEventId(e.id);
       setNewEventLabel(e.label);
       setNewEventBehavior(e.behavior);
+      setNewEventBranches(e.allowedBranches || []);
       window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top to see inputs
   };
 
@@ -385,6 +421,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       setEditingEventId(null);
       setNewEventLabel('');
       setNewEventBehavior('neutral');
+      setNewEventBranches([]);
   };
 
   const removeEvent = (id: string) => { if (window.confirm('Excluir?')) saveSettings({ ...settings, eventTypes: settings.eventTypes.filter(e => e.id !== id) }, 'event'); };
@@ -393,21 +430,26 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const saveTemplate = () => {
     if (!templateName.trim()) { showToast('Nome obrigatório', true); return; }
     
+    // Normalize branch: '' means Global
+    const branchToSave = templateBranch || undefined;
+
     if (editingTemplateId) {
         // Update
         const updatedTemplates = (settings.scheduleTemplates || []).map(t => 
-            t.id === editingTemplateId ? { ...t, name: templateName.trim(), schedule: templateSchedule } : t
+            t.id === editingTemplateId ? { ...t, name: templateName.trim(), schedule: templateSchedule, branch: branchToSave } : t
         );
         saveSettings({ ...settings, scheduleTemplates: updatedTemplates }, 'template', () => { 
             setTemplateName(''); 
+            setTemplateBranch('');
             setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule)));
             setEditingTemplateId(null);
         });
     } else {
         // Create
-        const newT: ScheduleTemplate = { id: generateUUID(), name: templateName.trim(), schedule: templateSchedule };
+        const newT: ScheduleTemplate = { id: generateUUID(), name: templateName.trim(), schedule: templateSchedule, branch: branchToSave };
         saveSettings({ ...settings, scheduleTemplates: [...(settings.scheduleTemplates || []), newT] }, 'template', () => { 
             setTemplateName(''); 
+            setTemplateBranch('');
             setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); 
         });
     }
@@ -416,6 +458,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const loadTemplateForEdit = (t: ScheduleTemplate) => {
       setEditingTemplateId(t.id);
       setTemplateName(t.name);
+      setTemplateBranch(t.branch || '');
       setTemplateSchedule(JSON.parse(JSON.stringify(t.schedule)));
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -423,6 +466,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const cancelEditTemplate = () => {
       setEditingTemplateId(null);
       setTemplateName('');
+      setTemplateBranch('');
       setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule)));
   };
 
@@ -500,7 +544,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            {/* Filiais e Setores (Separados) */}
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {hasPermission('settings:branches') && (
-                    <ManageList 
+                    <ManageBranchList 
                       title="Filiais" 
                       items={settings.branches} 
                       onAdd={addBranch} 
@@ -512,16 +556,65 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                     />
                 )}
                 {hasPermission('settings:sectors') && (
-                    <ManageList 
-                      title="Setores / Squads" 
-                      items={settings.sectors || []} 
-                      onAdd={addSector} 
-                      onEdit={editSector}
-                      onRemove={removeSector} 
-                      saving={savingState['sector'] || 'idle'} 
-                      removingId={removingId} 
-                      placeholder="Novo Setor..." 
-                    />
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h2 className="text-lg font-bold text-gray-800 mb-4">Setores / Squads</h2>
+                      
+                      {/* Input de Adição de Setor */}
+                      <div className="flex flex-col gap-2 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Novo Setor</label>
+                        <input 
+                           type="text" 
+                           className="border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white" 
+                           placeholder="Nome do Setor..." 
+                           value={newSectorName} 
+                           onChange={e => setNewSectorName(e.target.value)} 
+                        />
+                        <select
+                           className="border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+                           value={newSectorBranch}
+                           onChange={e => setNewSectorBranch(e.target.value)}
+                        >
+                            {settings.branches.map(b => (
+                                <option key={b} value={b}>{b}</option>
+                            ))}
+                        </select>
+                        <button 
+                           onClick={addSector} 
+                           disabled={savingState['sector'] === 'saving' || !newSectorName.trim()} 
+                           className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold mt-1 transition-colors disabled:opacity-50"
+                        >
+                           {savingState['sector'] === 'saving' ? 'Adicionando...' : 'Adicionar Setor'}
+                        </button>
+                      </div>
+
+                      {/* Lista de Setores Agrupada por Filial */}
+                      <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                         {settings.branches.map(branch => {
+                             const branchSectors = (settings.sectors || []).filter(s => s.branch === branch);
+                             if (branchSectors.length === 0) return null;
+
+                             return (
+                                 <div key={branch}>
+                                     <div className="bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-600 uppercase border-b border-gray-200 sticky top-0">
+                                         {branch}
+                                     </div>
+                                     {branchSectors.map(s => (
+                                         <div key={`${s.branch}-${s.name}`} className="flex justify-between items-center p-2 border-b border-gray-50 hover:bg-gray-50">
+                                             <span className="text-sm text-gray-700">{s.name}</span>
+                                             <button 
+                                                onClick={() => removeSector(s.name, s.branch)}
+                                                className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50"
+                                                title="Excluir"
+                                             >
+                                                ✕
+                                             </button>
+                                         </div>
+                                     ))}
+                                 </div>
+                             );
+                         })}
+                      </div>
+                    </div>
                 )}
            </div>
 
@@ -592,22 +685,44 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                    {editingEventId && <button onClick={cancelEditEvent} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
                </div>
                
-               <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 rounded-lg transition-colors ${editingEventId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50 border border-transparent'}`}>
-                  <input type="text" placeholder="Nome do Evento" className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventLabel} onChange={e => setNewEventLabel(e.target.value)} />
-                  <select className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as EventBehavior)}>
-                     <option value="neutral">Neutro</option>
-                     <option value="debit">Debita (Folga)</option>
-                     <option value="credit_1x">Credita (1x)</option>
-                     <option value="credit_2x">Credita (2x)</option>
-                  </select>
-                  <button onClick={saveEvent} disabled={!newEventLabel.trim() || savingState['event'] === 'saving'} className={`${editingEventId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold rounded-lg transition-colors`}>
-                      {editingEventId ? 'Atualizar' : 'Adicionar'}
-                  </button>
+               <div className={`grid grid-cols-1 gap-4 mb-4 p-4 rounded-lg transition-colors ${editingEventId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50 border border-transparent'}`}>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     <input type="text" placeholder="Nome do Evento" className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventLabel} onChange={e => setNewEventLabel(e.target.value)} />
+                     <select className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as EventBehavior)}>
+                        <option value="neutral">Neutro</option>
+                        <option value="debit">Debita (Folga)</option>
+                        <option value="credit_1x">Credita (1x)</option>
+                        <option value="credit_2x">Credita (2x)</option>
+                     </select>
+                     <button onClick={saveEvent} disabled={!newEventLabel.trim() || savingState['event'] === 'saving'} className={`${editingEventId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold rounded-lg transition-colors`}>
+                        {editingEventId ? 'Atualizar' : 'Adicionar'}
+                     </button>
+                  </div>
+                  
+                  {/* Branch restriction */}
+                  <div>
+                      <MultiSelect 
+                        label="Restringir Visibilidade a Filiais (Opcional)"
+                        options={settings.branches}
+                        selected={newEventBranches}
+                        onChange={setNewEventBranches}
+                        placeholder="Visível para Todas"
+                      />
+                  </div>
                </div>
                <div className="space-y-2">
                   {settings.eventTypes.map(e => (
                      <div key={e.id} className={`flex justify-between items-center p-2 border-b last:border-0 transition-colors ${editingEventId === e.id ? 'bg-indigo-50 border-indigo-200' : 'border-gray-100'}`}>
-                        <div><span className="font-bold">{e.label}</span> <span className="text-xs text-gray-500 ml-2">({e.behavior})</span></div>
+                        <div>
+                            <span className="font-bold">{e.label}</span> <span className="text-xs text-gray-500 ml-2">({e.behavior})</span>
+                            {e.allowedBranches && e.allowedBranches.length > 0 && (
+                                <div className="flex gap-1 mt-1">
+                                    {e.allowedBranches.map(b => (
+                                        <span key={b} className="text-[10px] bg-gray-200 px-1.5 rounded text-gray-600">{b}</span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         <div className="flex gap-2">
                            <button onClick={() => handleEditEvent(e)} className="text-blue-500 text-xs font-bold bg-blue-50 px-2 py-1 rounded hover:bg-blue-100">Editar</button>
                            <button onClick={() => removeEvent(e.id)} className="text-red-500 text-xs font-bold bg-red-50 px-2 py-1 rounded hover:bg-red-100">Excluir</button>
@@ -630,8 +745,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                       {editingTemplateId && <button onClick={cancelEditTemplate} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
                    </div>
 
-                   <div className={`mb-4 flex gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''}`}>
+                   <div className={`mb-4 flex flex-col md:flex-row gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''}`}>
                       <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" placeholder="Nome (Ex: Escala 12x36)..." value={templateName} onChange={e => setTemplateName(e.target.value)} />
+                      
+                      <div className="md:w-64">
+                          <select 
+                            className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white"
+                            value={templateBranch}
+                            onChange={e => setTemplateBranch(e.target.value)}
+                          >
+                             <option value="">Todas as Filiais (Global)</option>
+                             {settings.branches.map(b => (
+                                <option key={b} value={b}>{b}</option>
+                             ))}
+                          </select>
+                      </div>
+
                       <button onClick={saveTemplate} className={`${editingTemplateId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors`}>
                          {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Modelo'}
                       </button>
@@ -663,7 +792,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                     <div className="flex flex-col gap-2">
                         {(settings.scheduleTemplates || []).map(t => (
                           <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
-                              <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
+                              <div>
+                                 <div className="font-bold text-gray-700 truncate mr-2">{t.name}</div>
+                                 <div className="text-xs text-gray-500 mt-0.5">
+                                    {t.branch ? `Filial: ${t.branch}` : 'Global'}
+                                 </div>
+                              </div>
                               <div className="flex gap-2 shrink-0">
                                 <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
                                 <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>

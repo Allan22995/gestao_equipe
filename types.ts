@@ -22,6 +22,7 @@ export interface ScheduleTemplate {
   id: string;
   name: string;
   schedule: Schedule;
+  branch?: string; // Vinculo opcional com filial
 }
 
 // Novo: Configuração Detalhada de Escala de Revezamento
@@ -44,6 +45,12 @@ export interface AccessProfileConfig {
   id: string;
   name: string;
   active: boolean; // Flag para restringir visualização no cadastro
+}
+
+// Novo: Configuração de Setor (Vinculado a Filial)
+export interface SectorConfig {
+  name: string;
+  branch: string;
 }
 
 // Changed to string to allow dynamic profiles from settings
@@ -78,6 +85,7 @@ export interface EventTypeConfig {
   id: string;
   label: string;
   behavior: EventBehavior;
+  allowedBranches?: string[]; // Novo: Restrição de filiais (Se vazio, todas veem)
 }
 
 // Novo: Mensagem do Sistema (Banner Global)
@@ -96,7 +104,7 @@ export interface CoverageRule {
 export interface SystemSettings {
   branches: string[];
   roles: RoleConfig[]; 
-  sectors: string[]; 
+  sectors: SectorConfig[]; // Alterado de string[] para SectorConfig[]
   accessProfiles: AccessProfileConfig[]; 
   eventTypes: EventTypeConfig[];
   scheduleTemplates: ScheduleTemplate[]; 

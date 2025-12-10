@@ -51,12 +51,24 @@ export const Calendar: React.FC<CalendarProps> = ({
     }
   }, [availableBranches]);
 
-  // Available sectors for filter dropdown
+  // Available sectors for filter dropdown (Only unique names)
   const availableSectors = useMemo(() => {
     if (!settings?.sectors) return [];
-    if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
-    return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
-  }, [settings?.sectors, currentUserAllowedSectors]);
+    
+    // Filtra setores pela filial selecionada (se houver) para evitar ruído
+    let relevantSectors = settings.sectors;
+    if (filterBranches.length > 0) {
+        relevantSectors = relevantSectors.filter(s => filterBranches.includes(s.branch));
+    } else if (availableBranches.length > 0) {
+        // Se o usuário já é restrito por branch (ex: não é admin)
+        relevantSectors = relevantSectors.filter(s => availableBranches.includes(s.branch));
+    }
+
+    const uniqueSectorNames = Array.from(new Set(relevantSectors.map(s => s.name))).sort();
+
+    if (currentUserAllowedSectors.length === 0) return uniqueSectorNames; // All
+    return uniqueSectorNames.filter(s => currentUserAllowedSectors.includes(s));
+  }, [settings?.sectors, currentUserAllowedSectors, filterBranches, availableBranches]);
 
   // --- Lógica Dinâmica de Funções (Roles) ---
   // Filtra as funções disponíveis baseando-se nos setores e filiais selecionados

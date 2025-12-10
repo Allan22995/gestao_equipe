@@ -58,9 +58,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Available sectors for filter dropdown
   const availableSectors = useMemo(() => {
     if (!settings?.sectors) return [];
-    if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
-    return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
-  }, [settings?.sectors, currentUserAllowedSectors]);
+    
+    // Filtra setores pela filial selecionada (se houver)
+    let relevantSectors = settings.sectors;
+    if (filterBranches.length > 0) {
+        relevantSectors = relevantSectors.filter(s => filterBranches.includes(s.branch));
+    } else if (availableBranches.length > 0) {
+        relevantSectors = relevantSectors.filter(s => availableBranches.includes(s.branch));
+    }
+
+    const uniqueSectorNames = Array.from(new Set(relevantSectors.map(s => s.name))).sort();
+
+    if (currentUserAllowedSectors.length === 0) return uniqueSectorNames; // All
+    return uniqueSectorNames.filter(s => currentUserAllowedSectors.includes(s));
+  }, [settings?.sectors, currentUserAllowedSectors, filterBranches, availableBranches]);
 
   // --- Lógica de Funções Dinâmicas ---
   const availableRoles = useMemo(() => {

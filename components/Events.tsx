@@ -80,6 +80,20 @@ export const Events: React.FC<EventsProps> = ({
      return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [activeCollaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
+  // Determine allowed Event Types based on the selected collaborator's branch
+  const allowedEventTypes = useMemo(() => {
+      // Se não for manager, está travado em Folga (lógica abaixo), mas para o select ser dinâmico:
+      const selectedColab = activeCollaborators.find(c => c.id === formData.collaboratorId);
+      if (!selectedColab) return settings.eventTypes; // Default all if no user selected
+
+      return settings.eventTypes.filter(et => {
+          // Se não tiver restrição, mostra
+          if (!et.allowedBranches || et.allowedBranches.length === 0) return true;
+          // Se tiver, verifica se a branch do colab está na lista
+          return et.allowedBranches.includes(selectedColab.branch);
+      });
+  }, [settings.eventTypes, formData.collaboratorId, activeCollaborators]);
+
   // Filter Events History and Sort by Date Descending
   const allowedEvents = useMemo(() => {
      let filtered = events;
@@ -344,7 +358,7 @@ export const Events: React.FC<EventsProps> = ({
               disabled={!isManager} // Colaborador travado em 'folga' (via lógica do state)
             >
               <option value="">Selecione...</option>
-              {isManager ? settings.eventTypes.map(t => (
+              {isManager ? allowedEventTypes.map(t => (
                 <option key={t.id} value={t.id}>{t.label}</option>
               )) : (
                  <option value="folga">Folga</option>
