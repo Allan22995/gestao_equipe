@@ -9,7 +9,6 @@ interface SettingsProps {
   setSettings: (s: SystemSettings) => Promise<void>;
   showToast: (msg: string, isError?: boolean) => void;
   hasPermission: (perm: string) => boolean;
-  availableBranches: string[]; // Lista de filiais permitidas para o usuário logado
 }
 
 // Initial state for schedule logic
@@ -23,7 +22,108 @@ const initialSchedule: Schedule = {
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
 };
 
-export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission, availableBranches }) => {
+// --- COMPONENTE INTERNO: LISTAS SIMPLES COM EDIÇÃO (APENAS PARA FILIAIS) ---
+const ManageBranchList = ({ 
+  title, items, onAdd, onEdit, onRemove, saving, removingId, placeholder 
+}: {
+  title: string; 
+  items: string[]; 
+  onAdd: (val: string) => void; 
+  onEdit: (oldVal: string, newVal: string) => void; 
+  onRemove: (val: string) => void; 
+  saving: 'idle' | 'saving' | 'success'; 
+  removingId: string | null; 
+  placeholder: string;
+}) => {
+  const [newItem, setNewItem] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Edit State
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const filteredItems = items.filter(i => i.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  const handleAdd = () => { if (newItem.trim()) { onAdd(newItem); setNewItem(''); } };
+
+  const startEdit = (item: string) => {
+    setEditingItem(item);
+    setEditValue(item);
+  };
+
+  const cancelEdit = () => {
+    setEditingItem(null);
+    setEditValue('');
+  };
+
+  const saveEdit = () => {
+    if (editingItem && editValue.trim() && editValue !== editingItem) {
+      onEdit(editingItem, editValue.trim());
+    }
+    cancelEdit();
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h2 className="text-lg font-bold text-gray-800 mb-4">{title}</h2>
+      
+      {/* Input de Adição */}
+      <div className="flex gap-2 mb-4">
+        <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder={placeholder} value={newItem} onChange={e => setNewItem(e.target.value)} disabled={saving === 'saving'} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+        <button onClick={handleAdd} disabled={saving === 'saving' || !newItem.trim()} className={`${saving === 'success' ? 'bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg transition-all font-semibold min-w-[80px]`}>{saving === 'saving' ? '...' : saving === 'success' ? '✓' : 'Add'}</button>
+      </div>
+
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <button onClick={() => setIsExpanded(!isExpanded)} className="w-full bg-gray-50 p-3 text-left text-sm font-semibold text-gray-700 flex justify-between items-center hover:bg-gray-100 transition-colors"><span>Ver Itens ({items.length})</span><span className={`transition-transform transform ${isExpanded ? 'rotate-180' : 'rotate-0'}`}>▼</span></button>
+        
+        {isExpanded && (
+          <div className="bg-white p-3 border-t border-gray-200 animate-fadeIn">
+            <input type="text" placeholder="🔍 Pesquisar..." className="w-full border border-gray-300 rounded-md p-2 text-sm mb-3 outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <div className="max-h-48 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+              {filteredItems.map(item => (
+                <div key={item} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded group border-b border-gray-50 last:border-0 min-h-[40px]">
+                  
+                  {editingItem === item ? (
+                    <div className="flex flex-1 items-center gap-2 animate-fadeIn">
+                      <input 
+                        type="text" 
+                        autoFocus
+                        className="flex-1 border border-indigo-300 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+                        value={editValue}
+                        onChange={e => setEditValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveEdit();
+                          if (e.key === 'Escape') cancelEdit();
+                        }}
+                      />
+                      <button onClick={saveEdit} className="text-green-600 hover:bg-green-50 p-1 rounded" title="Salvar">✓</button>
+                      <button onClick={cancelEdit} className="text-gray-400 hover:bg-gray-100 p-1 rounded" title="Cancelar">✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm text-gray-700 truncate flex-1">{item}</span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button onClick={() => startEdit(item)} disabled={!!removingId} className="text-blue-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded transition-colors" title="Editar">
+                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                         </button>
+                         <button onClick={() => onRemove(item)} disabled={removingId === item} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors" title="Excluir">
+                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                         </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
   // Determine tab visibility based on permissions
   const showGeral = hasPermission('settings:integration') || hasPermission('settings:branches') || hasPermission('settings:sectors') || hasPermission('settings:profiles') || hasPermission('settings:event_types') || hasPermission('settings:schedule_templates');
   const showAcesso = hasPermission('settings:access_control');
@@ -54,12 +154,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // States Geral
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
   
-  // --- STATES MASTER-DETAIL (FILIAIS & SETORES) ---
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const [newBranchName, setNewBranchName] = useState('');
-  const [editingBranchOldName, setEditingBranchOldName] = useState<string | null>(null);
-  const [editingBranchNewName, setEditingBranchNewName] = useState('');
+  // States Setores (Nova Lógica)
   const [newSectorName, setNewSectorName] = useState('');
+  const [newSectorBranch, setNewSectorBranch] = useState(settings.branches[0] || '');
 
   // States Eventos
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -92,7 +189,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   // Loading States
   const [savingState, setSavingState] = useState<Record<string, 'idle' | 'saving' | 'success'>>({});
-  
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
   useEffect(() => { if (settings.spreadsheetUrl) setSpreadsheetUrl(settings.spreadsheetUrl); }, [settings.spreadsheetUrl]);
   
   // Sync System Message state when settings change remotely
@@ -115,99 +213,40 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     try { await setSettings(newSettings); setSaving(key, 'success'); if (callback) callback(); } catch (e) { console.error(e); setSaving(key, 'idle'); }
   };
 
-  // --- LOGIC: BRANCHES (MASTER) ---
-  const addBranch = () => {
-    const val = newBranchName.trim();
-    if (!val) return;
-    if (settings.branches.includes(val)) { showToast('Filial já existe.', true); return; }
-    
-    saveSettings({ ...settings, branches: [...settings.branches, val] }, 'branch', () => {
-        setNewBranchName('');
-        // Seleciona a nova filial automaticamente
-        setSelectedBranchId(val);
-    });
-  };
-
-  const startEditBranch = (name: string) => {
-      setEditingBranchOldName(name);
-      setEditingBranchNewName(name);
-  };
-
-  const cancelEditBranch = () => {
-      setEditingBranchOldName(null);
-      setEditingBranchNewName('');
-  };
-
-  const saveEditBranch = () => {
-      if (!editingBranchOldName || !editingBranchNewName.trim()) return;
-      if (editingBranchOldName === editingBranchNewName) { cancelEditBranch(); return; }
-      if (settings.branches.includes(editingBranchNewName.trim())) { showToast('Nome já existe.', true); return; }
-
-      const newName = editingBranchNewName.trim();
-      const oldName = editingBranchOldName;
-
-      // Update Branches Array
-      const newBranches = settings.branches.map(b => b === oldName ? newName : b);
-
-      // CASCADE UPDATE: Update Sectors linked to this branch
-      const newSectors = (settings.sectors || []).map(s => s.branch === oldName ? { ...s, branch: newName } : s);
-
-      // CASCADE UPDATE: Update Templates linked to this branch
-      const newTemplates = (settings.scheduleTemplates || []).map(t => t.branch === oldName ? { ...t, branch: newName } : t);
-      
-      // Note: Collaborators in DB are NOT updated here automatically. This only affects Settings config.
-
-      saveSettings({ 
-          ...settings, 
-          branches: newBranches,
-          sectors: newSectors,
-          scheduleTemplates: newTemplates
-      }, 'branch', () => {
-          if (selectedBranchId === oldName) setSelectedBranchId(newName);
-          cancelEditBranch();
-      });
-  };
-
-  const removeBranch = (name: string) => {
-      if (window.confirm(`ATENÇÃO: Excluir a filial "${name}" também excluirá TODOS os setores vinculados a ela.\n\nDeseja continuar?`)) {
-          // Remove Branch
-          const newBranches = settings.branches.filter(b => b !== name);
-          
-          // CASCADE DELETE: Remove Sectors linked to this branch
-          const newSectors = (settings.sectors || []).filter(s => s.branch !== name);
-
-          // CASCADE UPDATE: Remove linkage from Templates (or delete? better just unlink)
-          const newTemplates = (settings.scheduleTemplates || []).map(t => t.branch === name ? { ...t, branch: undefined } : t);
-
-          saveSettings({
-              ...settings,
-              branches: newBranches,
-              sectors: newSectors,
-              scheduleTemplates: newTemplates
-          }, 'branch', () => {
-              if (selectedBranchId === name) setSelectedBranchId(null);
-          });
+  // --- LOGIC: BRANCHES (Simple String List) ---
+  const updateList = (listKey: keyof SystemSettings, oldVal: string, newVal: string, saveKey: string) => {
+      const currentList = settings[listKey] as string[];
+      if (currentList.includes(newVal)) {
+          showToast('Este valor já existe na lista.', true);
+          return;
       }
+      const newList = currentList.map(item => item === oldVal ? newVal : item);
+      saveSettings({ ...settings, [listKey]: newList }, saveKey);
   };
+
+  const addBranch = (v: string) => { if (settings.branches.includes(v)) return; saveSettings({ ...settings, branches: [...settings.branches, v] }, 'branch'); };
+  const editBranch = (oldVal: string, newVal: string) => updateList('branches', oldVal, newVal, 'branch');
+  const removeBranch = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, branches: settings.branches.filter(b => b !== v) }, 'branch'); };
   
-  // --- LOGIC: SECTORS (DETAIL) ---
+  // --- LOGIC: SECTORS (Object List: Name + Branch) ---
   const addSector = () => {
-    if (!selectedBranchId) { showToast('Selecione uma filial primeiro.', true); return; }
     const name = newSectorName.trim();
-    if (!name) return;
-    
-    // Check duplicates within the SAME branch
-    if (settings.sectors?.some(s => s.name.toLowerCase() === name.toLowerCase() && s.branch === selectedBranchId)) {
+    if (!name || !newSectorBranch) {
+       showToast('Nome e Filial são obrigatórios.', true);
+       return;
+    }
+    // Check duplicates in same branch
+    if (settings.sectors?.some(s => s.name.toLowerCase() === name.toLowerCase() && s.branch === newSectorBranch)) {
        showToast('Este setor já existe nesta filial.', true);
        return;
     }
     
-    const newSector: SectorConfig = { name, branch: selectedBranchId };
+    const newSector: SectorConfig = { name, branch: newSectorBranch };
     saveSettings({ ...settings, sectors: [...(settings.sectors || []), newSector] }, 'sector', () => setNewSectorName(''));
   };
 
   const removeSector = (sectorName: string, branchName: string) => {
-      if (window.confirm(`Excluir setor ${sectorName}?`)) {
+      if (window.confirm(`Excluir setor ${sectorName} da filial ${branchName}?`)) {
           const newSectors = settings.sectors.filter(s => !(s.name === sectorName && s.branch === branchName));
           saveSettings({ ...settings, sectors: newSectors }, 'sector');
       }
@@ -216,10 +255,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // --- LOGIC: SHIFT ROTATIONS (ESCALAS) ---
   const addRotation = () => {
     if (!newRotationId.trim()) { showToast('Defina um nome para a escala (ex: A, B).', true); return; }
-    if (settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) { showToast('Já existe uma escala com este ID.', true); return; }
+    
+    // Check duplicate ID
+    if (settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) {
+        showToast('Já existe uma escala com este ID.', true);
+        return;
+    }
 
-    const newRule: RotationRule = { id: newRotationId.trim().toUpperCase(), label: `Escala ${newRotationId.trim().toUpperCase()}` };
-    saveSettings({ ...settings, shiftRotations: [...settings.shiftRotations, newRule] }, 'rotation', () => setNewRotationId(''));
+    const newRule: RotationRule = {
+       id: newRotationId.trim().toUpperCase(),
+       label: `Escala ${newRotationId.trim().toUpperCase()}`,
+       // workSundays removido
+    };
+
+    saveSettings({ ...settings, shiftRotations: [...settings.shiftRotations, newRule] }, 'rotation', () => {
+        setNewRotationId('');
+    });
   };
 
   const removeRotation = (id: string) => {
@@ -228,23 +279,35 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       }
   };
 
+
   // --- LOGIC: PROFILES (OBJECTS) ---
   const addProfile = () => { 
       const name = newProfileName.trim().toLowerCase();
       if (!name) return;
-      if (settings.accessProfiles?.some(p => p.name.toLowerCase() === name)) { showToast('Perfil já existe.', true); return; }
+      if (settings.accessProfiles?.some(p => p.name.toLowerCase() === name)) {
+          showToast('Perfil já existe.', true);
+          return;
+      }
       const newProfile: AccessProfileConfig = { id: name, name: name, active: true };
       saveSettings({ ...settings, accessProfiles: [...(settings.accessProfiles || []), newProfile] }, 'profile', () => setNewProfileName('')); 
   };
   
   const toggleProfileActive = (id: string) => {
-      const updatedProfiles = (settings.accessProfiles || []).map(p => p.id === id ? { ...p, active: !p.active } : p);
+      const updatedProfiles = (settings.accessProfiles || []).map(p => 
+          p.id === id ? { ...p, active: !p.active } : p
+      );
       saveSettings({ ...settings, accessProfiles: updatedProfiles }, 'profile');
   };
 
   const removeProfile = (id: string) => { 
-      if (['admin', 'colaborador', 'noc'].includes(id)) { showToast('Perfis padrão do sistema não podem ser excluídos.', true); return; }
-      if (window.confirm(`Excluir perfil?`)) { saveSettings({ ...settings, accessProfiles: (settings.accessProfiles || []).filter(p => p.id !== id) }, 'profile'); }
+      // Protect default profiles
+      if (['admin', 'colaborador', 'noc'].includes(id)) {
+          showToast('Perfis padrão do sistema não podem ser excluídos.', true);
+          return;
+      }
+      if (window.confirm(`Excluir perfil?`)) {
+          saveSettings({ ...settings, accessProfiles: (settings.accessProfiles || []).filter(p => p.id !== id) }, 'profile'); 
+      }
   };
 
   // --- LOGIC: ROLES & ACL ---
@@ -255,14 +318,29 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     saveSettings({ ...settings, roles: [...settings.roles, newRole] }, 'role', () => setNewRoleName(''));
   };
 
-  const startEditRole = (roleName: string) => { setEditingRoleName(roleName); setEditRoleNameInput(roleName); };
+  const startEditRole = (roleName: string) => {
+    setEditingRoleName(roleName);
+    setEditRoleNameInput(roleName);
+  };
 
   const saveEditRole = () => {
      if (!editingRoleName || !editRoleNameInput.trim()) return;
-     if (editRoleNameInput !== editingRoleName && settings.roles.some(r => r.name.toLowerCase() === editRoleNameInput.toLowerCase())) { showToast('Já existe uma função com este nome.', true); return; }
+     
+     // Check duplicidade (exceto o proprio)
+     if (editRoleNameInput !== editingRoleName && settings.roles.some(r => r.name.toLowerCase() === editRoleNameInput.toLowerCase())) {
+        showToast('Já existe uma função com este nome.', true);
+        return;
+     }
+
      const updatedRoles = settings.roles.map(r => r.name === editingRoleName ? { ...r, name: editRoleNameInput.trim() } : r);
+     
+     // Se a role estava selecionada na tela de permissoes, atualizar a seleção também
      if (selectedRoleForACL === editingRoleName) setSelectedRoleForACL(editRoleNameInput.trim());
-     saveSettings({ ...settings, roles: updatedRoles }, 'role', () => { setEditingRoleName(null); setEditRoleNameInput(''); });
+
+     saveSettings({ ...settings, roles: updatedRoles }, 'role', () => {
+        setEditingRoleName(null);
+        setEditRoleNameInput('');
+     });
   };
 
   const removeRole = (name: string) => {
@@ -278,9 +356,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const togglePermission = (roleName: string, permId: string) => {
      const role = settings.roles.find(r => r.name === roleName);
      if (!role) return;
+
      let newPerms = role.permissions || [];
-     if (newPerms.includes(permId)) newPerms = newPerms.filter(p => p !== permId);
-     else newPerms = [...newPerms, permId];
+     if (newPerms.includes(permId)) {
+       newPerms = newPerms.filter(p => p !== permId);
+     } else {
+       newPerms = [...newPerms, permId];
+     }
+     
      const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, permissions: newPerms } : r);
      saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
   };
@@ -288,9 +371,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const toggleManageableProfile = (roleName: string, profileId: string) => {
     const role = settings.roles.find(r => r.name === roleName);
     if (!role) return;
+
     let currentProfiles = role.manageableProfiles || [];
-    if (currentProfiles.includes(profileId)) currentProfiles = currentProfiles.filter(id => id !== profileId);
-    else currentProfiles = [...currentProfiles, profileId];
+    if (currentProfiles.includes(profileId)) {
+        currentProfiles = currentProfiles.filter(id => id !== profileId);
+    } else {
+        currentProfiles = [...currentProfiles, profileId];
+    }
+
     const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, manageableProfiles: currentProfiles } : r);
     saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
   };
@@ -298,44 +386,108 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // --- LOGIC: EVENTS ---
   const saveEvent = () => {
     if (!newEventLabel.trim()) return;
+    
+    // Convert newEventBranches (MultiSelect) to undefined if empty (means Global)
     const allowedBranches = newEventBranches.length > 0 ? newEventBranches : undefined;
 
     if (editingEventId) {
+       // Update existing
        const updatedEvents = settings.eventTypes.map(e => e.id === editingEventId ? { ...e, label: newEventLabel.trim(), behavior: newEventBehavior, allowedBranches } : e);
-       saveSettings({ ...settings, eventTypes: updatedEvents }, 'event', () => { setNewEventLabel(''); setNewEventBehavior('neutral'); setNewEventBranches([]); setEditingEventId(null); });
+       saveSettings({ ...settings, eventTypes: updatedEvents }, 'event', () => {
+          setNewEventLabel('');
+          setNewEventBehavior('neutral');
+          setNewEventBranches([]);
+          setEditingEventId(null);
+       });
     } else {
+       // Add new
        const newType: EventTypeConfig = { id: generateUUID(), label: newEventLabel.trim(), behavior: newEventBehavior, allowedBranches };
-       saveSettings({ ...settings, eventTypes: [...settings.eventTypes, newType] }, 'event', () => { setNewEventLabel(''); setNewEventBranches([]); });
+       saveSettings({ ...settings, eventTypes: [...settings.eventTypes, newType] }, 'event', () => {
+          setNewEventLabel('');
+          setNewEventBranches([]);
+       });
     }
   };
 
-  const handleEditEvent = (e: EventTypeConfig) => { setEditingEventId(e.id); setNewEventLabel(e.label); setNewEventBehavior(e.behavior); setNewEventBranches(e.allowedBranches || []); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const cancelEditEvent = () => { setEditingEventId(null); setNewEventLabel(''); setNewEventBehavior('neutral'); setNewEventBranches([]); };
+  const handleEditEvent = (e: EventTypeConfig) => {
+      setEditingEventId(e.id);
+      setNewEventLabel(e.label);
+      setNewEventBehavior(e.behavior);
+      setNewEventBranches(e.allowedBranches || []);
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top to see inputs
+  };
+
+  const cancelEditEvent = () => {
+      setEditingEventId(null);
+      setNewEventLabel('');
+      setNewEventBehavior('neutral');
+      setNewEventBranches([]);
+  };
+
   const removeEvent = (id: string) => { if (window.confirm('Excluir?')) saveSettings({ ...settings, eventTypes: settings.eventTypes.filter(e => e.id !== id) }, 'event'); };
 
   // --- LOGIC: TEMPLATES ---
   const saveTemplate = () => {
     if (!templateName.trim()) { showToast('Nome obrigatório', true); return; }
+    
+    // Normalize branch: '' means Global
     const branchToSave = templateBranch || undefined;
+
     if (editingTemplateId) {
-        const updatedTemplates = (settings.scheduleTemplates || []).map(t => t.id === editingTemplateId ? { ...t, name: templateName.trim(), schedule: templateSchedule, branch: branchToSave } : t);
-        saveSettings({ ...settings, scheduleTemplates: updatedTemplates }, 'template', () => { setTemplateName(''); setTemplateBranch(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); setEditingTemplateId(null); });
+        // Update
+        const updatedTemplates = (settings.scheduleTemplates || []).map(t => 
+            t.id === editingTemplateId ? { ...t, name: templateName.trim(), schedule: templateSchedule, branch: branchToSave } : t
+        );
+        saveSettings({ ...settings, scheduleTemplates: updatedTemplates }, 'template', () => { 
+            setTemplateName(''); 
+            setTemplateBranch('');
+            setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+            setEditingTemplateId(null);
+        });
     } else {
+        // Create
         const newT: ScheduleTemplate = { id: generateUUID(), name: templateName.trim(), schedule: templateSchedule, branch: branchToSave };
-        saveSettings({ ...settings, scheduleTemplates: [...(settings.scheduleTemplates || []), newT] }, 'template', () => { setTemplateName(''); setTemplateBranch(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); });
+        saveSettings({ ...settings, scheduleTemplates: [...(settings.scheduleTemplates || []), newT] }, 'template', () => { 
+            setTemplateName(''); 
+            setTemplateBranch('');
+            setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); 
+        });
     }
   };
 
-  const loadTemplateForEdit = (t: ScheduleTemplate) => { setEditingTemplateId(t.id); setTemplateName(t.name); setTemplateBranch(t.branch || ''); setTemplateSchedule(JSON.parse(JSON.stringify(t.schedule))); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const cancelEditTemplate = () => { setEditingTemplateId(null); setTemplateName(''); setTemplateBranch(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); };
+  const loadTemplateForEdit = (t: ScheduleTemplate) => {
+      setEditingTemplateId(t.id);
+      setTemplateName(t.name);
+      setTemplateBranch(t.branch || '');
+      setTemplateSchedule(JSON.parse(JSON.stringify(t.schedule)));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditTemplate = () => {
+      setEditingTemplateId(null);
+      setTemplateName('');
+      setTemplateBranch('');
+      setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+  };
+
   const removeTemplate = (id: string) => { if (window.confirm('Excluir modelo?')) saveSettings({ ...settings, scheduleTemplates: (settings.scheduleTemplates || []).filter(t => t.id !== id) }, 'template'); };
 
   // --- LOGIC: SYSTEM MESSAGE ---
-  const saveSystemMessage = () => { saveSettings({ ...settings, systemMessage: { active: sysMsgActive, level: sysMsgLevel, message: sysMsgContent } }, 'system_msg'); };
+  const saveSystemMessage = () => {
+    saveSettings({
+      ...settings,
+      systemMessage: {
+        active: sysMsgActive,
+        level: sysMsgLevel,
+        message: sysMsgContent
+      }
+    }, 'system_msg');
+  };
 
   // --- UI HELPERS ---
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
   
+  // Group Permissions
   const groupedPermissions = SYSTEM_PERMISSIONS.reduce((acc, curr) => {
     if (!acc[curr.category]) acc[curr.category] = [];
     acc[curr.category].push(curr);
@@ -389,161 +541,82 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            )}
 
-           {/* --- MASTER-DETAIL: FILIAIS & SETORES --- */}
-           {(hasPermission('settings:branches') || hasPermission('settings:sectors')) && (
-               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-0 overflow-hidden">
-                  <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                     <div>
-                        <h2 className="text-lg font-bold text-gray-800">Gerenciar Estrutura Organizacional</h2>
-                        <p className="text-xs text-gray-500">Selecione uma filial para gerenciar seus setores exclusivos.</p>
-                     </div>
-                  </div>
+           {/* Filiais e Setores (Separados) */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {hasPermission('settings:branches') && (
+                    <ManageBranchList 
+                      title="Filiais" 
+                      items={settings.branches} 
+                      onAdd={addBranch} 
+                      onEdit={editBranch}
+                      onRemove={removeBranch} 
+                      saving={savingState['branch'] || 'idle'} 
+                      removingId={removingId} 
+                      placeholder="Nova Filial..." 
+                    />
+                )}
+                {hasPermission('settings:sectors') && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h2 className="text-lg font-bold text-gray-800 mb-4">Setores / Squads</h2>
+                      
+                      {/* Input de Adição de Setor */}
+                      <div className="flex flex-col gap-2 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Novo Setor</label>
+                        <input 
+                           type="text" 
+                           className="border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white" 
+                           placeholder="Nome do Setor..." 
+                           value={newSectorName} 
+                           onChange={e => setNewSectorName(e.target.value)} 
+                        />
+                        <select
+                           className="border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+                           value={newSectorBranch}
+                           onChange={e => setNewSectorBranch(e.target.value)}
+                        >
+                            {settings.branches.map(b => (
+                                <option key={b} value={b}>{b}</option>
+                            ))}
+                        </select>
+                        <button 
+                           onClick={addSector} 
+                           disabled={savingState['sector'] === 'saving' || !newSectorName.trim()} 
+                           className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold mt-1 transition-colors disabled:opacity-50"
+                        >
+                           {savingState['sector'] === 'saving' ? 'Adicionando...' : 'Adicionar Setor'}
+                        </button>
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 h-[500px]">
-                     {/* COLUMN 1: BRANCHES LIST */}
-                     <div className="col-span-1 border-r border-gray-200 flex flex-col h-full">
-                        <div className="p-3 bg-white border-b border-gray-100 shadow-sm z-10">
-                           <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">Filiais</h3>
-                           {/* Add Branch */}
-                           <div className="flex gap-2">
-                              <input 
-                                 type="text" 
-                                 className="flex-1 border border-gray-300 rounded p-1.5 text-sm outline-none focus:border-indigo-500"
-                                 placeholder="Nova Filial..."
-                                 value={newBranchName}
-                                 onChange={e => setNewBranchName(e.target.value)}
-                                 disabled={!hasPermission('settings:branches')}
-                              />
-                              <button 
-                                onClick={addBranch}
-                                disabled={!hasPermission('settings:branches') || savingState['branch'] === 'saving' || !newBranchName.trim()}
-                                className="bg-indigo-600 text-white px-3 rounded font-bold hover:bg-indigo-700 disabled:opacity-50"
-                              >
-                                 +
-                              </button>
-                           </div>
-                        </div>
-                        
-                        {/* 
-                            FILTRAGEM DE ACESSO:
-                            Aqui mostramos apenas as filiais que estão presentes em 'availableBranches'.
-                            Se for Admin, availableBranches contém todas.
-                            Se for Gerente de Filial, contém apenas a sua.
-                        */}
-                        <div className="flex-1 overflow-y-auto bg-gray-50 p-2 space-y-1">
-                           {settings.branches.filter(b => availableBranches.includes(b)).map(branch => (
-                              <div 
-                                 key={branch}
-                                 onClick={() => setSelectedBranchId(branch)}
-                                 className={`p-3 rounded-lg flex items-center justify-between cursor-pointer transition-all ${selectedBranchId === branch ? 'bg-white shadow-md border-l-4 border-l-indigo-500 ring-1 ring-black/5' : 'hover:bg-white border border-transparent'}`}
-                              >
-                                 {editingBranchOldName === branch ? (
-                                     <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
-                                        <input 
-                                          autoFocus
-                                          className="flex-1 border border-indigo-300 rounded px-1 py-0.5 text-sm outline-none"
-                                          value={editingBranchNewName}
-                                          onChange={e => setEditingBranchNewName(e.target.value)}
-                                          onKeyDown={e => {
-                                              if (e.key === 'Enter') saveEditBranch();
-                                              if (e.key === 'Escape') cancelEditBranch();
-                                          }}
-                                        />
-                                        <button onClick={saveEditBranch} className="text-green-600 font-bold px-1">✓</button>
-                                        <button onClick={cancelEditBranch} className="text-gray-400 font-bold px-1">✕</button>
+                      {/* Lista de Setores Agrupada por Filial */}
+                      <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                         {settings.branches.map(branch => {
+                             const branchSectors = (settings.sectors || []).filter(s => s.branch === branch);
+                             if (branchSectors.length === 0) return null;
+
+                             return (
+                                 <div key={branch}>
+                                     <div className="bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-600 uppercase border-b border-gray-200 sticky top-0">
+                                         {branch}
                                      </div>
-                                 ) : (
-                                     <>
-                                        <span className={`font-medium text-sm truncate ${selectedBranchId === branch ? 'text-indigo-700' : 'text-gray-700'}`}>
-                                            {branch}
-                                        </span>
-                                        {hasPermission('settings:branches') && (
-                                            <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100">
-                                                <button onClick={(e) => { e.stopPropagation(); startEditBranch(branch); }} className="p-1 hover:bg-gray-200 rounded text-blue-500">✎</button>
-                                                <button onClick={(e) => { e.stopPropagation(); removeBranch(branch); }} className="p-1 hover:bg-gray-200 rounded text-red-500">🗑️</button>
-                                            </div>
-                                        )}
-                                     </>
-                                 )}
-                              </div>
-                           ))}
-                        </div>
-                     </div>
-
-                     {/* COLUMN 2: SECTORS DETAIL */}
-                     <div className="col-span-2 flex flex-col h-full bg-white relative">
-                        {selectedBranchId ? (
-                           <>
-                              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-indigo-50/30">
-                                 <h3 className="text-sm font-bold text-indigo-800 uppercase flex items-center gap-2">
-                                     🏢 Setores de: <span className="text-black">{selectedBranchId}</span>
-                                 </h3>
-                                 <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                                     {(settings.sectors || []).filter(s => s.branch === selectedBranchId).length} Setores
-                                 </span>
-                              </div>
-
-                              <div className="flex-1 overflow-y-auto p-4">
-                                 {hasPermission('settings:sectors') && (
-                                     <div className="flex gap-2 mb-4">
-                                        <input 
-                                           type="text" 
-                                           className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-100"
-                                           placeholder={`Novo Setor em ${selectedBranchId}...`}
-                                           value={newSectorName}
-                                           onChange={e => setNewSectorName(e.target.value)}
-                                           onKeyDown={e => e.key === 'Enter' && addSector()}
-                                        />
-                                        <button 
-                                          onClick={addSector}
-                                          disabled={!newSectorName.trim() || savingState['sector'] === 'saving'}
-                                          className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50"
-                                        >
-                                           Adicionar Setor
-                                        </button>
-                                     </div>
-                                 )}
-
-                                 <div className="space-y-2">
-                                     {(settings.sectors || []).filter(s => s.branch === selectedBranchId).map((sector, idx) => (
-                                         <div key={`${sector.branch}-${sector.name}-${idx}`} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                                             <div className="flex items-center gap-3">
-                                                 <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">
-                                                     {sector.name.charAt(0).toUpperCase()}
-                                                 </span>
-                                                 <span className="text-sm font-medium text-gray-800">{sector.name}</span>
-                                             </div>
-                                             
-                                             {hasPermission('settings:sectors') && (
-                                                <button 
-                                                  onClick={() => removeSector(sector.name, sector.branch)}
-                                                  className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded transition-colors"
-                                                  title="Excluir Setor"
-                                                >
-                                                   🗑️
-                                                </button>
-                                             )}
+                                     {branchSectors.map(s => (
+                                         <div key={`${s.branch}-${s.name}`} className="flex justify-between items-center p-2 border-b border-gray-50 hover:bg-gray-50">
+                                             <span className="text-sm text-gray-700">{s.name}</span>
+                                             <button 
+                                                onClick={() => removeSector(s.name, s.branch)}
+                                                className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50"
+                                                title="Excluir"
+                                             >
+                                                ✕
+                                             </button>
                                          </div>
                                      ))}
-                                     {(settings.sectors || []).filter(s => s.branch === selectedBranchId).length === 0 && (
-                                         <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-lg">
-                                             Nenhum setor cadastrado nesta filial.
-                                         </div>
-                                     )}
                                  </div>
-                              </div>
-                           </>
-                        ) : (
-                           <div className="flex flex-col items-center justify-center h-full text-gray-400 p-6 text-center">
-                              <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                              <h3 className="text-lg font-bold text-gray-500 mb-1">Nenhuma Filial Selecionada</h3>
-                              <p className="text-sm">Clique em uma filial à esquerda para gerenciar seus setores.</p>
-                           </div>
-                        )}
-                     </div>
-                  </div>
-               </div>
-           )}
+                             );
+                         })}
+                      </div>
+                    </div>
+                )}
+           </div>
 
            {/* Perfis de Acesso (Separado e Atualizado) */}
            {hasPermission('settings:profiles') && (
@@ -630,7 +703,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   <div>
                       <MultiSelect 
                         label="Restringir Visibilidade a Filiais (Opcional)"
-                        options={settings.branches.filter(b => availableBranches.includes(b))} // FILTERED
+                        options={settings.branches}
                         selected={newEventBranches}
                         onChange={setNewEventBranches}
                         placeholder="Visível para Todas"
@@ -682,7 +755,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                             onChange={e => setTemplateBranch(e.target.value)}
                           >
                              <option value="">Todas as Filiais (Global)</option>
-                             {settings.branches.filter(b => availableBranches.includes(b)).map(b => ( // FILTERED
+                             {settings.branches.map(b => (
                                 <option key={b} value={b}>{b}</option>
                              ))}
                           </select>
