@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, SectorConfig } from './types';
 import { dbService } from './services/storage'; 
@@ -396,7 +397,7 @@ function App() {
           userColabId={userColabId}
         />;
       case 'comunicados': return <CommunicationGenerator />;
-      case 'configuracoes': return <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} hasPermission={hasPermission} availableBranches={availableBranches} />;
+      case 'configuracoes': return <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} hasPermission={hasPermission} />;
       default: return null;
     }
   };
