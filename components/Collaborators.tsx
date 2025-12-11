@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -17,6 +16,7 @@ interface CollaboratorsProps {
   canDelete: boolean;
   currentUserAllowedSectors: string[];
   currentUserRole: string; 
+  availableBranches: string[]; // Recebe as filiais permitidas para o usuário logado
 }
 
 const initialSchedule: Schedule = {
@@ -31,7 +31,7 @@ const initialSchedule: Schedule = {
 
 export const Collaborators: React.FC<CollaboratorsProps> = ({ 
   collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canCreate, canUpdate, canDelete,
-  currentUserAllowedSectors, currentUserRole
+  currentUserAllowedSectors, currentUserRole, availableBranches
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -97,8 +97,14 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     if (!canCreate) return;
     setShowForm(true);
     setEditingId(null);
+    
+    // Auto-select branch if restricted
+    const initialBranch = availableBranches.length === 1 ? availableBranches[0] : '';
+
     setFormData({ 
-      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
+      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', 
+      branch: initialBranch, 
+      role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
       hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
@@ -325,28 +331,44 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     return leader ? leader.name : 'Não encontrado';
   };
 
-  // --- SECTORS LOGIC (DEPENDS ON BRANCH) ---
+  // --- SECTORS LOGIC (DEPENDS ON BRANCH AND PERMISSIONS) ---
   const sectorOptions = useMemo(() => {
       if (!formData.branch) return [];
       
       // Use branch-specific sectors if available, otherwise fallback to global
+      let branchSectors: string[] = [];
       if (settings.branchSectors && settings.branchSectors[formData.branch]) {
-          return settings.branchSectors[formData.branch];
+          branchSectors = settings.branchSectors[formData.branch];
+      } else {
+          branchSectors = settings.sectors || [];
       }
-      
-      return settings.sectors || [];
-  }, [formData.branch, settings.branchSectors, settings.sectors]);
+
+      // NOVO: Filtrar se o usuário tiver restrição de setor (currentUserAllowedSectors)
+      // Se a lista de setores permitidos não estiver vazia, retornamos apenas a interseção
+      if (currentUserAllowedSectors && currentUserAllowedSectors.length > 0) {
+          return branchSectors.filter(s => currentUserAllowedSectors.includes(s));
+      }
+
+      return branchSectors;
+  }, [formData.branch, settings.branchSectors, settings.sectors, currentUserAllowedSectors]);
 
   const scheduleTemplates = settings.scheduleTemplates || [];
   const rotationOptions = settings.shiftRotations || [];
 
   const filteredCollaborators = collaborators.filter(c => {
+    // 1. Filtrar por Setor Permitido (Visualização)
     if (currentUserAllowedSectors.length > 0) {
       if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) {
         return false;
       }
     }
     
+    // 2. Filtrar por Filial Permitida (Visualização) - NOVO
+    // Se o usuário só pode ver certas filiais, não mostre colaboradores de outras
+    if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) {
+        return false;
+    }
+
     return (
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       c.colabId.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -452,9 +474,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Filial *</label>
-              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value, leaderId: '', sector: ''})}>
+              <select 
+                required 
+                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
+                value={formData.branch} 
+                onChange={e => setFormData({...formData, branch: e.target.value, leaderId: '', sector: ''})}
+                // Se só existe uma filial disponível (restrição), desabilita a troca ou apenas exibe essa.
+                // Como filtramos o map abaixo, o usuário só verá as permitidas. 
+                // Se tiver apenas 1, já estará selecionada.
+              >
                  <option value="">Selecione...</option>
-                 {settings.branches.map(b => (
+                 {availableBranches.map(b => (
                    <option key={b} value={b}>{b}</option>
                  ))}
               </select>

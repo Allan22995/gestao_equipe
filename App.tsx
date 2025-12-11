@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES } from './types';
 import { dbService } from './services/storage'; 
@@ -361,6 +360,7 @@ function App() {
           canDelete={hasPermission('collaborators:delete')}
           currentUserAllowedSectors={currentUserAllowedSectors}
           currentUserRole={currentUserRole}
+          availableBranches={availableBranches} // Passando as filiais permitidas
         />;
       case 'eventos':
         return <Events 
