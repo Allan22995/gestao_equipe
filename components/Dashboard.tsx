@@ -55,12 +55,51 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   }, [availableBranches]);
 
-  // Available sectors for filter dropdown
+  // Available sectors for filter dropdown (Dynamic based on branch)
   const availableSectors = useMemo(() => {
-    if (!settings?.sectors) return [];
-    if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
-    return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
-  }, [settings?.sectors, currentUserAllowedSectors]);
+    if (!settings) return [];
+    
+    // Determine the source of sectors
+    let sectorsPool: string[] = [];
+
+    if (filterBranches.length > 0) {
+        filterBranches.forEach(branch => {
+            const branchSectors = settings.branchSectors?.[branch] || [];
+            sectorsPool = [...sectorsPool, ...branchSectors];
+        });
+    } else {
+        if (availableBranches.length > 0) {
+             availableBranches.forEach(branch => {
+                const branchSectors = settings.branchSectors?.[branch] || [];
+                sectorsPool = [...sectorsPool, ...branchSectors];
+             });
+        } else {
+             if (settings.branchSectors) {
+                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...s]);
+             } else {
+                sectorsPool = settings.sectors || [];
+             }
+        }
+    }
+    
+    sectorsPool = Array.from(new Set(sectorsPool));
+
+    if (currentUserAllowedSectors.length > 0) {
+        return sectorsPool.filter(s => currentUserAllowedSectors.includes(s));
+    }
+    
+    return sectorsPool.sort();
+  }, [settings, currentUserAllowedSectors, filterBranches, availableBranches]);
+
+  // Reset sector filter if selected sector is no longer available
+  useEffect(() => {
+      if (filterSectors.length > 0) {
+          const validSectors = filterSectors.filter(s => availableSectors.includes(s));
+          if (validSectors.length !== filterSectors.length) {
+              setFilterSectors(validSectors);
+          }
+      }
+  }, [availableSectors, filterSectors]);
 
   // --- Lógica de Funções Dinâmicas ---
   const availableRoles = useMemo(() => {
@@ -574,7 +613,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 options={availableSectors}
                 selected={filterSectors}
                 onChange={setFilterSectors}
-                placeholder={currentUserAllowedSectors.length > 0 ? 'Todos Permitidos' : 'Todos'}
+                placeholder={filterBranches.length === 0 ? 'Selecione a Filial' : 'Todos'}
                 disabled={currentUserAllowedSectors.length === 1}
               />
           </div>

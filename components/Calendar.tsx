@@ -51,12 +51,57 @@ export const Calendar: React.FC<CalendarProps> = ({
     }
   }, [availableBranches]);
 
-  // Available sectors for filter dropdown
+  // Available sectors for filter dropdown (Dynamic based on selected branch)
   const availableSectors = useMemo(() => {
-    if (!settings?.sectors) return [];
-    if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
-    return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
-  }, [settings?.sectors, currentUserAllowedSectors]);
+    if (!settings) return [];
+    
+    // Determine the source of sectors
+    let sectorsPool: string[] = [];
+
+    if (filterBranches.length > 0) {
+        // If specific branches selected, get sectors only from those branches
+        filterBranches.forEach(branch => {
+            const branchSectors = settings.branchSectors?.[branch] || [];
+            sectorsPool = [...sectorsPool, ...branchSectors];
+        });
+    } else {
+        // If no branch selected, show all available sectors from available branches or global
+        if (availableBranches.length > 0) {
+             availableBranches.forEach(branch => {
+                const branchSectors = settings.branchSectors?.[branch] || [];
+                sectorsPool = [...sectorsPool, ...branchSectors];
+             });
+        } else {
+             // Fallback to legacy global list or all sectors from map
+             if (settings.branchSectors) {
+                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...s]);
+             } else {
+                sectorsPool = settings.sectors || [];
+             }
+        }
+    }
+    
+    // Unique values
+    sectorsPool = Array.from(new Set(sectorsPool));
+
+    // Filter by User Permissions
+    if (currentUserAllowedSectors.length > 0) {
+        return sectorsPool.filter(s => currentUserAllowedSectors.includes(s));
+    }
+    
+    return sectorsPool.sort();
+  }, [settings, currentUserAllowedSectors, filterBranches, availableBranches]);
+
+  // Reset sector filter if selected sector is no longer available
+  useEffect(() => {
+      if (filterSectors.length > 0) {
+          const validSectors = filterSectors.filter(s => availableSectors.includes(s));
+          if (validSectors.length !== filterSectors.length) {
+              setFilterSectors(validSectors);
+          }
+      }
+  }, [availableSectors, filterSectors]);
+
 
   // --- Lógica Dinâmica de Funções (Roles) ---
   // Filtra as funções disponíveis baseando-se nos setores e filiais selecionados
@@ -383,7 +428,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 options={availableSectors}
                 selected={filterSectors}
                 onChange={setFilterSectors}
-                placeholder={currentUserAllowedSectors.length > 0 ? 'Todos Permitidos' : 'Todos'}
+                placeholder={filterBranches.length === 0 ? 'Selecione a Filial' : 'Todos'}
                 disabled={currentUserAllowedSectors.length === 1}
               />
            </div>

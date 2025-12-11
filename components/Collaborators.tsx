@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -324,7 +325,18 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     return leader ? leader.name : 'Não encontrado';
   };
 
-  const sectorOptions = settings.sectors || [];
+  // --- SECTORS LOGIC (DEPENDS ON BRANCH) ---
+  const sectorOptions = useMemo(() => {
+      if (!formData.branch) return [];
+      
+      // Use branch-specific sectors if available, otherwise fallback to global
+      if (settings.branchSectors && settings.branchSectors[formData.branch]) {
+          return settings.branchSectors[formData.branch];
+      }
+      
+      return settings.sectors || [];
+  }, [formData.branch, settings.branchSectors, settings.sectors]);
+
   const scheduleTemplates = settings.scheduleTemplates || [];
   const rotationOptions = settings.shiftRotations || [];
 
@@ -440,7 +452,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Filial *</label>
-              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value, leaderId: ''})}>
+              <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value, leaderId: '', sector: ''})}>
                  <option value="">Selecione...</option>
                  {settings.branches.map(b => (
                    <option key={b} value={b}>{b}</option>
@@ -461,11 +473,12 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             <div className="flex flex-col md:col-span-2">
               <label className="text-xs font-semibold text-gray-600 mb-1">Setor Principal (Lotação)</label>
               <select 
-                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-gray-100"
                  value={formData.sector} 
                  onChange={e => setFormData({...formData, sector: e.target.value})}
+                 disabled={!formData.branch}
               >
-                 <option value="">Selecione (Opcional)...</option>
+                 <option value="">{formData.branch ? 'Selecione (Opcional)...' : 'Selecione a Filial primeiro'}</option>
                  {sectorOptions.map(s => (
                    <option key={s} value={s}>{s}</option>
                  ))}
@@ -512,10 +525,12 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    </div>
                    <p className="text-xs text-gray-500 mb-3">A função selecionada ({formData.role}) tem visualização restrita. Selecione quais setores este usuário pode ver.</p>
                    
+                   {!formData.branch ? (
+                       <p className="text-sm text-red-500 font-bold">Selecione uma filial para ver os setores disponíveis.</p>
+                   ) : (
                    <div className="flex flex-wrap gap-2">
-                      {Array.from(new Set([...sectorOptions, ...(formData.allowedSectors || [])]))
-                        .sort()
-                        .map(sector => (
+                      {sectorOptions.length === 0 && <p className="text-xs text-gray-400">Nenhum setor disponível nesta filial.</p>}
+                      {sectorOptions.map(sector => (
                         <button
                           key={sector}
                           type="button"
@@ -531,6 +546,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                         </button>
                       ))}
                    </div>
+                   )}
                    {(!formData.allowedSectors || formData.allowedSectors.length === 0) && (
                       <p className="text-xs text-red-500 mt-2 font-medium">Selecione pelo menos um setor.</p>
                    )}

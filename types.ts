@@ -1,4 +1,5 @@
 
+
 export interface DaySchedule {
   enabled: boolean;
   start: string;
@@ -86,8 +87,9 @@ export interface CoverageRule {
 
 export interface SystemSettings {
   branches: string[];
+  sectors: string[]; // Mantido para retrocompatibilidade, mas o uso principal será branchSectors
+  branchSectors?: Record<string, string[]>; // NOVO: Mapeamento Filial -> Setores
   roles: RoleConfig[]; 
-  sectors: string[]; 
   accessProfiles: AccessProfileConfig[]; 
   eventTypes: EventTypeConfig[];
   scheduleTemplates: ScheduleTemplate[]; 

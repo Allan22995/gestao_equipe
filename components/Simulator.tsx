@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, SystemSettings, Schedule, CoverageRule } from '../types';
 import { getFeriados, weekDayMap, checkRotationDay } from '../utils/helpers';
@@ -86,12 +84,51 @@ export const Simulator: React.FC<SimulatorProps> = ({
     }
   }, [availableBranches]);
 
-  // Available sectors for filter dropdown
+  // Available sectors for filter dropdown (Dynamic based on selected branch)
   const availableSectors = useMemo(() => {
-    if (!settings?.sectors) return [];
-    if (currentUserAllowedSectors.length === 0) return settings.sectors; // All
-    return settings.sectors.filter(s => currentUserAllowedSectors.includes(s));
-  }, [settings?.sectors, currentUserAllowedSectors]);
+    if (!settings) return [];
+    
+    // Determine the source of sectors
+    let sectorsPool: string[] = [];
+
+    if (filterBranches.length > 0) {
+        filterBranches.forEach(branch => {
+            const branchSectors = settings.branchSectors?.[branch] || [];
+            sectorsPool = [...sectorsPool, ...branchSectors];
+        });
+    } else {
+        if (availableBranches.length > 0) {
+             availableBranches.forEach(branch => {
+                const branchSectors = settings.branchSectors?.[branch] || [];
+                sectorsPool = [...sectorsPool, ...branchSectors];
+             });
+        } else {
+             if (settings.branchSectors) {
+                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...s]);
+             } else {
+                sectorsPool = settings.sectors || [];
+             }
+        }
+    }
+    
+    sectorsPool = Array.from(new Set(sectorsPool));
+
+    if (currentUserAllowedSectors.length > 0) {
+        return sectorsPool.filter(s => currentUserAllowedSectors.includes(s));
+    }
+    
+    return sectorsPool.sort();
+  }, [settings, currentUserAllowedSectors, filterBranches, availableBranches]);
+
+  // Reset sector filter if selected sector is no longer available
+  useEffect(() => {
+      if (filterSectors.length > 0) {
+          const validSectors = filterSectors.filter(s => availableSectors.includes(s));
+          if (validSectors.length !== filterSectors.length) {
+              setFilterSectors(validSectors);
+          }
+      }
+  }, [availableSectors, filterSectors]);
 
   // --- Calculate Available Roles based on Sector ---
   const availableRolesOptions = useMemo(() => {
@@ -408,6 +445,19 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Fim</label>
                               <input type="date" value={simEndDate} onChange={e => setSimEndDate(e.target.value)} className="w-full border border-gray-300 rounded-md p-1.5 text-sm" />
                           </div>
+                          
+                          {/* Branch Multi-Select Filter */}
+                          <div>
+                              <MultiSelect 
+                                label="FILTRAR POR FILIAL"
+                                options={availableBranches}
+                                selected={filterBranches}
+                                onChange={setFilterBranches}
+                                placeholder={availableBranches.length > 1 ? 'Todas' : 'Sua Filial'}
+                                disabled={availableBranches.length === 1}
+                              />
+                          </div>
+
                           {/* Sector Filter (Multi) */}
                           <div>
                               <MultiSelect 
@@ -415,7 +465,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                 options={availableSectors}
                                 selected={filterSectors}
                                 onChange={setFilterSectors}
-                                placeholder="Todos os Setores"
+                                placeholder={filterBranches.length === 0 ? "Selecione Filial" : "Todos os Setores"}
                                 disabled={currentUserAllowedSectors.length === 1}
                               />
                           </div>
@@ -528,73 +578,62 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                   <h3 className="font-bold text-indigo-800 uppercase tracking-wide">TOTAL GERAL <span className="text-xs font-normal normal-case opacity-70">(Agrupado)</span></h3>
                               </div>
                               <div className="flex gap-1 min-w-max">
-                                {simulationData.days.map((day, idx) => {
+                                {simulationData.days.map((day) => {
                                       const data = simulationData.grandTotals[day.date];
                                       let colorClass = 'bg-gray-50 border-gray-200 text-gray-400'; 
                                       
                                       if (!day.isHoliday) {
-                                          if (data.status === 'ok') colorClass = 'bg-emerald-200 border-emerald-400 text-emerald-900 shadow-sm';
-                                          else if (data.status === 'alert') colorClass = 'bg-amber-200 border-amber-400 text-amber-900 shadow-sm';
-                                          else colorClass = 'bg-red-200 border-red-400 text-red-900 shadow-sm';
+                                          if (data.status === 'ok') colorClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                                          if (data.status === 'alert') colorClass = 'bg-amber-100 text-amber-800 border-amber-300';
+                                          if (data.status === 'violation') colorClass = 'bg-red-100 text-red-800 border-red-300';
                                       } else {
-                                          colorClass = 'bg-gray-200 border-gray-300 opacity-60'; 
+                                          colorClass = 'bg-gray-100 text-gray-400 border-gray-200 opacity-50';
                                       }
 
                                       return (
-                                          <div key={`total-${idx}`} className={`w-12 h-16 flex flex-col items-center justify-center border-2 rounded-lg transition-all ${colorClass}`} title={`${day.date}: Total Disponível ${data.available} / Meta Global ${data.min}`}>
-                                              <span className="text-[10px] font-bold uppercase">{weekDayMap[new Date(day.date + 'T00:00:00').getDay()].substr(0, 3)}</span>
-                                              <span className="text-[10px] mb-1">{day.label.split('/')[0]}</span>
+                                          <div key={day.date} className={`w-10 h-14 flex flex-col items-center justify-center border rounded ${colorClass}`}>
+                                              <span className="text-[10px] font-bold">{day.label}</span>
                                               {!day.isHoliday ? (
-                                                  <span className="font-bold text-sm">
-                                                      {data.available}<span className="text-[9px] opacity-60">/{data.min}</span>
-                                                  </span>
-                                              ) : <span className="text-xs">-</span>}
+                                                  <span className="text-sm font-bold">{data.available}/{data.min}</span>
+                                              ) : <span className="text-xs">F</span>}
                                           </div>
                                       );
-                                  })}
+                                })}
                               </div>
                           </div>
                       )}
 
-                      {Object.keys(simulationData.results).map(role => {
-                          const min = getRuleForRole(role);
-                          return (
-                              <div key={role} className="mb-6 px-4 pt-4">
-                                  <div className="flex items-center gap-2 mb-2">
-                                      <h3 className="font-bold text-gray-700">{role}</h3>
-                                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Meta: {min} pessoas</span>
-                                  </div>
-                                  
-                                  <div className="flex gap-1 min-w-max">
-                                      {simulationData.days.map((day, idx) => {
-                                          const data = simulationData.results[role][day.date];
-                                          let colorClass = 'bg-gray-50 border-gray-200 text-gray-400'; // Default / Holiday
-                                          
-                                          if (!day.isHoliday) {
-                                              if (data.status === 'ok') colorClass = 'bg-emerald-100 border-emerald-300 text-emerald-800';
-                                              else if (data.status === 'alert') colorClass = 'bg-amber-100 border-amber-300 text-amber-800';
-                                              else colorClass = 'bg-red-100 border-red-300 text-red-800';
-                                          } else {
-                                              // Holiday visual override, but keeping count visible
-                                              colorClass = 'bg-gray-100 border-gray-200 opacity-60'; 
-                                          }
+                      {/* Matrix Rows by Role */}
+                      <div className="px-4 space-y-6">
+                        {Object.keys(simulationData.results).map(role => (
+                            <div key={role} className="border-b border-gray-100 pb-4 last:border-0">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <h3 className="font-bold text-gray-700">{role}</h3>
+                                    <span className="text-xs text-gray-400 font-normal">(Meta: {getRuleForRole(role)})</span>
+                                </div>
+                                <div className="flex gap-1 min-w-max">
+                                    {simulationData.days.map((day) => {
+                                        const data = simulationData.results[role][day.date];
+                                        let colorClass = 'bg-gray-50 border-gray-200 text-gray-400';
+                                        
+                                        if (!day.isHoliday) {
+                                            if (data.status === 'ok') colorClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                                            if (data.status === 'alert') colorClass = 'bg-amber-100 text-amber-800 border-amber-200';
+                                            if (data.status === 'violation') colorClass = 'bg-red-100 text-red-800 border-red-200';
+                                        } else {
+                                            colorClass = 'bg-gray-100 text-gray-400 border-gray-200 opacity-50';
+                                        }
 
-                                          return (
-                                              <div key={idx} className={`w-12 h-16 flex flex-col items-center justify-center border rounded transition-all hover:scale-105 ${colorClass}`} title={`${day.date}: ${data.available} disponíveis`}>
-                                                  <span className="text-[10px] font-bold uppercase">{weekDayMap[new Date(day.date + 'T00:00:00').getDay()].substr(0, 3)}</span>
-                                                  <span className="text-[10px] mb-1">{day.label.split('/')[0]}</span>
-                                                  {!day.isHoliday ? (
-                                                      <span className="font-bold text-sm">
-                                                          {data.available}<span className="text-[9px] opacity-60">/{min}</span>
-                                                      </span>
-                                                  ) : <span className="text-xs">-</span>}
-                                              </div>
-                                          );
-                                      })}
-                                  </div>
-                              </div>
-                          );
-                      })}
+                                        return (
+                                            <div key={`${role}-${day.date}`} className={`w-10 h-12 flex flex-col items-center justify-center border rounded text-xs ${colorClass}`} title={`${day.date}: ${data.available} disponíveis`}>
+                                                <span className="font-bold">{day.isHoliday ? 'F' : data.available}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                      </div>
                   </div>
               </div>
           </div>

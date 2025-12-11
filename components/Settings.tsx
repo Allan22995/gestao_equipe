@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -132,6 +133,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
 
+  // Filiais e Setores (Master-Detail)
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newSectorName, setNewSectorName] = useState('');
+
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
@@ -157,6 +163,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [savingState, setSavingState] = useState<Record<string, 'idle' | 'saving' | 'success'>>({});
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  // Inicializar seleção de filial
+  useEffect(() => {
+     if (settings.branches.length > 0 && !selectedBranch) {
+        setSelectedBranch(settings.branches[0]);
+     }
+  }, [settings.branches]);
+
   useEffect(() => { if (settings.spreadsheetUrl) setSpreadsheetUrl(settings.spreadsheetUrl); }, [settings.spreadsheetUrl]);
   
   useEffect(() => {
@@ -178,24 +191,66 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     try { await setSettings(newSettings); setSaving(key, 'success'); if (callback) callback(); } catch (e) { console.error(e); setSaving(key, 'idle'); }
   };
 
-  const updateList = (listKey: keyof SystemSettings, oldVal: string, newVal: string, saveKey: string) => {
-      const currentList = settings[listKey] as string[];
-      if (currentList.includes(newVal)) {
-          showToast('Este valor já existe na lista.', true);
-          return;
-      }
-      const newList = currentList.map(item => item === oldVal ? newVal : item);
-      saveSettings({ ...settings, [listKey]: newList }, saveKey);
+  // --- BRANCH & SECTOR LOGIC ---
+  const addBranch = () => {
+     if (!newBranchName.trim()) return;
+     if (settings.branches.includes(newBranchName)) {
+        showToast('Filial já existe.', true);
+        return;
+     }
+     const updatedBranches = [...settings.branches, newBranchName];
+     // Initialize sectors for new branch
+     const updatedBranchSectors = { ...(settings.branchSectors || {}), [newBranchName]: [] };
+     
+     saveSettings({ ...settings, branches: updatedBranches, branchSectors: updatedBranchSectors }, 'branch', () => {
+         setNewBranchName('');
+         setSelectedBranch(newBranchName);
+     });
   };
 
-  const addBranch = (v: string) => { if (settings.branches.includes(v)) return; saveSettings({ ...settings, branches: [...settings.branches, v] }, 'branch'); };
-  const editBranch = (oldVal: string, newVal: string) => updateList('branches', oldVal, newVal, 'branch');
-  const removeBranch = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, branches: settings.branches.filter(b => b !== v) }, 'branch'); };
-  
-  const addSector = (v: string) => { if (settings.sectors?.includes(v)) return; saveSettings({ ...settings, sectors: [...(settings.sectors || []), v] }, 'sector'); };
-  const editSector = (oldVal: string, newVal: string) => updateList('sectors', oldVal, newVal, 'sector');
-  const removeSector = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, sectors: (settings.sectors || []).filter(s => s !== v) }, 'sector'); };
-  
+  const removeBranch = (branch: string) => {
+     if (window.confirm(`Tem certeza que deseja excluir a filial "${branch}" e todos seus setores?`)) {
+        const updatedBranches = settings.branches.filter(b => b !== branch);
+        const updatedBranchSectors = { ...(settings.branchSectors || {}) };
+        delete updatedBranchSectors[branch];
+        
+        saveSettings({ ...settings, branches: updatedBranches, branchSectors: updatedBranchSectors }, 'branch', () => {
+            if (selectedBranch === branch) setSelectedBranch(updatedBranches[0] || null);
+        });
+     }
+  };
+
+  const addSectorToBranch = () => {
+      if (!selectedBranch || !newSectorName.trim()) return;
+      
+      const currentSectors = settings.branchSectors?.[selectedBranch] || [];
+      if (currentSectors.includes(newSectorName)) {
+          showToast('Setor já existe nesta filial.', true);
+          return;
+      }
+      
+      const updatedSectors = [...currentSectors, newSectorName];
+      const updatedBranchSectors = { ...(settings.branchSectors || {}), [selectedBranch]: updatedSectors };
+      
+      // Also update flat list for compatibility if needed, or ignore it
+      const allSectors = new Set([...(settings.sectors || []), newSectorName]);
+
+      saveSettings({ ...settings, branchSectors: updatedBranchSectors, sectors: Array.from(allSectors) }, 'sector', () => {
+          setNewSectorName('');
+      });
+  };
+
+  const removeSectorFromBranch = (sector: string) => {
+      if (!selectedBranch) return;
+      if (window.confirm(`Excluir setor "${sector}" da filial "${selectedBranch}"?`)) {
+          const currentSectors = settings.branchSectors?.[selectedBranch] || [];
+          const updatedSectors = currentSectors.filter(s => s !== sector);
+          const updatedBranchSectors = { ...(settings.branchSectors || {}), [selectedBranch]: updatedSectors };
+          
+          saveSettings({ ...settings, branchSectors: updatedBranchSectors }, 'sector');
+      }
+  };
+
   const addRotation = () => {
     if (!newRotationId.trim()) { showToast('Defina um nome para a escala (ex: A, B).', true); return; }
     if (settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) { showToast('Já existe uma escala com este ID.', true); return; }
@@ -332,10 +387,113 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <ManageList title="Filiais" items={settings.branches} onAdd={addBranch} onEdit={editBranch} onRemove={removeBranch} saving={savingState['branch'] || 'idle'} removingId={removingId} placeholder="Nova Filial..." />
-                <ManageList title="Setores / Squads" items={settings.sectors || []} onAdd={addSector} onEdit={editSector} onRemove={removeSector} saving={savingState['sector'] || 'idle'} removingId={removingId} placeholder="Novo Setor..." />
+           {/* --- NOVO LAYOUT DE FILIAIS E SETORES (Mestre-Detalhe) --- */}
+           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+               <div className="p-4 border-b border-gray-100 bg-gray-50">
+                  <h2 className="text-lg font-bold text-gray-800">Gerenciar Filiais e Setores</h2>
+                  <p className="text-xs text-gray-500">Selecione uma filial à esquerda para gerenciar seus setores à direita.</p>
+               </div>
+               
+               <div className="flex flex-col md:flex-row h-[500px]">
+                  {/* COLUNA ESQUERDA: FILIAIS */}
+                  <div className="w-full md:w-1/3 border-r border-gray-200 flex flex-col bg-gray-50/30">
+                     <div className="p-4 border-b border-gray-200">
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Filiais</label>
+                        <div className="flex gap-2">
+                           <input 
+                              type="text" 
+                              className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
+                              placeholder="Nome da Filial..." 
+                              value={newBranchName}
+                              onChange={e => setNewBranchName(e.target.value)}
+                           />
+                           <button 
+                              onClick={addBranch}
+                              disabled={!newBranchName.trim()}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 font-bold text-lg leading-none disabled:opacity-50"
+                           >
+                              +
+                           </button>
+                        </div>
+                     </div>
+                     <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                        {settings.branches.map(branch => (
+                           <div 
+                              key={branch}
+                              onClick={() => setSelectedBranch(branch)}
+                              className={`group flex justify-between items-center p-3 rounded-lg cursor-pointer transition-all border ${selectedBranch === branch ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'bg-white border-gray-200 hover:border-indigo-300'}`}
+                           >
+                              <div>
+                                 <span className={`font-bold block ${selectedBranch === branch ? 'text-indigo-800' : 'text-gray-700'}`}>{branch}</span>
+                                 <span className="text-xs text-gray-400">{(settings.branchSectors?.[branch] || []).length} setores</span>
+                              </div>
+                              <button 
+                                 onClick={(e) => { e.stopPropagation(); removeBranch(branch); }}
+                                 className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded transition-all"
+                              >
+                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* COLUNA DIREITA: SETORES DA FILIAL SELECIONADA */}
+                  <div className="w-full md:w-2/3 flex flex-col bg-white">
+                     {selectedBranch ? (
+                        <>
+                           <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0">
+                              <div>
+                                 <h3 className="font-bold text-gray-800 text-lg">Setores: <span className="text-indigo-600 bg-indigo-50 px-2 rounded">{selectedBranch}</span></h3>
+                              </div>
+                              <div className="flex gap-2 w-1/2">
+                                 <input 
+                                    type="text" 
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none" 
+                                    placeholder={`Novo Setor em ${selectedBranch}...`} 
+                                    value={newSectorName}
+                                    onChange={e => setNewSectorName(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && addSectorToBranch()}
+                                 />
+                                 <button 
+                                    onClick={addSectorToBranch}
+                                    disabled={!newSectorName.trim()}
+                                    className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-4 py-2 font-bold text-sm whitespace-nowrap disabled:opacity-50"
+                                 >
+                                    Adicionar Setor
+                                 </button>
+                              </div>
+                           </div>
+                           
+                           <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                 {(settings.branchSectors?.[selectedBranch] || []).length === 0 && (
+                                    <p className="col-span-full text-center text-gray-400 italic py-10">Nenhum setor cadastrado nesta filial.</p>
+                                 )}
+                                 {(settings.branchSectors?.[selectedBranch] || []).map(sector => (
+                                    <div key={sector} className="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
+                                       <span className="font-medium text-gray-700">{sector}</span>
+                                       <button 
+                                          onClick={() => removeSectorFromBranch(sector)}
+                                          className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                       >
+                                          Excluir
+                                       </button>
+                                    </div>
+                                 ))}
+                              </div>
+                           </div>
+                        </>
+                     ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-10">
+                           <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                           <p className="font-medium">Selecione uma filial para gerenciar seus setores.</p>
+                        </div>
+                     )}
+                  </div>
+               </div>
            </div>
+
 
            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
              <div className="flex justify-between items-center mb-4">

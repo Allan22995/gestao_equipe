@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES } from './types';
 import { dbService } from './services/storage'; 
@@ -20,7 +21,14 @@ import { generateUUID } from './utils/helpers';
 const ALL_PERMISSIONS = SYSTEM_PERMISSIONS.map(p => p.id);
 
 const DEFAULT_SETTINGS: SystemSettings = {
-  branches: ['Matriz', 'Filial Norte'],
+  branches: ['Matriz', 'Filial Norte', 'Fábrica', 'Centro de Distribuição'],
+  sectors: ['Administrativo', 'TI', 'RH', 'Comercial'], // Fallback
+  branchSectors: {
+    'Matriz': ['Administrativo', 'TI', 'RH', 'Comercial'],
+    'Filial Norte': ['Vendas', 'Estoque', 'Logística'],
+    'Fábrica': ['Produção', 'Manutenção', 'Qualidade'],
+    'Centro de Distribuição': ['Recebimento', 'Expedição', 'Transporte']
+  },
   roles: [
     { 
       name: 'Gerente', 
@@ -68,7 +76,6 @@ const DEFAULT_SETTINGS: SystemSettings = {
       permissions: ['dashboard:view', 'calendar:view', 'dashboard:view_phones', 'calendar:view_phones'] 
     }
   ],
-  sectors: ['Logística', 'TI', 'Vendas', 'RH'],
   accessProfiles: [
     { id: 'admin', name: 'admin', active: true },
     { id: 'colaborador', name: 'colaborador', active: true },
@@ -234,6 +241,11 @@ function App() {
 
              return { ...r, permissions: Array.from(new Set(newPerms)) };
           });
+
+          // Ensure branchSectors exists
+          if (!loadedSettings.branchSectors) {
+             loadedSettings.branchSectors = DEFAULT_SETTINGS.branchSectors;
+          }
 
           setSettings(loadedSettings);
         } else {
