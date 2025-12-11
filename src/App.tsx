@@ -1,0 +1,1 @@
+// Este arquivo deve ser removido. O App.tsx correto está na raiz do projeto.

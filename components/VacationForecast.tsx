@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { Collaborator, VacationRequest, VacationStatus, UserProfile } from '../types';
 import { generateUUID, formatDate } from '../utils/helpers';
@@ -14,7 +12,9 @@ interface VacationForecastProps {
   logAction: (action: string, entity: string, details: string, user: string) => void;
   currentUserProfile: UserProfile;
   currentUserName: string;
-  canEdit: boolean; // Permissão ACL
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
   canManageStatus: boolean; // Nova Permissão: Aprovar/Rejeitar
   currentUserAllowedSectors: string[]; // Novo: Filtro de setor
   userColabId: string | null;
@@ -27,7 +27,9 @@ const CalendarIcon = () => (
 );
 
 export const VacationForecast: React.FC<VacationForecastProps> = ({ 
-  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, canEdit, canManageStatus, currentUserAllowedSectors, userColabId
+  collaborators, requests, onAdd, onUpdate, onDelete, showToast, logAction, currentUserProfile, currentUserName, 
+  canCreate, canUpdate, canDelete, canManageStatus, 
+  currentUserAllowedSectors, userColabId
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -107,7 +109,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
        return req.status === 'nova_opcao';
     }
     
-    return canEdit; // Fallback para outras regras
+    return canUpdate; // Fallback para outras regras
   };
 
   const handleEdit = (req: VacationRequest) => {
@@ -127,7 +129,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
   };
 
   const handleDelete = (id: string, reqStatus: VacationStatus) => {
-    if (!canEdit) return;
+    if (!canDelete) return;
 
     // Regra de bloqueio para colaborador
     if (currentUserProfile === 'colaborador' && reqStatus !== 'nova_opcao') {
@@ -157,7 +159,6 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canEdit) return;
     
     if (!formData.collaboratorId) {
       showToast('Selecione um colaborador.', true);
@@ -172,6 +173,10 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
 
     if (!editingId) {
       // CRIAÇÃO
+      if (!canCreate) {
+          showToast('Você não tem permissão para criar previsões.', true);
+          return;
+      }
       // Se tiver permissão de gerenciar status, permite criar já aprovado, senão padrão 'pendente'
       const initialStatus = canManageStatus ? formData.status : 'pendente';
 
@@ -192,6 +197,11 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       resetForm();
     } else {
       // ATUALIZAÇÃO
+      if (!canUpdate) {
+          showToast('Você não tem permissão para editar previsões.', true);
+          return;
+      }
+
       let nextStatus = formData.status;
       let acceptedFlag = false;
 
@@ -241,7 +251,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
           )}
         </div>
 
-        {canEdit ? (
+        {(canCreate || (editingId && canUpdate)) ? (
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col md:col-span-2">
             <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador *</label>
@@ -369,42 +379,40 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
                   {r.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Atualizado por: {r.updatedBy}</div>}
                 </div>
                 
-                {canEdit && (
-                  <div className="flex gap-2 mt-3 md:mt-0">
-                    {/* Botão de Aceite para Colaborador */}
-                    {currentUserProfile === 'colaborador' && r.status === 'nova_opcao' && (
-                      <button 
-                         onClick={() => handleAcceptProposal(r)}
-                         className="text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm font-bold shadow-sm transition-colors flex items-center gap-1"
-                      >
-                         <span>✓</span> Aceitar
-                      </button>
-                    )}
+                <div className="flex gap-2 mt-3 md:mt-0">
+                  {/* Botão de Aceite para Colaborador */}
+                  {currentUserProfile === 'colaborador' && r.status === 'nova_opcao' && (
+                    <button 
+                        onClick={() => handleAcceptProposal(r)}
+                        className="text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm font-bold shadow-sm transition-colors flex items-center gap-1"
+                    >
+                        <span>✓</span> Aceitar
+                    </button>
+                  )}
 
-                    {/* Botões de Edição/Exclusão */}
-                    {canAction ? (
-                        <>
-                          <button 
-                            onClick={() => handleEdit(r)} 
-                            className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors"
-                          >
-                            {currentUserProfile === 'colaborador' && r.status === 'nova_opcao' ? 'Editar / Contrapor' : 'Editar'}
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(r.id, r.status)} 
-                            className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
-                          >
-                            Excluir
-                          </button>
-                        </>
-                    ) : (
-                        // Se não pode agir, mostra status para o colaborador
-                        currentUserProfile === 'colaborador' && r.status !== 'aprovado' && (
-                           <span className="text-xs text-gray-400 italic px-2 py-1 bg-gray-50 rounded">Aguardando Liderança...</span>
-                        )
-                    )}
-                  </div>
-                )}
+                  {/* Botões de Edição/Exclusão */}
+                  {canAction ? (
+                      <>
+                        <button 
+                          onClick={() => handleEdit(r)} 
+                          className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors"
+                        >
+                          {currentUserProfile === 'colaborador' && r.status === 'nova_opcao' ? 'Editar / Contrapor' : 'Editar'}
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(r.id, r.status)} 
+                          className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
+                        >
+                          Excluir
+                        </button>
+                      </>
+                  ) : (
+                      // Se não pode agir, mostra status para o colaborador
+                      currentUserProfile === 'colaborador' && r.status !== 'aprovado' && (
+                          <span className="text-xs text-gray-400 italic px-2 py-1 bg-gray-50 rounded">Aguardando Liderança...</span>
+                      )
+                  )}
+                </div>
               </div>
             );
           })}

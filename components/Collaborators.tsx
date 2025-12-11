@@ -45,23 +45,20 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     branch: '',
     role: '',
     sector: '',
-    leaderId: '', // Novo: Hierarquia
+    leaderId: '', 
     allowedSectors: [] as string[],
     login: '',
     shiftType: '',
     hasRotation: false,
     rotationGroup: '',
     rotationStartDate: '',
-    active: true, // Padrão Ativo
+    active: true,
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [isFixingNames, setIsFixingNames] = useState(false);
 
-  // Determine if editing is allowed for current selection
-  // If no selection, we are adding new (check canCreate)
-  // If selection, we are editing (check canUpdate)
   const isFormActive = showForm || editingId;
 
   const handleScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, value: any) => {
@@ -81,7 +78,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     }
   };
 
-  // Toggle sector in allowed list
   const toggleAllowedSector = (sector: string) => {
     setFormData(prev => {
       const current = prev.allowedSectors || [];
@@ -93,7 +89,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     });
   };
 
-  // Determine if the currently selected role requires sector restriction
   const selectedRoleConfig = settings.roles.find(r => r.name === formData.role);
   const isRoleRestricted = selectedRoleConfig ? !selectedRoleConfig.canViewAllSectors : false;
 
@@ -122,7 +117,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       branch: colab.branch,
       role: colab.role,
       sector: colab.sector || '',
-      leaderId: colab.leaderId || '', // Load leader
+      leaderId: colab.leaderId || '',
       allowedSectors: colab.allowedSectors || [],
       login: colab.login,
       shiftType: colab.shiftType,
@@ -139,7 +134,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         }
     });
     setSchedule(safeSchedule);
-    setSelectedTemplateId(''); // Reset selection on edit
+    setSelectedTemplateId('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -169,7 +164,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       showToast('Já existe um colaborador com este Login', true);
       return;
     }
-    // Check duplicate email
     if (formData.email) {
       const isDuplicateEmail = collaborators.some(c => c.email === formData.email && c.id !== editingId);
       if (isDuplicateEmail) {
@@ -178,26 +172,22 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       }
     }
 
-    // Validation for Phone (Not required for NOC)
     if (!formData.phone && !isNoc) {
        showToast('Telefone é obrigatório para este perfil.', true);
        return;
     }
 
-    // Validation for Schedule (Not required for NOC)
     const hasWorkDays = (Object.values(schedule) as DaySchedule[]).some(day => day.enabled && day.start && day.end);
     if (!hasWorkDays && !isNoc && formData.active) {
       showToast('Defina pelo menos um dia de trabalho com horários (ou inative o colaborador).', true);
       return;
     }
 
-    // Validation for Restricted Role
     if (isRoleRestricted && (!formData.allowedSectors || formData.allowedSectors.length === 0)) {
        showToast('Esta função exige que pelo menos um setor de visualização seja selecionado.', true);
        return;
     }
     
-    // Validation for Rotation
     if (formData.hasRotation) {
         if (!formData.rotationGroup) {
             showToast('Selecione o Grupo de Escala.', true);
@@ -209,14 +199,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         }
     }
 
-    // Clean up allowedSectors if role is not restricted (optional but good for data hygiene)
     const finalAllowedSectors = isRoleRestricted ? formData.allowedSectors : [];
     
-    // Clean up rotation group if hasRotation is false
     const finalRotationGroup = formData.hasRotation ? formData.rotationGroup : '';
     const finalRotationStart = formData.hasRotation ? formData.rotationStartDate : '';
 
-    // Standardize Name (Title Case)
     const standardizedName = formatTitleCase(formData.name);
 
     if (editingId) {
@@ -259,7 +246,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   };
 
   const handleFixAllNames = async () => {
-    if (!window.confirm('Isso irá padronizar a formatação dos nomes de TODOS os colaboradores (ex: "JOAO SILVA" para "Joao Silva"). Deseja continuar?')) {
+    if (!window.confirm('Isso irá padronizar a formatação dos nomes de TODOS os colaboradores. Deseja continuar?')) {
       return;
     }
     
@@ -268,15 +255,12 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     
     try {
       for (const colab of collaborators) {
-        // Skip check if user doesn't have permission to edit this specific user (sector restriction)
         if (currentUserAllowedSectors.length > 0) {
            if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) continue;
         }
 
         const formatted = formatTitleCase(colab.name);
         if (formatted !== colab.name) {
-          // Precisamos chamar onUpdate (que chama o Firebase)
-          // Em um app real, seria melhor um batch update, mas aqui usaremos a função existente
           await onUpdate({ ...colab, name: formatted });
           count++;
         }
@@ -296,7 +280,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
-  // --- LOGIC: PROFILE OPTIONS ---
   const profileOptions = React.useMemo(() => {
     let available = (settings.accessProfiles || [])
        .filter(p => p.active)
@@ -319,7 +302,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   }, [settings.accessProfiles, settings.roles, currentUserRole, currentUserProfile]);
 
-  // --- LOGIC: POTENTIAL LEADERS ---
   const potentialLeaders = useMemo(() => {
     const leadershipKeywords = ['líder', 'lider', 'supervisor', 'coordenador', 'gerente', 'diretor', 'head', 'encarregado', 'ceo', 'presidência'];
 
@@ -362,7 +344,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Formulário visível apenas se isFormActive */}
       {isFormActive && (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
@@ -375,8 +356,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         </div>
         
         <form onSubmit={handleSubmit}>
-          {/* ... (Conteúdo do formulário mantido igual, mas usando o estado showForm para controlar visibilidade) ... */}
-          {/* Status Toggle (Ativo/Inativo) - Exibir apenas na edição */}
           {editingId && (
             <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between animate-fadeIn">
               <span className="text-sm font-bold text-gray-700">Status do Colaborador</span>
@@ -396,19 +375,16 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {/* ID */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">ID (Matrícula) *</label>
               <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Ex: 001" value={formData.colabId} onChange={e => setFormData({...formData, colabId: e.target.value})} />
             </div>
 
-            {/* Login Rede */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Usuário de Rede/Login *</label>
               <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="nome.sobrenome" value={formData.login} onChange={e => setFormData({...formData, login: e.target.value})} />
             </div>
 
-            {/* Nome */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Nome Completo *</label>
               <input 
@@ -423,14 +399,12 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               <span className="text-[10px] text-gray-400">Padronizado automaticamente (Ex: Joao da Silva)</span>
             </div>
 
-            {/* Email (Vinculo Auth) */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">E-mail Google (Login) *</label>
               <input required type="email" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="email@gmail.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
               <span className="text-[10px] text-gray-400">Usado para autenticação no sistema</span>
             </div>
 
-            {/* Telefone */}
              <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Telefone (Celular)</label>
               <input 
@@ -443,7 +417,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               />
             </div>
 
-            {/* Outro Contato */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Outro Contato</label>
               <input 
@@ -455,7 +428,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               />
             </div>
 
-            {/* Perfil de Acesso */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Perfil de Acesso *</label>
               <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white capitalize" value={formData.profile} onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}>
@@ -466,7 +438,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </select>
             </div>
 
-            {/* Branch Select */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Filial *</label>
               <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value, leaderId: ''})}>
@@ -477,7 +448,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </select>
             </div>
 
-            {/* Role Select */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Função *</label>
               <select required className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
@@ -488,7 +458,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </select>
             </div>
 
-            {/* Sector / Squad Select */}
             <div className="flex flex-col md:col-span-2">
               <label className="text-xs font-semibold text-gray-600 mb-1">Setor Principal (Lotação)</label>
               <select 
@@ -503,7 +472,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </select>
             </div>
 
-            {/* Shift Type (Turno) */}
              <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Turno</label>
               <select className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" value={formData.shiftType} onChange={e => setFormData({...formData, shiftType: e.target.value})}>
@@ -516,7 +484,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </select>
             </div>
 
-            {/* Leader Select (Hierarquia) */}
             <div className="flex flex-col md:col-span-1">
               <label className="text-xs font-semibold text-gray-600 mb-1">Líder Imediato</label>
               <select 
@@ -537,7 +504,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </span>
             </div>
             
-             {/* Permissões de Visualização (Se a função for restrita) */}
              {isRoleRestricted && (
                 <div className="md:col-span-3 bg-gray-50 p-4 rounded-lg border border-gray-200 animate-fadeIn">
                    <div className="flex justify-between items-start mb-2">
@@ -585,7 +551,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
           <div className="border-t border-gray-100 pt-6">
             <h3 className="text-sm font-bold text-gray-800 mb-4">Jornada e Escala</h3>
             
-            {/* ESCALA DE REVEZAMENTO - SECTION */}
             <div className="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
                <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-3">
@@ -633,7 +598,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                </div>
             </div>
 
-            {/* Template Selector */}
             {scheduleTemplates.length > 0 && (
               <div className="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-3">
                  <span className="text-xs font-bold text-blue-800">Carregar Modelo:</span>
@@ -730,7 +694,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       </div>
       )}
 
-      {/* Lista de Colaboradores */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
            <div className="flex items-center gap-4">

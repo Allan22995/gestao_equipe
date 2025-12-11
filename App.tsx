@@ -163,7 +163,7 @@ function App() {
            if (roleConfig && roleConfig.permissions) {
               setCurrentUserPermissions(roleConfig.permissions);
            } else {
-              // Permissões padrão para legados
+              // Permissões padrão para legados/migração
               const defaults = [
                  'dashboard:view', 'calendar:view', 'comms:view',
                  'events:view', 'events:create', // pode solicitar
@@ -290,7 +290,6 @@ function App() {
     : [userBranch];
 
   // --- TAB CONTROL LOGIC ---
-  // Map old tab IDs to new permission modules check
   const allTabs: {id: TabType, label: string, icon: string, requiredPerm: string}[] = [
     { id: 'calendario', label: 'Calendário', icon: '📆', requiredPerm: 'calendar:view' },
     { id: 'dashboard', label: 'Dashboard', icon: '📊', requiredPerm: 'dashboard:view' },

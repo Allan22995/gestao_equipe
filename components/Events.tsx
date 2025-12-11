@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
@@ -13,8 +11,10 @@ interface EventsProps {
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
   settings: SystemSettings;
-  canEdit: boolean; // Permissão ACL
-  currentUserAllowedSectors: string[]; // Novo: Filtro de setor
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  currentUserAllowedSectors: string[];
   currentUserProfile: UserProfile;
   userColabId: string | null;
 }
@@ -26,7 +26,9 @@ const CalendarIcon = () => (
 );
 
 export const Events: React.FC<EventsProps> = ({ 
-  collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit, currentUserAllowedSectors, currentUserProfile, userColabId
+  collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, 
+  canCreate, canUpdate, canDelete, 
+  currentUserAllowedSectors, currentUserProfile, userColabId
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -132,7 +134,7 @@ export const Events: React.FC<EventsProps> = ({
   };
 
   const handleEdit = (evt: EventRecord) => {
-    if (!canEdit) return;
+    if (!canUpdate) return;
 
     // Regras de Bloqueio para Colaborador
     if (!isManager) {
@@ -232,6 +234,10 @@ export const Events: React.FC<EventsProps> = ({
     const user = isManager ? 'Gestor/Admin' : (getColabName(userColabId || '') || 'Colaborador');
 
     if (!editingId) {
+      if (!canCreate) {
+         showToast('Você não tem permissão para criar eventos.', true);
+         return;
+      }
       const newEvent: EventRecord = {
         id: generateUUID(),
         collaboratorId: finalColabId,
@@ -249,6 +255,10 @@ export const Events: React.FC<EventsProps> = ({
       showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
       resetForm();
     } else {
+      if (!canUpdate) {
+         showToast('Você não tem permissão para editar eventos.', true);
+         return;
+      }
       onUpdate({
         id: editingId,
         collaboratorId: finalColabId,
@@ -272,7 +282,7 @@ export const Events: React.FC<EventsProps> = ({
   };
 
   const handleDelete = (id: string, status?: EventStatus) => {
-    if (!canEdit) return;
+    if (!canDelete) return;
     
     // Regra: Colaborador não exclui evento Aprovado
     if (!isManager && (status === 'aprovado' || !status)) { // !status assume aprovado (legado)
@@ -304,7 +314,7 @@ export const Events: React.FC<EventsProps> = ({
 
   return (
     <div className="space-y-8">
-      {canEdit ? (
+      {(canCreate || (editingId && canUpdate)) ? (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">
@@ -478,11 +488,11 @@ export const Events: React.FC<EventsProps> = ({
                     {e.observation && <div className="text-xs text-gray-500 italic mt-1 bg-white/50 p-1 rounded inline-block">Obs: {e.observation}</div>}
                     {e.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Modificado por: {e.updatedBy}</div>}
                 </div>
-                {canEdit && (
+                
                 <div className="flex gap-2 mt-3 md:mt-0">
                     
                     {/* Botão Aceitar para Colaborador */}
-                    {!isManager && evtStatus === 'nova_opcao' && (
+                    {!isManager && evtStatus === 'nova_opcao' && canUpdate && (
                         <button 
                             onClick={() => handleAcceptProposal(e)}
                             className="text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm font-bold shadow-sm transition-colors flex items-center gap-1"
@@ -492,20 +502,20 @@ export const Events: React.FC<EventsProps> = ({
                     )}
 
                     {/* Edit Button Logic */}
-                    {(isManager || evtStatus === 'pendente' || evtStatus === 'nova_opcao') && (
+                    {(canUpdate) && (isManager || evtStatus === 'pendente' || evtStatus === 'nova_opcao') && (
                         <button onClick={() => handleEdit(e)} className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors">
                             {!isManager && evtStatus === 'nova_opcao' ? 'Contrapor / Editar' : 'Editar'}
                         </button>
                     )}
 
                     {/* Delete Button Logic */}
-                    {(isManager || evtStatus !== 'aprovado') && (
+                    {(canDelete) && (isManager || evtStatus !== 'aprovado') && (
                         <button onClick={() => handleDelete(e.id, e.status)} className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors">
                            {(!isManager && evtStatus !== 'aprovado') ? 'Cancelar' : 'Excluir'}
                         </button>
                     )}
                 </div>
-                )}
+                
                 </div>
             );
           })}

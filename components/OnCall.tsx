@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { Collaborator, OnCallRecord, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatDate, promptForUser } from '../utils/helpers';
@@ -13,7 +11,9 @@ interface OnCallProps {
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
   settings: SystemSettings;
-  canEdit: boolean; // Permissão ACL
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
   currentUserProfile: UserProfile;
   userColabId: string | null;
 }
@@ -24,7 +24,11 @@ const CalendarIcon = () => (
   </svg>
 );
 
-export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, onUpdate, onDelete, showToast, logAction, settings, canEdit, currentUserProfile, userColabId }) => {
+export const OnCall: React.FC<OnCallProps> = ({ 
+  collaborators, onCalls, onAdd, onUpdate, onDelete, showToast, logAction, settings, 
+  canCreate, canUpdate, canDelete,
+  currentUserProfile, userColabId 
+}) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     collaboratorId: '',
@@ -80,7 +84,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
   };
 
   const handleEdit = (record: OnCallRecord) => {
-    if (!canEdit) return;
+    if (!canUpdate) return;
     setEditingId(record.id);
     setFormData({
       collaboratorId: record.collaboratorId,
@@ -97,6 +101,10 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
     e.preventDefault();
     
     if (!editingId) {
+      if (!canCreate) {
+         showToast('Você não tem permissão para criar plantões.', true);
+         return;
+      }
       const newRecord: OnCallRecord = {
         id: generateUUID(),
         ...formData,
@@ -106,6 +114,10 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
       showToast('Plantão registrado!');
       resetForm();
     } else {
+      if (!canUpdate) {
+         showToast('Você não tem permissão para editar plantões.', true);
+         return;
+      }
       const user = promptForUser('Editar Plantão');
       if (!user) return;
 
@@ -123,7 +135,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
   };
 
   const handleDelete = (id: string) => {
-    if (!canEdit) return;
+    if (!canDelete) return;
     const user = promptForUser('Excluir Plantão');
     if (!user) return;
 
@@ -180,7 +192,7 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
           </div>
         </div>
 
-        {canEdit ? (
+        {(canCreate || (editingId && canUpdate)) ? (
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
            <div className="flex flex-col md:col-span-2">
             <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador *</label>
@@ -290,12 +302,16 @@ export const OnCall: React.FC<OnCallProps> = ({ collaborators, onCalls, onAdd, o
                   {o.observation && <div className="text-xs text-gray-400 italic mt-1">{o.observation}</div>}
                   {o.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Modificado por: {o.updatedBy}</div>}
                </div>
-               {canEdit && (
+               
                <div className="flex gap-2 mt-3 md:mt-0">
-                  <button onClick={() => handleEdit(o)} className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors">Editar</button>
-                  <button onClick={() => handleDelete(o.id)} className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors">Excluir</button>
+                  {canUpdate && (
+                      <button onClick={() => handleEdit(o)} className="text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-sm font-medium transition-colors">Editar</button>
+                  )}
+                  {canDelete && (
+                      <button onClick={() => handleDelete(o.id)} className="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors">Excluir</button>
+                  )}
                </div>
-               )}
+               
              </div>
            ))}
         </div>

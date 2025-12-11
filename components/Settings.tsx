@@ -11,7 +11,6 @@ interface SettingsProps {
   hasPermission: (perm: string) => boolean;
 }
 
-// Initial state for schedule logic
 const initialSchedule: Schedule = {
   segunda: { enabled: false, start: '', end: '', startsPreviousDay: false },
   terca: { enabled: false, start: '', end: '', startsPreviousDay: false },
@@ -22,7 +21,6 @@ const initialSchedule: Schedule = {
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
 };
 
-// --- COMPONENTE INTERNO: LISTAS SIMPLES COM EDIÇÃO ---
 const ManageList = ({ 
   title, items, onAdd, onEdit, onRemove, saving, removingId, placeholder 
 }: {
@@ -39,7 +37,6 @@ const ManageList = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // Edit State
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
@@ -68,7 +65,6 @@ const ManageList = ({
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h2 className="text-lg font-bold text-gray-800 mb-4">{title}</h2>
       
-      {/* Input de Adição */}
       <div className="flex gap-2 mb-4">
         <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder={placeholder} value={newItem} onChange={e => setNewItem(e.target.value)} disabled={saving === 'saving'} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
         <button onClick={handleAdd} disabled={saving === 'saving' || !newItem.trim()} className={`${saving === 'success' ? 'bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg transition-all font-semibold min-w-[80px]`}>{saving === 'saving' ? '...' : saving === 'success' ? '✓' : 'Add'}</button>
@@ -124,57 +120,45 @@ const ManageList = ({
 };
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
-  // Determine tab visibility based on permissions
   const showGeral = hasPermission('settings:manage_general');
   const showAcesso = hasPermission('settings:manage_access');
-  const showSistema = hasPermission('settings:view'); // Fallback basic
+  const showSistema = hasPermission('settings:view'); 
 
-  // Tabs Internas (Initialize based on permissions)
   const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'sistema'>(() => {
     if (showGeral) return 'geral';
     if (showAcesso) return 'acesso';
     return 'sistema';
   });
 
-  // States Geral
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
 
-  // States Eventos
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
   
-  // States Profiles
   const [newProfileName, setNewProfileName] = useState('');
 
-  // States Jornada (Agora dentro de Geral)
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState('');
   const [templateSchedule, setTemplateSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   
-  // States Roles (Basic list management)
   const [newRoleName, setNewRoleName] = useState('');
   const [editingRoleName, setEditingRoleName] = useState<string | null>(null);
   const [editRoleNameInput, setEditRoleNameInput] = useState('');
   
-  // NEW: Permission Matrix State
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
 
-  // System Message State
   const [sysMsgActive, setSysMsgActive] = useState(settings.systemMessage?.active || false);
   const [sysMsgLevel, setSysMsgLevel] = useState<'info' | 'warning' | 'error'>(settings.systemMessage?.level || 'info');
   const [sysMsgContent, setSysMsgContent] = useState(settings.systemMessage?.message || '');
 
-  // Rotation Edit States
   const [newRotationId, setNewRotationId] = useState('');
 
-  // Loading States
   const [savingState, setSavingState] = useState<Record<string, 'idle' | 'saving' | 'success'>>({});
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => { if (settings.spreadsheetUrl) setSpreadsheetUrl(settings.spreadsheetUrl); }, [settings.spreadsheetUrl]);
   
-  // Sync System Message state when settings change remotely
   useEffect(() => {
     if (settings.systemMessage) {
       setSysMsgActive(settings.systemMessage.active);
@@ -194,7 +178,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     try { await setSettings(newSettings); setSaving(key, 'success'); if (callback) callback(); } catch (e) { console.error(e); setSaving(key, 'idle'); }
   };
 
-  // --- LOGIC: BRANCHES, SECTORS ---
   const updateList = (listKey: keyof SystemSettings, oldVal: string, newVal: string, saveKey: string) => {
       const currentList = settings[listKey] as string[];
       if (currentList.includes(newVal)) {
@@ -213,7 +196,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const editSector = (oldVal: string, newVal: string) => updateList('sectors', oldVal, newVal, 'sector');
   const removeSector = (v: string) => { if (window.confirm(`Excluir ${v}?`)) saveSettings({ ...settings, sectors: (settings.sectors || []).filter(s => s !== v) }, 'sector'); };
   
-  // --- LOGIC: SHIFT ROTATIONS (ESCALAS) ---
   const addRotation = () => {
     if (!newRotationId.trim()) { showToast('Defina um nome para a escala (ex: A, B).', true); return; }
     if (settings.shiftRotations.some(r => r.id.toLowerCase() === newRotationId.trim().toLowerCase())) { showToast('Já existe uma escala com este ID.', true); return; }
@@ -225,7 +207,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       if (window.confirm(`Excluir Escala ${id}?`)) saveSettings({ ...settings, shiftRotations: settings.shiftRotations.filter(r => r.id !== id) }, 'rotation');
   };
 
-  // --- LOGIC: PROFILES (OBJECTS) ---
   const addProfile = () => { 
       const name = newProfileName.trim().toLowerCase();
       if (!name) return;
@@ -244,7 +225,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       if (window.confirm(`Excluir perfil?`)) saveSettings({ ...settings, accessProfiles: (settings.accessProfiles || []).filter(p => p.id !== id) }, 'profile'); 
   };
 
-  // --- LOGIC: ROLES & ACL ---
   const addRole = () => {
     if (!newRoleName.trim()) return;
     if (settings.roles.some(r => r.name.toLowerCase() === newRoleName.toLowerCase())) { showToast('Função já existe', true); return; }
@@ -265,7 +245,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     if (window.confirm(`Excluir função ${name}?`)) saveSettings({ ...settings, roles: settings.roles.filter(r => r.name !== name) }, 'role');
   };
 
-  // --- LOGIC: PERMISSION TOGGLING (GRANULAR) ---
   const togglePermission = (roleName: string, permId: string) => {
      const role = settings.roles.find(r => r.name === roleName);
      if (!role) return;
@@ -281,7 +260,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
      saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
   };
 
-  // --- LOGIC: EVENTS ---
   const saveEvent = () => {
     if (!newEventLabel.trim()) return;
     if (editingEventId) {
@@ -297,7 +275,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const cancelEditEvent = () => { setEditingEventId(null); setNewEventLabel(''); setNewEventBehavior('neutral'); };
   const removeEvent = (id: string) => { if (window.confirm('Excluir?')) saveSettings({ ...settings, eventTypes: settings.eventTypes.filter(e => e.id !== id) }, 'event'); };
 
-  // --- LOGIC: TEMPLATES ---
   const saveTemplate = () => {
     if (!templateName.trim()) { showToast('Nome obrigatório', true); return; }
     if (editingTemplateId) {
@@ -313,19 +290,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const cancelEditTemplate = () => { setEditingTemplateId(null); setTemplateName(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); };
   const removeTemplate = (id: string) => { if (window.confirm('Excluir modelo?')) saveSettings({ ...settings, scheduleTemplates: (settings.scheduleTemplates || []).filter(t => t.id !== id) }, 'template'); };
 
-  // --- LOGIC: SYSTEM MESSAGE ---
   const saveSystemMessage = () => { saveSettings({ ...settings, systemMessage: { active: sysMsgActive, level: sysMsgLevel, message: sysMsgContent } }, 'system_msg'); };
 
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
-  // Current Selected Module for Matrix
   const currentModuleDef = PERMISSION_MODULES.find(m => m.id === selectedModule);
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Configurações do Sistema</h1>
       
-      {/* SUB-TABS NAVIGATION */}
       <div className="flex border-b border-gray-200 gap-1 overflow-x-auto">
         {showGeral && (
           <button onClick={() => setActiveSubTab('geral')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeSubTab === 'geral' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -344,11 +318,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         )}
       </div>
 
-      {/* --- TAB: GERAL & CADASTROS --- */}
       {activeSubTab === 'geral' && showGeral && (
         <div className="animate-fadeIn space-y-8">
            
-           {/* Integrações */}
            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
              <h2 className="text-lg font-bold text-gray-800 mb-4">Integrações (Links Externos)</h2>
              <div className="flex flex-col gap-2">
@@ -360,13 +332,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            </div>
 
-           {/* Filiais e Setores */}
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <ManageList title="Filiais" items={settings.branches} onAdd={addBranch} onEdit={editBranch} onRemove={removeBranch} saving={savingState['branch'] || 'idle'} removingId={removingId} placeholder="Nova Filial..." />
                 <ManageList title="Setores / Squads" items={settings.sectors || []} onAdd={addSector} onEdit={editSector} onRemove={removeSector} saving={savingState['sector'] || 'idle'} removingId={removingId} placeholder="Novo Setor..." />
            </div>
 
-           {/* Tipos de Evento */}
            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
              <div className="flex justify-between items-center mb-4">
                  <h2 className="text-lg font-bold text-gray-800">Tipos de Evento</h2>
@@ -398,7 +368,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            </div>
 
-            {/* SEÇÃO JORNADA DE TRABALHO CONSOLIDADA */}
             <>
               <div className="border-t border-gray-200 my-8"></div>
               <h2 className="text-xl font-bold text-gray-800 mb-6">Modelos de Jornada & Escalas</h2>
@@ -436,7 +405,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Lista de Modelos Salvos */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos de Jornada Salvos</h2>
                   <div className="flex flex-col gap-2">
@@ -453,12 +421,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   </div>
                 </div>
                 
-                {/* Lista de Escalas (A, B, C...) Simplificada */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h2 className="text-lg font-bold text-gray-800 mb-2">Escalas de Revezamento</h2>
                   <p className="text-sm text-gray-500 mb-4">Cadastre os nomes das escalas disponíveis para seleção (Ex: Escala A, Azul, Impar).</p>
                   
-                  {/* Add Rotation Form */}
                   <div className="bg-indigo-50 p-4 rounded-lg mb-4 border border-indigo-100">
                       <div className="flex gap-2">
                          <input 
@@ -472,7 +438,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                       </div>
                   </div>
 
-                  {/* List of Rotations */}
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
                       {(settings.shiftRotations || []).map(r => (
                         <div key={r.id} className="p-3 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
@@ -492,13 +457,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         </div>
       )}
 
-      {/* --- TAB: CONTROLE DE ACESSO (Redesenhada) --- */}
       {activeSubTab === 'acesso' && showAcesso && (
         <div className="animate-fadeIn space-y-8">
            
-           {/* Section 1: Manage Roles & Profiles */}
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* ROLES MANAGEMENT */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-bold text-gray-800 mb-2">Funções (Roles)</h2>
                     <p className="text-sm text-gray-500 mb-4">Crie grupos para definir permissões.</p>
@@ -531,7 +493,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                     </div>
                 </div>
 
-                {/* PROFILES MANAGEMENT */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-bold text-gray-800 mb-2">Perfis de Sistema</h2>
                     <p className="text-sm text-gray-500 mb-4">Níveis de acesso técnico.</p>
@@ -564,7 +525,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                 </div>
            </div>
 
-           {/* Section 2: MODULE CARDS (Visual Grid) */}
            <div className="mt-8">
                <h2 className="text-xl font-bold text-gray-800 mb-4">Gerenciar Permissões por Tela</h2>
                <p className="text-gray-600 mb-6">Selecione um módulo para configurar quem pode ver, criar, editar ou excluir.</p>
@@ -587,7 +547,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                </div>
            </div>
 
-           {/* PERMISSION MATRIX MODAL */}
            <Modal 
              isOpen={!!selectedModule} 
              onClose={() => setSelectedModule(null)} 
@@ -651,7 +610,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         </div>
       )}
       
-      {/* --- TAB: AVISOS DO SISTEMA --- */}
       {activeSubTab === 'sistema' && showSistema && (
         <div className="animate-fadeIn">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
