@@ -1,16 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { 
-  getAuth, 
-  GoogleAuthProvider, 
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signOut,
-  onAuthStateChanged
-} from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 
 // No Vite, as variáveis de ambiente DEVEM começar com VITE_
 const firebaseConfig = {
@@ -36,16 +26,14 @@ console.groupEnd();
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+export const auth = firebaseAuth.getAuth(app);
+export const googleProvider = new firebaseAuth.GoogleAuthProvider();
 
-export { 
-  signInWithPopup, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  sendPasswordResetEmail,
-  signOut,
-  onAuthStateChanged
-};
+export const signInWithPopup = firebaseAuth.signInWithPopup;
+export const signInWithEmailAndPassword = firebaseAuth.signInWithEmailAndPassword;
+export const createUserWithEmailAndPassword = firebaseAuth.createUserWithEmailAndPassword;
+export const sendPasswordResetEmail = firebaseAuth.sendPasswordResetEmail;
+export const signOut = firebaseAuth.signOut;
+export const onAuthStateChanged = firebaseAuth.onAuthStateChanged;
 
-export type { User };
+export type User = firebaseAuth.User;

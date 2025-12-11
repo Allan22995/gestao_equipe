@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
 
@@ -35,6 +35,13 @@ export const Events: React.FC<EventsProps> = ({
   // Helper para identificar se é um perfil de liderança/admin
   const isManager = currentUserProfile !== 'colaborador';
 
+  // State para Lançamento em Lote
+  const [isMultiMode, setIsMultiMode] = useState(false);
+  const [multiSelectedIds, setMultiSelectedIds] = useState<string[]>([]);
+  const [multiSearch, setMultiSearch] = useState('');
+  const [isMultiDropdownOpen, setIsMultiDropdownOpen] = useState(false);
+  const multiDropdownRef = useRef<HTMLDivElement>(null);
+
   const [formData, setFormData] = useState({
     collaboratorId: '',
     type: '',
@@ -44,11 +51,21 @@ export const Events: React.FC<EventsProps> = ({
     status: 'pendente' as EventStatus
   });
 
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (multiDropdownRef.current && !multiDropdownRef.current.contains(event.target as Node)) {
+        setIsMultiDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Efeito para garantir que, se for colaborador, o formulário já nasça preenchido corretamente
   useEffect(() => {
     if (!isManager && userColabId && !editingId) {
       setFormData(prev => {
-        // Só atualiza se estiver diferente para evitar loop ou re-render desnecessário
         if (prev.collaboratorId !== userColabId || prev.type !== 'folga') {
           return {
             ...prev,
@@ -61,7 +78,7 @@ export const Events: React.FC<EventsProps> = ({
     }
   }, [isManager, userColabId, editingId]);
 
-  // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
+  // Filtrar colaboradores ativos primeiro
   const activeCollaborators = useMemo(() => {
      return collaborators.filter(c => c.active !== false);
   }, [collaborators]);
@@ -81,6 +98,14 @@ export const Events: React.FC<EventsProps> = ({
      
      return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [activeCollaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
+
+  // Filter for Multi Select Dropdown
+  const filteredMultiOptions = useMemo(() => {
+      return allowedCollaborators.filter(c => 
+          c.name.toLowerCase().includes(multiSearch.toLowerCase()) ||
+          c.role.toLowerCase().includes(multiSearch.toLowerCase())
+      );
+  }, [allowedCollaborators, multiSearch]);
 
   // Filter Events History and Sort by Date Descending
   const allowedEvents = useMemo(() => {
@@ -109,11 +134,9 @@ export const Events: React.FC<EventsProps> = ({
          const dateA = a.startDate || '';
          const dateB = b.startDate || '';
          
-         // Comparação primária: Data de Início (Descendente)
          const dateComparison = dateB.localeCompare(dateA);
          if (dateComparison !== 0) return dateComparison;
 
-         // Comparação secundária: Data de Criação (Descendente) para desempate
          const createdA = a.createdAt || '';
          const createdB = b.createdAt || '';
          return createdB.localeCompare(createdA);
@@ -123,6 +146,8 @@ export const Events: React.FC<EventsProps> = ({
 
   const resetForm = () => {
     setEditingId(null);
+    setIsMultiMode(false);
+    setMultiSelectedIds([]);
     setFormData({
       collaboratorId: (!isManager && userColabId) ? userColabId : '',
       type: (!isManager) ? 'folga' : '', // Default to Folga for collaborator
@@ -136,10 +161,7 @@ export const Events: React.FC<EventsProps> = ({
   const handleEdit = (evt: EventRecord) => {
     if (!canUpdate) return;
 
-    // Regras de Bloqueio para Colaborador
     if (!isManager) {
-        // Colaborador só pode editar se for 'nova_opcao' ou 'pendente' (para corrigir)
-        // Se estiver aprovado, não pode.
         if (evt.status === 'aprovado') {
             showToast('Eventos aprovados não podem ser editados.', true);
             return;
@@ -147,13 +169,14 @@ export const Events: React.FC<EventsProps> = ({
     }
 
     setEditingId(evt.id);
+    setIsMultiMode(false); // Disable multi mode on edit
     setFormData({
       collaboratorId: evt.collaboratorId,
       type: evt.type,
       startDate: evt.startDate,
       endDate: evt.endDate,
       observation: evt.observation,
-      status: evt.status || 'aprovado' // Legacy events are treated as approved
+      status: evt.status || 'aprovado'
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -180,12 +203,10 @@ export const Events: React.FC<EventsProps> = ({
   };
 
   const handleAcceptProposal = (evt: EventRecord) => {
-     // User accepts "Nova Opção"
      const user = getColabName(userColabId || '') || 'Usuário';
-     
      onUpdate({
         ...evt,
-        status: 'pendente', // Volta para pendente para aprovação final
+        status: 'pendente',
         collaboratorAcceptedProposal: true,
         updatedBy: user,
         lastUpdatedAt: new Date().toISOString()
@@ -195,97 +216,153 @@ export const Events: React.FC<EventsProps> = ({
      showToast('Proposta aceita! Aguardando confirmação final.');
   };
 
+  const toggleMultiSelect = (id: string) => {
+      setMultiSelectedIds(prev => 
+          prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+      );
+  };
+
+  const handleSelectAll = () => {
+      if (multiSelectedIds.length === filteredMultiOptions.length) {
+          setMultiSelectedIds([]);
+      } else {
+          setMultiSelectedIds(filteredMultiOptions.map(c => c.id));
+      }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Se for colaborador, garante que o tipo é folga e id é ele mesmo, mesmo que o form tenha falhado visualmente
-    let finalType = formData.type;
-    let finalColabId = formData.collaboratorId;
-    
-    if (!isManager) {
-        if (!finalType) finalType = 'folga';
-        if (!finalColabId && userColabId) finalColabId = userColabId;
-    }
-
-    if (!finalType) {
-        showToast("Selecione o tipo de evento.", true);
-        return;
-    }
-    if (!finalColabId) {
-        showToast("Erro ao identificar colaborador.", true);
-        return;
-    }
-
-    // Se for colaborador, força status 'pendente' (exceto se estiver editando status específico)
-    // Na verdade, se colaborador edita, volta para 'pendente' (nova solicitação/correção)
-    let finalStatus: EventStatus = formData.status;
-    let acceptedFlag = false;
-
-    if (!isManager) {
-        finalStatus = 'pendente'; // Sempre volta para pendente se o colaborador mexe
-        acceptedFlag = false; // Reseta flag se ele editou
-    } else {
-        // Se for manager editando, mantém o status selecionado
-        // Se manager muda para 'nova_opcao', reseta flag de aceite
-        if (formData.status === 'nova_opcao') acceptedFlag = false;
-    }
-
-    const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
     const user = isManager ? 'Gestor/Admin' : (getColabName(userColabId || '') || 'Colaborador');
-
+    
+    // --- LÓGICA DE CRIAÇÃO (ADD) ---
     if (!editingId) {
-      if (!canCreate) {
-         showToast('Você não tem permissão para criar eventos.', true);
-         return;
-      }
-      const newEvent: EventRecord = {
-        id: generateUUID(),
-        collaboratorId: finalColabId,
-        type: finalType,
-        typeLabel: label,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        observation: formData.observation,
-        daysGained: gained,
-        daysUsed: used,
-        status: finalStatus,
-        createdAt: new Date().toISOString()
-      };
-      onAdd(newEvent);
-      showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
-      resetForm();
-    } else {
-      if (!canUpdate) {
-         showToast('Você não tem permissão para editar eventos.', true);
-         return;
-      }
-      onUpdate({
-        id: editingId,
-        collaboratorId: finalColabId,
-        type: finalType,
-        typeLabel: label,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        observation: formData.observation,
-        daysGained: gained,
-        daysUsed: used,
-        status: finalStatus,
-        collaboratorAcceptedProposal: acceptedFlag,
-        updatedBy: user,
-        lastUpdatedAt: new Date().toISOString()
-      } as EventRecord);
+        if (!canCreate) {
+            showToast('Você não tem permissão para criar eventos.', true);
+            return;
+        }
 
-      logAction('update', 'evento', `Evento ID ${editingId} editado. Status: ${finalStatus}`, user);
-      showToast('Evento atualizado!');
-      resetForm();
+        let finalType = formData.type;
+        if (!isManager) finalType = 'folga';
+
+        if (!finalType) {
+            showToast("Selecione o tipo de evento.", true);
+            return;
+        }
+
+        // --- LOTE (MULTI) ---
+        if (isMultiMode && isManager) {
+            if (multiSelectedIds.length === 0) {
+                showToast("Selecione pelo menos um colaborador.", true);
+                return;
+            }
+
+            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+            let count = 0;
+
+            multiSelectedIds.forEach(colId => {
+                const newEvent: EventRecord = {
+                    id: generateUUID(),
+                    collaboratorId: colId,
+                    type: finalType,
+                    typeLabel: label,
+                    startDate: formData.startDate,
+                    endDate: formData.endDate,
+                    observation: formData.observation,
+                    daysGained: gained,
+                    daysUsed: used,
+                    status: formData.status, // Manager defines status
+                    createdAt: new Date().toISOString()
+                };
+                onAdd(newEvent);
+                count++;
+            });
+
+            logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${label}`, user);
+            showToast(`${count} eventos registrados com sucesso!`);
+            resetForm();
+            return;
+        }
+
+        // --- INDIVIDUAL (SINGLE) ---
+        let finalColabId = formData.collaboratorId;
+        if (!isManager && userColabId) finalColabId = userColabId;
+
+        if (!finalColabId) {
+            showToast("Selecione o colaborador.", true);
+            return;
+        }
+
+        let finalStatus: EventStatus = formData.status;
+        if (!isManager) finalStatus = 'pendente';
+
+        const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+
+        const newEvent: EventRecord = {
+            id: generateUUID(),
+            collaboratorId: finalColabId,
+            type: finalType,
+            typeLabel: label,
+            startDate: formData.startDate,
+            endDate: formData.endDate,
+            observation: formData.observation,
+            daysGained: gained,
+            daysUsed: used,
+            status: finalStatus,
+            createdAt: new Date().toISOString()
+        };
+        onAdd(newEvent);
+        showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
+        resetForm();
+
+    } else {
+        // --- EDIÇÃO (UPDATE) ---
+        if (!canUpdate) {
+            showToast('Você não tem permissão para editar eventos.', true);
+            return;
+        }
+
+        let finalType = formData.type;
+        if (!isManager && !finalType) finalType = 'folga';
+
+        let finalStatus: EventStatus = formData.status;
+        let acceptedFlag = false;
+
+        if (!isManager) {
+            finalStatus = 'pendente'; 
+            acceptedFlag = false; 
+        } else {
+            if (formData.status === 'nova_opcao') acceptedFlag = false;
+        }
+
+        const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+
+        onUpdate({
+            id: editingId,
+            collaboratorId: formData.collaboratorId,
+            type: finalType,
+            typeLabel: label,
+            startDate: formData.startDate,
+            endDate: formData.endDate,
+            observation: formData.observation,
+            daysGained: gained,
+            daysUsed: used,
+            status: finalStatus,
+            collaboratorAcceptedProposal: acceptedFlag,
+            updatedBy: user,
+            lastUpdatedAt: new Date().toISOString()
+        } as EventRecord);
+
+        logAction('update', 'evento', `Evento ID ${editingId} editado. Status: ${finalStatus}`, user);
+        showToast('Evento atualizado!');
+        resetForm();
     }
   };
 
   const handleDelete = (id: string, status?: EventStatus) => {
     if (!canDelete) return;
     
-    // Regra: Colaborador não exclui evento Aprovado
-    if (!isManager && (status === 'aprovado' || !status)) { // !status assume aprovado (legado)
+    if (!isManager && (status === 'aprovado' || !status)) { 
          showToast('Você não pode excluir um evento já aprovado.', true);
          return;
     }
@@ -317,9 +394,25 @@ export const Events: React.FC<EventsProps> = ({
       {(canCreate || (editingId && canUpdate)) ? (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">
-            {editingId ? 'Editar Evento / Solicitação' : (isManager ? 'Registrar Evento' : 'Solicitar Folga')}
-          </h2>
+          <div className="flex flex-col">
+             <h2 className="text-xl font-bold text-gray-800">
+               {editingId ? 'Editar Evento / Solicitação' : (isManager ? 'Registrar Evento' : 'Solicitar Folga')}
+             </h2>
+             {isManager && !editingId && (
+                <div className="mt-2 flex items-center gap-3">
+                   <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={isMultiMode} 
+                        onChange={e => setIsMultiMode(e.target.checked)} 
+                      />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                      <span className="ml-2 text-xs font-bold text-gray-600">Lançamento em Lote (Múltiplos)</span>
+                   </label>
+                </div>
+             )}
+          </div>
           {editingId && (
             <button onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700 underline">
               Cancelar Edição
@@ -329,19 +422,83 @@ export const Events: React.FC<EventsProps> = ({
         
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col">
-            <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador *</label>
-            <select
-              required
-              className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100"
-              value={formData.collaboratorId}
-              onChange={e => setFormData({...formData, collaboratorId: e.target.value})}
-              disabled={!!editingId || !isManager} // Colaborador não muda o nome, e na edição ninguém muda o nome
-            >
-              <option value="">Selecione...</option>
-              {allowedCollaborators.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador(es) *</label>
+            
+            {/* SINGLE SELECT MODE */}
+            {!isMultiMode && (
+                <select
+                required
+                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100"
+                value={formData.collaboratorId}
+                onChange={e => setFormData({...formData, collaboratorId: e.target.value})}
+                disabled={!!editingId || !isManager}
+                >
+                <option value="">Selecione...</option>
+                {allowedCollaborators.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+                </select>
+            )}
+
+            {/* MULTI SELECT MODE */}
+            {isMultiMode && (
+                <div className="relative" ref={multiDropdownRef}>
+                    <div 
+                      onClick={() => setIsMultiDropdownOpen(!isMultiDropdownOpen)}
+                      className="w-full border border-gray-300 rounded-lg p-2 bg-white text-sm cursor-pointer flex justify-between items-center focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <span className={multiSelectedIds.length === 0 ? "text-gray-400" : "text-gray-700 font-bold"}>
+                            {multiSelectedIds.length === 0 ? "Selecione colaboradores..." : `${multiSelectedIds.length} selecionados`}
+                        </span>
+                        <span className="text-gray-400">▼</span>
+                    </div>
+
+                    {isMultiDropdownOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col animate-fadeIn">
+                            <div className="p-2 border-b border-gray-100 bg-gray-50">
+                                <input 
+                                    type="text" 
+                                    autoFocus
+                                    placeholder="Buscar..." 
+                                    className="w-full border border-gray-300 rounded px-2 py-1 text-xs outline-none focus:border-indigo-500"
+                                    value={multiSearch}
+                                    onChange={e => setMultiSearch(e.target.value)}
+                                />
+                            </div>
+                            <div className="overflow-y-auto flex-1 p-1 space-y-1">
+                                <div 
+                                    onClick={handleSelectAll}
+                                    className="flex items-center gap-2 p-2 hover:bg-indigo-50 cursor-pointer rounded text-xs font-bold text-indigo-700 border-b border-gray-100"
+                                >
+                                    <input 
+                                        type="checkbox" 
+                                        checked={multiSelectedIds.length > 0 && multiSelectedIds.length === filteredMultiOptions.length}
+                                        readOnly
+                                        className="pointer-events-none"
+                                    />
+                                    Selecionar Todos ({filteredMultiOptions.length})
+                                </div>
+                                {filteredMultiOptions.map(c => (
+                                    <div 
+                                        key={c.id} 
+                                        onClick={() => toggleMultiSelect(c.id)}
+                                        className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer rounded"
+                                    >
+                                        <input 
+                                            type="checkbox" 
+                                            checked={multiSelectedIds.includes(c.id)}
+                                            readOnly
+                                            className="pointer-events-none rounded text-indigo-600"
+                                        />
+                                        <span className="text-sm text-gray-700 truncate">{c.name}</span>
+                                    </div>
+                                ))}
+                                {filteredMultiOptions.length === 0 && <p className="text-center text-gray-400 text-xs py-2">Nada encontrado</p>}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
 
           <div className="flex flex-col">
@@ -427,7 +584,7 @@ export const Events: React.FC<EventsProps> = ({
           </div>
 
           <button type="submit" className="md:col-span-2 bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-transform active:scale-95">
-            {editingId ? (isManager ? 'Salvar Alterações' : 'Atualizar Solicitação') : (isManager ? 'Registrar' : 'Solicitar')}
+            {editingId ? (isManager ? 'Salvar Alterações' : 'Atualizar Solicitação') : (isManager ? (isMultiMode ? `Registrar para ${multiSelectedIds.length} Colaboradores` : 'Registrar') : 'Solicitar')}
           </button>
         </form>
       </div>
