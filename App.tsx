@@ -79,7 +79,7 @@ function App() {
   // Current User Context
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userColabId, setUserColabId] = useState<string | null>(null);
-  const [userBranch, setUserBranch] = useState<string | null>(null); // Nova prop para armazenar a filial do usuário
+  const [userBranch, setUserBranch] = useState<string | null>(null);
   const [currentUserAllowedSectors, setCurrentUserAllowedSectors] = useState<string[]>([]);
   const [currentUserPermissions, setCurrentUserPermissions] = useState<string[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
@@ -117,7 +117,7 @@ function App() {
       if (foundColab) {
         setUserProfile(foundColab.profile || 'colaborador');
         setUserColabId(foundColab.id);
-        setUserBranch(foundColab.branch || null); // Armazena a filial do usuário
+        setUserBranch(foundColab.branch || null);
         setCurrentUserRole(foundColab.role || '');
         
         // 1. Encontrar a Role Config
@@ -128,7 +128,7 @@ function App() {
            setCurrentUserAllowedSectors([]); 
            setCurrentUserPermissions(SYSTEM_PERMISSIONS.map(p => p.id)); // Full access
         } else {
-           // 2. Definir Setores Permitidos (Escopo de Dados)
+           // 2. Definir Setores Permitidos
            if (roleConfig && roleConfig.canViewAllSectors) {
               setCurrentUserAllowedSectors([]); 
            } else {
@@ -138,16 +138,13 @@ function App() {
               setCurrentUserAllowedSectors(allowed);
            }
 
-           // 3. Definir Permissões (Funcionalidades)
-           // Se a role não tem permissões definidas (legado), vamos tentar adivinhar ou dar padrão restrito
+           // 3. Definir Permissões
            if (roleConfig && roleConfig.permissions) {
               setCurrentUserPermissions(roleConfig.permissions);
            } else {
-              // Fallback para NOC (hardcoded logic replacement)
               if (foundColab.profile === 'noc') {
                   setCurrentUserPermissions(['tab:calendario', 'tab:dashboard', 'view:phones']);
               } else {
-                  // Default Colaborador: Vê Calendário, Dashboard, Comunicados e PODE escrever Eventos (Folgas)
                   setCurrentUserPermissions(['tab:calendario', 'tab:dashboard', 'tab:comunicados', 'tab:eventos', 'write:events', 'tab:previsao_ferias', 'write:vacation']);
               }
            }
@@ -179,27 +176,23 @@ function App() {
         if (data) {
           let loadedSettings = { ...DEFAULT_SETTINGS, ...data };
           
-          // Migração de Roles Antigas (String -> Object)
+          // Migração de Roles Antigas
           if (loadedSettings.roles.length > 0 && typeof loadedSettings.roles[0] === 'string') {
              const legacyRoles = loadedSettings.roles as unknown as string[];
              loadedSettings.roles = legacyRoles.map((r: string) => ({ 
                name: r, 
                canViewAllSectors: true,
-               permissions: SYSTEM_PERMISSIONS.map(p => p.id) // Default legacy to full? Or restrict?
+               permissions: SYSTEM_PERMISSIONS.map(p => p.id)
              }));
           }
           
-          // Migração de Roles sem permissões (Object sem array)
+          // Migração de Roles sem permissões
           loadedSettings.roles = loadedSettings.roles.map((r: any) => {
             if (!r.permissions) {
-                // Default Permissions for legacy objects
                 return { ...r, permissions: ['tab:calendario', 'tab:dashboard'] };
             }
-            // Migração de Permissão Legada (settings:lists -> settings:branches & settings:sectors)
             if (r.permissions.includes('settings:lists')) {
-                console.log(`⚠️ Migrando permissão 'settings:lists' para 'settings:branches' e 'settings:sectors' na role: ${r.name}`);
                 const newPerms = r.permissions.filter((p: string) => p !== 'settings:lists');
-                // Adiciona as novas se já não existirem
                 if (!newPerms.includes('settings:branches')) newPerms.push('settings:branches');
                 if (!newPerms.includes('settings:sectors')) newPerms.push('settings:sectors');
                 return { ...r, permissions: newPerms };
@@ -207,25 +200,22 @@ function App() {
             return r;
           });
 
-          // Migração de Perfis de Acesso Antigos (String[] -> AccessProfileConfig[])
+          // Migração de Perfis de Acesso Antigos
           if (loadedSettings.accessProfiles && loadedSettings.accessProfiles.length > 0 && typeof loadedSettings.accessProfiles[0] === 'string') {
-             console.log("⚠️ Migrando perfis de acesso legado (string) para objetos...");
              const legacyProfiles = loadedSettings.accessProfiles as unknown as string[];
              loadedSettings.accessProfiles = legacyProfiles.map((p: string) => ({
                id: p,
                name: p,
-               active: true // Default ativo para legados
+               active: true
              }));
           }
 
-          // Migração de ShiftRotations Antigos (String[] -> RotationRule[])
+          // Migração de Escalas Antigas
           if (loadedSettings.shiftRotations && loadedSettings.shiftRotations.length > 0 && typeof loadedSettings.shiftRotations[0] === 'string') {
-             console.log("⚠️ Migrando escalas legadas (string) para objetos...");
              const legacyRotations = loadedSettings.shiftRotations as unknown as string[];
              loadedSettings.shiftRotations = legacyRotations.map((r: string) => ({
                 id: r,
                 label: `Escala ${r}`
-                // workSundays removed from default migration logic
              }));
           }
 
@@ -245,7 +235,6 @@ function App() {
 
   // Helpers
   const hasPermission = (perm: string) => {
-    // Admin profile always has root access
     if (userProfile === 'admin') return true;
     return currentUserPermissions.includes(perm);
   };
@@ -280,14 +269,10 @@ function App() {
 
   const currentUserName = userColabId ? (collaborators.find(c => c.id === userColabId)?.name || user?.email) : user?.email || 'Sistema';
 
-  // --- LOGIC: BRANCH RESTRICTION ---
-  // Se for admin, vê todas. Se não, vê apenas a sua.
-  // Se não tiver branch definida, por segurança vê todas (ou poderia ser vazio, mas melhor garantir usabilidade)
   const availableBranches = (userProfile === 'admin' || !userBranch)
     ? settings.branches
     : [userBranch];
 
-  // --- TAB CONTROL LOGIC ---
   const allTabs: {id: TabType, label: string, icon: string}[] = [
     { id: 'calendario', label: 'Calendário', icon: '📆' },
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -301,7 +286,6 @@ function App() {
     { id: 'configuracoes', label: 'Configurações', icon: '⚙️' },
   ];
 
-  // Filter tabs based on permissions
   const visibleTabs = allTabs.filter(t => hasPermission(`tab:${t.id}`));
 
   useEffect(() => {
@@ -416,7 +400,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#1E90FF] font-sans flex flex-col">
-      {/* SYSTEM BANNER - MENSAGEM GLOBAL */}
       {settings.systemMessage?.active && (
         <div className={`w-full px-4 py-3 text-center font-bold text-sm md:text-base flex items-center justify-center gap-3 shadow-md animate-slideIn transition-colors relative z-50 ${
           settings.systemMessage.level === 'error' ? 'bg-red-600 text-white' :
