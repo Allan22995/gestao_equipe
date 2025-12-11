@@ -11,9 +11,11 @@ interface CollaboratorsProps {
   showToast: (msg: string, isError?: boolean) => void;
   settings: SystemSettings;
   currentUserProfile: UserProfile;
-  canEdit: boolean; // Permissão ACL
-  currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
-  currentUserRole: string; // Função do usuário logado (para filtrar perfis que podem ser criados)
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  currentUserAllowedSectors: string[];
+  currentUserRole: string; 
 }
 
 const initialSchedule: Schedule = {
@@ -27,11 +29,12 @@ const initialSchedule: Schedule = {
 };
 
 export const Collaborators: React.FC<CollaboratorsProps> = ({ 
-  collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canEdit,
+  collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canCreate, canUpdate, canDelete,
   currentUserAllowedSectors, currentUserRole
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     colabId: '',
     name: '',
@@ -55,6 +58,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [isFixingNames, setIsFixingNames] = useState(false);
+
+  // Determine if editing is allowed for current selection
+  // If no selection, we are adding new (check canCreate)
+  // If selection, we are editing (check canUpdate)
+  const isFormActive = showForm || editingId;
 
   const handleScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, value: any) => {
     setSchedule(prev => ({
@@ -89,9 +97,21 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const selectedRoleConfig = settings.roles.find(r => r.name === formData.role);
   const isRoleRestricted = selectedRoleConfig ? !selectedRoleConfig.canViewAllSectors : false;
 
+  const handleAddNew = () => {
+    if (!canCreate) return;
+    setShowForm(true);
+    setEditingId(null);
+    setFormData({ 
+      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
+      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
+    });
+    setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+  };
+
   const handleEdit = (colab: Collaborator) => {
-    if (!canEdit) return;
+    if (!canUpdate) return;
     setEditingId(colab.id);
+    setShowForm(true);
     setFormData({
       colabId: colab.colabId,
       name: colab.name,
@@ -125,6 +145,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const handleCancelEdit = () => {
     setEditingId(null);
+    setShowForm(false);
     setFormData({ 
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
       hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
@@ -230,7 +251,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   };
 
   const handleDelete = (id: string) => {
-    if (!canEdit) return;
+    if (!canDelete) return;
     if (window.confirm('Tem certeza que deseja excluir?')) {
       onDelete(id);
       showToast('Colaborador removido.');
@@ -276,60 +297,40 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
   // --- LOGIC: PROFILE OPTIONS ---
-  // 1. Get all active profiles from settings
-  // 2. Filter by currentUserRole restrictions (if any)
   const profileOptions = React.useMemo(() => {
-    // A. Base list: All ACTIVE profiles in settings
     let available = (settings.accessProfiles || [])
        .filter(p => p.active)
        .map(p => p.name);
 
     if (available.length === 0) {
-        // Fallback safety if config is empty
         available = ['colaborador']; 
     }
 
-    // B. Apply Restriction based on Logged User Role
-    // If user is Admin (firebase profile), allow all active.
     if (currentUserProfile === 'admin') {
        return available;
     }
 
-    // Otherwise, check RoleConfig for manageableProfiles
     const currentRoleConfig = settings.roles.find(r => r.name === currentUserRole);
     if (currentRoleConfig && currentRoleConfig.manageableProfiles && currentRoleConfig.manageableProfiles.length > 0) {
-       // Filter: Only show profiles that are BOTH active AND manageable by this role
        return available.filter(p => currentRoleConfig.manageableProfiles!.includes(p));
     }
 
-    // Default: If no restriction defined for role, show all active (or restrict to basic? let's show all active for backward compat)
     return available;
 
   }, [settings.accessProfiles, settings.roles, currentUserRole, currentUserProfile]);
 
   // --- LOGIC: POTENTIAL LEADERS ---
   const potentialLeaders = useMemo(() => {
-    // Palavras-chave que indicam cargo de liderança
     const leadershipKeywords = ['líder', 'lider', 'supervisor', 'coordenador', 'gerente', 'diretor', 'head', 'encarregado', 'ceo', 'presidência'];
 
     return collaborators
       .filter(c => {
-         // 1. Deve ser ativo
          if (c.active === false) return false;
-         // 2. Não pode ser ele mesmo
          if (c.id === editingId) return false;
-
-         // 3. FILTRO DE FILIAL: O Líder deve pertencer à mesma filial selecionada no formulário
-         // Isso evita líderes de outras unidades aparecerem na lista
          if (formData.branch && c.branch !== formData.branch) return false;
-
-         // 4. FILTRO DE CARGO (ROLE): Deve conter palavra-chave de liderança
          const roleName = c.role.toLowerCase();
          const isLeaderRole = leadershipKeywords.some(k => roleName.includes(k));
-         
-         // Permitir também quem tem role 'Admin' ou 'Gerente' explícito
          const isAdminOrManager = ['admin', 'gerente'].includes(roleName);
-
          return isLeaderRole || isAdminOrManager;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -346,9 +347,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const rotationOptions = settings.shiftRotations || [];
 
   const filteredCollaborators = collaborators.filter(c => {
-    // Security Filter (Respect Restricted View)
     if (currentUserAllowedSectors.length > 0) {
-      // If user has allowed sectors, the colab MUST belong to one of them
       if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) {
         return false;
       }
@@ -363,22 +362,20 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Formulário visível apenas se canEdit */}
-      {canEdit ? (
+      {/* Formulário visível apenas se isFormActive */}
+      {isFormActive && (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">
             {editingId ? 'Editar Colaborador' : 'Cadastrar Colaborador'}
           </h2>
-          {editingId && (
-            <button onClick={handleCancelEdit} className="text-sm text-gray-500 hover:text-gray-700 underline">
-              Cancelar Edição
-            </button>
-          )}
+          <button onClick={handleCancelEdit} className="text-sm text-gray-500 hover:text-gray-700 underline">
+            Cancelar
+          </button>
         </div>
         
         <form onSubmit={handleSubmit}>
-          
+          {/* ... (Conteúdo do formulário mantido igual, mas usando o estado showForm para controlar visibilidade) ... */}
           {/* Status Toggle (Ativo/Inativo) - Exibir apenas na edição */}
           {editingId && (
             <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between animate-fadeIn">
@@ -550,7 +547,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    <p className="text-xs text-gray-500 mb-3">A função selecionada ({formData.role}) tem visualização restrita. Selecione quais setores este usuário pode ver.</p>
                    
                    <div className="flex flex-wrap gap-2">
-                      {/* FIX: Use combined set of active sectors AND user's existing sectors to show legacy ones */}
                       {Array.from(new Set([...sectorOptions, ...(formData.allowedSectors || [])]))
                         .sort()
                         .map(sector => (
@@ -716,15 +712,13 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
           </div>
 
           <div className="mt-8 flex justify-end gap-3">
-             {editingId && (
-               <button 
-                type="button" 
-                onClick={handleCancelEdit}
-                className="px-6 py-2 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition"
-               >
-                 Cancelar
-               </button>
-             )}
+             <button 
+              type="button" 
+              onClick={handleCancelEdit}
+              className="px-6 py-2 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition"
+             >
+               Cancelar
+             </button>
              <button 
               type="submit" 
               className="bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-transform active:scale-95"
@@ -734,20 +728,26 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
           </div>
         </form>
       </div>
-      ) : (
-        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-center text-blue-800">
-          <p className="font-bold">Modo Leitura</p>
-          <p className="text-sm">Você tem permissão apenas para visualizar a lista de colaboradores.</p>
-        </div>
       )}
 
       {/* Lista de Colaboradores */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-           <h2 className="text-xl font-bold text-gray-800">Equipe Cadastrada</h2>
+           <div className="flex items-center gap-4">
+              <h2 className="text-xl font-bold text-gray-800">Equipe Cadastrada</h2>
+              {canCreate && !isFormActive && (
+                <button 
+                  onClick={handleAddNew}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-md transition-transform active:scale-95 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  Novo Colaborador
+                </button>
+              )}
+           </div>
            
            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-center">
-             {canEdit && (
+             {canUpdate && (
                <button 
                  onClick={handleFixAllNames}
                  disabled={isFixingNames}
@@ -793,16 +793,18 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                       )}
                    </div>
                 </div>
-                {canEdit && (
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                   {canUpdate && (
                    <button onClick={() => handleEdit(c)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-full transition-colors" title="Editar">
                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                    </button>
+                   )}
+                   {canDelete && (
                    <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors" title="Excluir">
                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                    </button>
+                   )}
                 </div>
-                )}
               </div>
 
               <div className="pl-2 mt-3 space-y-1">

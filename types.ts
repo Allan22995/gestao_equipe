@@ -1,5 +1,4 @@
 
-
 export interface DaySchedule {
   enabled: boolean;
   start: string;
@@ -35,7 +34,7 @@ export interface RotationRule {
 export interface RoleConfig {
   name: string;
   canViewAllSectors: boolean; // Se true, vê tudo. Se false, precisa definir quais setores vê.
-  permissions: string[]; // Lista de IDs de permissão (ex: 'tab:dashboard', 'action:edit_events')
+  permissions: string[]; // Lista de IDs de permissão (ex: 'collaborators:view', 'events:create')
   manageableProfiles?: string[]; // Lista de nomes de perfis que esta role pode atribuir a novos usuários
 }
 
@@ -179,37 +178,130 @@ export interface AuditLog {
 
 export type TabType = 'calendario' | 'dashboard' | 'simulador' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados';
 
-// --- DEFINIÇÃO DE PERMISSÕES DO SISTEMA ---
-export const SYSTEM_PERMISSIONS = [
-  // Acesso as Abas
-  { id: 'tab:calendario', label: 'Aba: Calendário', category: 'Navegação' },
-  { id: 'tab:dashboard', label: 'Aba: Dashboard', category: 'Navegação' },
-  { id: 'tab:simulador', label: 'Aba: Simulador', category: 'Navegação' },
-  { id: 'tab:colaboradores', label: 'Aba: Colaboradores', category: 'Navegação' },
-  { id: 'tab:eventos', label: 'Aba: Eventos', category: 'Navegação' },
-  { id: 'tab:plantoes', label: 'Aba: Plantões', category: 'Navegação' },
-  { id: 'tab:saldo', label: 'Aba: Saldo', category: 'Navegação' },
-  { id: 'tab:previsao_ferias', label: 'Aba: Prev. Férias', category: 'Navegação' },
-  { id: 'tab:comunicados', label: 'Aba: Comunicados', category: 'Navegação' },
-  { id: 'tab:configuracoes', label: 'Aba: Configurações', category: 'Navegação' },
-  
-  // Ações Específicas
-  { id: 'view:phones', label: 'Visualizar Contatos (Tel/Outros)', category: 'Privacidade' },
-  { id: 'write:collaborators', label: 'Editar/Excluir Colaboradores', category: 'Edição' },
-  { id: 'write:events', label: 'Editar/Excluir Eventos', category: 'Edição' },
-  { id: 'write:on_calls', label: 'Editar/Excluir Plantões', category: 'Edição' },
-  { id: 'write:vacation', label: 'Gerenciar Férias (Criar/Editar/Excluir)', category: 'Edição' }, // Atualizado
-  { id: 'write:vacation_status', label: 'Aprovar/Alterar Status de Férias', category: 'Edição' }, // Nova Permissão
-  { id: 'write:balance', label: 'Ajuste Manual de Saldo', category: 'Edição' },
-  { id: 'write:coverage_rules', label: 'Configurar Regras de Cobertura', category: 'Configuração' },
+// --- NOVA DEFINIÇÃO DE PERMISSÕES GRANULARES ---
 
-  // Novas Permissões Granulares de Configuração
-  { id: 'settings:integration', label: 'Config: Integrações (Planilha)', category: 'Configuração (Detalhes)' },
-  { id: 'settings:branches', label: 'Config: Filiais', category: 'Configuração (Detalhes)' }, // Apartado
-  { id: 'settings:sectors', label: 'Config: Setores', category: 'Configuração (Detalhes)' }, // Apartado
-  { id: 'settings:profiles', label: 'Config: Perfis de Acesso', category: 'Configuração (Detalhes)' },
-  { id: 'settings:event_types', label: 'Config: Tipos de Evento', category: 'Configuração (Detalhes)' },
-  { id: 'settings:access_control', label: 'Config: Controle de Acesso (Roles)', category: 'Configuração (Detalhes)' },
-  { id: 'settings:schedule_templates', label: 'Config: Modelos de Jornada', category: 'Configuração (Detalhes)' },
-  { id: 'settings:system_msg', label: 'Config: Avisos do Sistema', category: 'Configuração (Detalhes)' },
+export interface PermissionModule {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  actions: {
+    id: string;
+    label: string;
+    type: 'view' | 'create' | 'update' | 'delete' | 'special';
+  }[];
+}
+
+export const PERMISSION_MODULES: PermissionModule[] = [
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    description: 'Visão geral, métricas e status em tempo real.',
+    icon: '📊',
+    actions: [
+      { id: 'dashboard:view', label: 'Visualizar Tela', type: 'view' },
+      { id: 'dashboard:view_phones', label: 'Ver Telefones/Contatos', type: 'special' }
+    ]
+  },
+  {
+    id: 'calendar',
+    label: 'Calendário',
+    description: 'Visualização mensal de escalas e eventos.',
+    icon: '📆',
+    actions: [
+      { id: 'calendar:view', label: 'Visualizar Tela', type: 'view' },
+      { id: 'calendar:view_phones', label: 'Ver Telefones/Contatos', type: 'special' }
+    ]
+  },
+  {
+    id: 'collaborators',
+    label: 'Colaboradores',
+    description: 'Gestão do cadastro de funcionários e perfis.',
+    icon: '👥',
+    actions: [
+      { id: 'collaborators:view', label: 'Visualizar Lista', type: 'view' },
+      { id: 'collaborators:create', label: 'Cadastrar Novo', type: 'create' },
+      { id: 'collaborators:update', label: 'Editar Dados', type: 'update' },
+      { id: 'collaborators:delete', label: 'Excluir/Inativar', type: 'delete' }
+    ]
+  },
+  {
+    id: 'events',
+    label: 'Eventos (Folgas)',
+    description: 'Lançamento de folgas, faltas e abonos.',
+    icon: '📅',
+    actions: [
+      { id: 'events:view', label: 'Visualizar Histórico', type: 'view' },
+      { id: 'events:create', label: 'Lançar Evento', type: 'create' },
+      { id: 'events:update', label: 'Editar Evento', type: 'update' },
+      { id: 'events:delete', label: 'Excluir Evento', type: 'delete' }
+    ]
+  },
+  {
+    id: 'on_calls',
+    label: 'Plantões',
+    description: 'Gestão de horários de plantão extra.',
+    icon: '🌙',
+    actions: [
+      { id: 'on_calls:view', label: 'Visualizar Plantões', type: 'view' },
+      { id: 'on_calls:create', label: 'Criar Plantão', type: 'create' },
+      { id: 'on_calls:update', label: 'Editar Plantão', type: 'update' },
+      { id: 'on_calls:delete', label: 'Excluir Plantão', type: 'delete' }
+    ]
+  },
+  {
+    id: 'vacation',
+    label: 'Férias',
+    description: 'Controle de previsões e solicitações de férias.',
+    icon: '✈️',
+    actions: [
+      { id: 'vacation:view', label: 'Visualizar Previsões', type: 'view' },
+      { id: 'vacation:create', label: 'Solicitar Férias', type: 'create' },
+      { id: 'vacation:update', label: 'Editar Solicitação', type: 'update' },
+      { id: 'vacation:delete', label: 'Excluir Solicitação', type: 'delete' },
+      { id: 'vacation:manage_status', label: 'Aprovar/Reprovar', type: 'special' }
+    ]
+  },
+  {
+    id: 'balance',
+    label: 'Banco de Horas',
+    description: 'Visualização de saldo e ajustes manuais.',
+    icon: '💰',
+    actions: [
+      { id: 'balance:view', label: 'Visualizar Saldo', type: 'view' },
+      { id: 'balance:create', label: 'Lançar Ajuste Manual', type: 'create' }
+    ]
+  },
+  {
+    id: 'simulator',
+    label: 'Simulador',
+    description: 'Simulação de escalas futuras e regras.',
+    icon: '🧪',
+    actions: [
+      { id: 'simulator:view', label: 'Acessar Simulador', type: 'view' },
+      { id: 'simulator:manage_rules', label: 'Configurar Regras', type: 'special' }
+    ]
+  },
+  {
+    id: 'comms',
+    label: 'Comunicados',
+    description: 'Gerador de imagens para comunicados.',
+    icon: '📢',
+    actions: [
+      { id: 'comms:view', label: 'Acessar Gerador', type: 'view' }
+    ]
+  },
+  {
+    id: 'settings',
+    label: 'Configurações',
+    description: 'Administração do sistema.',
+    icon: '⚙️',
+    actions: [
+      { id: 'settings:view', label: 'Acessar Configurações', type: 'view' },
+      { id: 'settings:manage_general', label: 'Gerenciar Cadastros', type: 'update' },
+      { id: 'settings:manage_access', label: 'Controle de Acesso', type: 'special' }
+    ]
+  }
 ];
+
+export const SYSTEM_PERMISSIONS = PERMISSION_MODULES.flatMap(m => m.actions);

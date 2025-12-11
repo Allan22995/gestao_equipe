@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule } from './types';
+import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES } from './types';
 import { dbService } from './services/storage'; 
 import { auth, onAuthStateChanged, signOut, User } from './services/firebase'; 
 import { Calendar } from './components/Calendar';
@@ -15,36 +16,56 @@ import { Simulator } from './components/Simulator';
 import { Login } from './components/Login';
 import { generateUUID } from './utils/helpers';
 
+// Helper to get all permission IDs
+const ALL_PERMISSIONS = SYSTEM_PERMISSIONS.map(p => p.id);
+
 const DEFAULT_SETTINGS: SystemSettings = {
   branches: ['Matriz', 'Filial Norte'],
   roles: [
     { 
       name: 'Gerente', 
       canViewAllSectors: true, 
-      permissions: SYSTEM_PERMISSIONS.map(p => p.id), 
+      permissions: ALL_PERMISSIONS, 
       manageableProfiles: ['admin', 'colaborador', 'noc', 'liderança'] 
     },
     { 
       name: 'Liderança', 
       canViewAllSectors: false, 
-      permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'tab:saldo', 'tab:previsao_ferias', 'write:events', 'write:on_calls', 'view:phones', 'write:vacation', 'write:vacation_status'], 
+      permissions: [
+        'dashboard:view', 'dashboard:view_phones',
+        'calendar:view', 'calendar:view_phones',
+        'collaborators:view', 
+        'events:view', 'events:create', 'events:update', 
+        'on_calls:view', 'on_calls:create', 'on_calls:update', 
+        'vacation:view', 'vacation:create', 'vacation:update', 'vacation:manage_status',
+        'balance:view', 'balance:create',
+        'simulator:view',
+        'comms:view'
+      ], 
       manageableProfiles: ['colaborador', 'liderança'] 
     },
     { 
       name: 'Coordenador', 
       canViewAllSectors: false, 
-      permissions: ['tab:calendario', 'tab:dashboard', 'tab:colaboradores', 'tab:eventos', 'tab:plantoes', 'view:phones', 'write:events', 'write:on_calls'], 
+      permissions: [
+        'dashboard:view', 'dashboard:view_phones',
+        'calendar:view', 'calendar:view_phones',
+        'collaborators:view', 
+        'events:view', 'events:create', 'events:update',
+        'on_calls:view', 'on_calls:create', 'on_calls:update',
+        'vacation:view'
+      ], 
       manageableProfiles: ['colaborador'] 
     },
     { 
       name: 'Vendedor', 
       canViewAllSectors: false, 
-      permissions: ['tab:calendario', 'tab:dashboard'] 
+      permissions: ['dashboard:view', 'calendar:view'] 
     },
     { 
       name: 'NOC', 
       canViewAllSectors: true, 
-      permissions: ['tab:calendario', 'tab:dashboard', 'view:phones'] 
+      permissions: ['dashboard:view', 'calendar:view', 'dashboard:view_phones', 'calendar:view_phones'] 
     }
   ],
   sectors: ['Logística', 'TI', 'Vendas', 'RH'],
@@ -126,7 +147,7 @@ function App() {
         // Se for admin hardcoded no profile, dá acesso total independente da role
         if (foundColab.profile === 'admin') {
            setCurrentUserAllowedSectors([]); 
-           setCurrentUserPermissions(SYSTEM_PERMISSIONS.map(p => p.id)); // Full access
+           setCurrentUserPermissions(ALL_PERMISSIONS); // Full access
         } else {
            // 2. Definir Setores Permitidos
            if (roleConfig && roleConfig.canViewAllSectors) {
@@ -142,11 +163,13 @@ function App() {
            if (roleConfig && roleConfig.permissions) {
               setCurrentUserPermissions(roleConfig.permissions);
            } else {
-              if (foundColab.profile === 'noc') {
-                  setCurrentUserPermissions(['tab:calendario', 'tab:dashboard', 'view:phones']);
-              } else {
-                  setCurrentUserPermissions(['tab:calendario', 'tab:dashboard', 'tab:comunicados', 'tab:eventos', 'write:events', 'tab:previsao_ferias', 'write:vacation']);
-              }
+              // Permissões padrão para legados
+              const defaults = [
+                 'dashboard:view', 'calendar:view', 'comms:view',
+                 'events:view', 'events:create', // pode solicitar
+                 'vacation:view', 'vacation:create' // pode solicitar
+              ];
+              setCurrentUserPermissions(defaults);
            }
         }
       } else {
@@ -176,48 +199,41 @@ function App() {
         if (data) {
           let loadedSettings = { ...DEFAULT_SETTINGS, ...data };
           
-          // Migração de Roles Antigas
-          if (loadedSettings.roles.length > 0 && typeof loadedSettings.roles[0] === 'string') {
-             const legacyRoles = loadedSettings.roles as unknown as string[];
-             loadedSettings.roles = legacyRoles.map((r: string) => ({ 
-               name: r, 
-               canViewAllSectors: true,
-               permissions: SYSTEM_PERMISSIONS.map(p => p.id)
-             }));
-          }
-          
-          // Migração de Roles sem permissões
+          // MIGRATION LOGIC FOR OLD PERMISSIONS TO NEW GRANULAR
           loadedSettings.roles = loadedSettings.roles.map((r: any) => {
-            if (!r.permissions) {
-                return { ...r, permissions: ['tab:calendario', 'tab:dashboard'] };
-            }
-            if (r.permissions.includes('settings:lists')) {
-                const newPerms = r.permissions.filter((p: string) => p !== 'settings:lists');
-                if (!newPerms.includes('settings:branches')) newPerms.push('settings:branches');
-                if (!newPerms.includes('settings:sectors')) newPerms.push('settings:sectors');
-                return { ...r, permissions: newPerms };
-            }
-            return r;
+             const perms = r.permissions || [];
+             let newPerms: string[] = [...perms];
+             
+             // Map old 'tab:x' to 'x:view'
+             if (perms.includes('tab:dashboard') && !newPerms.includes('dashboard:view')) newPerms.push('dashboard:view');
+             if (perms.includes('tab:calendario') && !newPerms.includes('calendar:view')) newPerms.push('calendar:view');
+             if (perms.includes('tab:colaboradores') && !newPerms.includes('collaborators:view')) newPerms.push('collaborators:view');
+             if (perms.includes('tab:eventos') && !newPerms.includes('events:view')) newPerms.push('events:view');
+             if (perms.includes('tab:plantoes') && !newPerms.includes('on_calls:view')) newPerms.push('on_calls:view');
+             if (perms.includes('tab:saldo') && !newPerms.includes('balance:view')) newPerms.push('balance:view');
+             if (perms.includes('tab:previsao_ferias') && !newPerms.includes('vacation:view')) newPerms.push('vacation:view');
+             if (perms.includes('tab:comunicados') && !newPerms.includes('comms:view')) newPerms.push('comms:view');
+             if (perms.includes('tab:configuracoes') && !newPerms.includes('settings:view')) newPerms.push('settings:view');
+             if (perms.includes('tab:simulador') && !newPerms.includes('simulator:view')) newPerms.push('simulator:view');
+
+             // Map 'write:x' to create/update/delete
+             if (perms.includes('write:collaborators')) newPerms.push('collaborators:create', 'collaborators:update', 'collaborators:delete');
+             if (perms.includes('write:events')) newPerms.push('events:create', 'events:update', 'events:delete');
+             if (perms.includes('write:on_calls')) newPerms.push('on_calls:create', 'on_calls:update', 'on_calls:delete');
+             if (perms.includes('write:vacation')) newPerms.push('vacation:create', 'vacation:update', 'vacation:delete');
+             if (perms.includes('write:vacation_status')) newPerms.push('vacation:manage_status');
+             if (perms.includes('write:balance')) newPerms.push('balance:create');
+             if (perms.includes('write:coverage_rules')) newPerms.push('simulator:manage_rules');
+             if (perms.includes('view:phones')) newPerms.push('dashboard:view_phones', 'calendar:view_phones');
+
+             // Settings mappings
+             if (perms.some((p: string) => p.startsWith('settings:'))) {
+                 if (!newPerms.includes('settings:manage_general')) newPerms.push('settings:manage_general');
+                 if (perms.includes('settings:access_control')) newPerms.push('settings:manage_access');
+             }
+
+             return { ...r, permissions: Array.from(new Set(newPerms)) };
           });
-
-          // Migração de Perfis de Acesso Antigos
-          if (loadedSettings.accessProfiles && loadedSettings.accessProfiles.length > 0 && typeof loadedSettings.accessProfiles[0] === 'string') {
-             const legacyProfiles = loadedSettings.accessProfiles as unknown as string[];
-             loadedSettings.accessProfiles = legacyProfiles.map((p: string) => ({
-               id: p,
-               name: p,
-               active: true
-             }));
-          }
-
-          // Migração de Escalas Antigas
-          if (loadedSettings.shiftRotations && loadedSettings.shiftRotations.length > 0 && typeof loadedSettings.shiftRotations[0] === 'string') {
-             const legacyRotations = loadedSettings.shiftRotations as unknown as string[];
-             loadedSettings.shiftRotations = legacyRotations.map((r: string) => ({
-                id: r,
-                label: `Escala ${r}`
-             }));
-          }
 
           setSettings(loadedSettings);
         } else {
@@ -273,20 +289,22 @@ function App() {
     ? settings.branches
     : [userBranch];
 
-  const allTabs: {id: TabType, label: string, icon: string}[] = [
-    { id: 'calendario', label: 'Calendário', icon: '📆' },
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'simulador', label: 'Simulador', icon: '🧪' },
-    { id: 'colaboradores', label: 'Colaboradores', icon: '👥' },
-    { id: 'eventos', label: 'Eventos', icon: '📅' },
-    { id: 'plantoes', label: 'Plantões', icon: '🌙' },
-    { id: 'saldo', label: 'Saldo', icon: '💰' },
-    { id: 'previsao_ferias', label: 'Prev. Férias', icon: '✈️' },
-    { id: 'comunicados', label: 'Comunicados', icon: '📢' },
-    { id: 'configuracoes', label: 'Configurações', icon: '⚙️' },
+  // --- TAB CONTROL LOGIC ---
+  // Map old tab IDs to new permission modules check
+  const allTabs: {id: TabType, label: string, icon: string, requiredPerm: string}[] = [
+    { id: 'calendario', label: 'Calendário', icon: '📆', requiredPerm: 'calendar:view' },
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', requiredPerm: 'dashboard:view' },
+    { id: 'simulador', label: 'Simulador', icon: '🧪', requiredPerm: 'simulator:view' },
+    { id: 'colaboradores', label: 'Colaboradores', icon: '👥', requiredPerm: 'collaborators:view' },
+    { id: 'eventos', label: 'Eventos', icon: '📅', requiredPerm: 'events:view' },
+    { id: 'plantoes', label: 'Plantões', icon: '🌙', requiredPerm: 'on_calls:view' },
+    { id: 'saldo', label: 'Saldo', icon: '💰', requiredPerm: 'balance:view' },
+    { id: 'previsao_ferias', label: 'Prev. Férias', icon: '✈️', requiredPerm: 'vacation:view' },
+    { id: 'comunicados', label: 'Comunicados', icon: '📢', requiredPerm: 'comms:view' },
+    { id: 'configuracoes', label: 'Configurações', icon: '⚙️', requiredPerm: 'settings:view' },
   ];
 
-  const visibleTabs = allTabs.filter(t => hasPermission(`tab:${t.id}`));
+  const visibleTabs = allTabs.filter(t => hasPermission(t.requiredPerm));
 
   useEffect(() => {
     if (visibleTabs.length > 0) {
@@ -297,14 +315,15 @@ function App() {
 
   const renderContent = () => {
     if (!userProfile) return null;
-    if (!hasPermission(`tab:${activeTab}`)) return <div className="p-8 text-center text-gray-500">Acesso Negado a esta aba.</div>;
+    const currentTabObj = allTabs.find(t => t.id === activeTab);
+    if (!currentTabObj || !hasPermission(currentTabObj.requiredPerm)) return <div className="p-8 text-center text-gray-500">Acesso Negado a esta aba.</div>;
 
     switch (activeTab) {
       case 'calendario':
         return <Calendar 
             collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} 
             settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={currentUserAllowedSectors}
-            canViewPhones={hasPermission('view:phones')}
+            canViewPhones={hasPermission('calendar:view_phones')}
             availableBranches={availableBranches}
             userColabId={userColabId}
           />;
@@ -312,20 +331,23 @@ function App() {
         return <Dashboard 
             collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} 
             settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={currentUserAllowedSectors}
-            canViewPhones={hasPermission('view:phones')}
+            canViewPhones={hasPermission('dashboard:view_phones')}
             availableBranches={availableBranches}
           />;
       case 'simulador':
         return <Simulator 
             collaborators={collaborators} events={events} settings={settings} onSaveSettings={handleSaveSettings}
-            currentUserAllowedSectors={currentUserAllowedSectors} canEditRules={hasPermission('write:coverage_rules')}
+            currentUserAllowedSectors={currentUserAllowedSectors} 
+            canEditRules={hasPermission('simulator:manage_rules')}
             availableBranches={availableBranches}
           />;
       case 'colaboradores':
         return <Collaborators 
           collaborators={collaborators} onAdd={handleAddCollaborator} onUpdate={handleUpdateCollaborator} onDelete={handleDeleteCollaborator}
           showToast={showToast} settings={settings} currentUserProfile={userProfile}
-          canEdit={hasPermission('write:collaborators')}
+          canCreate={hasPermission('collaborators:create')}
+          canUpdate={hasPermission('collaborators:update')}
+          canDelete={hasPermission('collaborators:delete')}
           currentUserAllowedSectors={currentUserAllowedSectors}
           currentUserRole={currentUserRole}
         />;
@@ -333,7 +355,9 @@ function App() {
         return <Events 
           collaborators={collaborators} events={events} onAdd={handleAddEvent} onUpdate={handleUpdateEvent} onDelete={handleDeleteEvent}
           showToast={showToast} logAction={logAction} settings={settings} 
-          canEdit={hasPermission('write:events')}
+          canCreate={hasPermission('events:create')}
+          canUpdate={hasPermission('events:update')}
+          canDelete={hasPermission('events:delete')}
           currentUserAllowedSectors={currentUserAllowedSectors}
           currentUserProfile={userProfile}
           userColabId={userColabId}
@@ -342,7 +366,9 @@ function App() {
         return <OnCall 
           collaborators={collaborators} onCalls={onCalls} onAdd={handleAddOnCall} onUpdate={handleUpdateOnCall} onDelete={handleDeleteOnCall}
           showToast={showToast} logAction={logAction} settings={settings} 
-          canEdit={hasPermission('write:on_calls')}
+          canCreate={hasPermission('on_calls:create')}
+          canUpdate={hasPermission('on_calls:update')}
+          canDelete={hasPermission('on_calls:delete')}
           currentUserProfile={userProfile}
           userColabId={userColabId}
         />;
@@ -350,7 +376,7 @@ function App() {
         return <Balance 
           collaborators={collaborators} events={events} adjustments={adjustments} onAddAdjustment={handleAddAdjustment}
           showToast={showToast} logAction={logAction} currentUserName={currentUserName as string}
-          canEdit={hasPermission('write:balance')}
+          canCreate={hasPermission('balance:create')}
           currentUserAllowedSectors={currentUserAllowedSectors}
           currentUserProfile={userProfile}
           userColabId={userColabId}
@@ -359,8 +385,10 @@ function App() {
         return <VacationForecast 
           collaborators={collaborators} requests={vacationRequests} onAdd={handleAddVacation} onUpdate={handleUpdateVacation} onDelete={handleDeleteVacation}
           showToast={showToast} logAction={logAction} currentUserProfile={userProfile} currentUserName={currentUserName as string}
-          canEdit={hasPermission('write:vacation')}
-          canManageStatus={hasPermission('write:vacation_status')}
+          canCreate={hasPermission('vacation:create')}
+          canUpdate={hasPermission('vacation:update')}
+          canDelete={hasPermission('vacation:delete')}
+          canManageStatus={hasPermission('vacation:manage_status')}
           currentUserAllowedSectors={currentUserAllowedSectors}
           userColabId={userColabId}
         />;
