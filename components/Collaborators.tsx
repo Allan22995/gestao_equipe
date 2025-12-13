@@ -360,14 +360,12 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
           branchSectors = settings.sectors || [];
       }
 
-      // NOVO: Filtrar se o usuário tiver restrição de setor (currentUserAllowedSectors)
-      // Se a lista de setores permitidos não estiver vazia, retornamos apenas a interseção
-      if (currentUserAllowedSectors && currentUserAllowedSectors.length > 0) {
-          return branchSectors.filter(s => currentUserAllowedSectors.includes(s));
-      }
-
+      // CORREÇÃO: Não filtrar por currentUserAllowedSectors aqui.
+      // Se a filial estiver disponível (availableBranches), mostramos todos os setores dela.
+      // Isso corrige o problema onde líderes com visualização restrita não conseguiam atribuir outros setores da mesma filial a novos colaboradores/líderes.
+      
       return branchSectors;
-  }, [formData.branch, settings.branchSectors, settings.sectors, currentUserAllowedSectors]);
+  }, [formData.branch, settings.branchSectors, settings.sectors]);
 
   const scheduleTemplates = settings.scheduleTemplates || [];
   const rotationOptions = settings.shiftRotations || [];
