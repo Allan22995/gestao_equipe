@@ -223,7 +223,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       });
 
       // 4. Rotations (Check Sundays)
-      const sundays = [];
+      const sundays: Date[] = [];
       for (let d = 1; d <= daysInMonth; d++) {
           const date = new Date(year, month, d);
           if (date.getDay() === 0) sundays.push(date);
