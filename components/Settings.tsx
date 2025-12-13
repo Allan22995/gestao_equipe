@@ -240,29 +240,29 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     if (window.confirm(`Excluir função ${name}?`)) saveSettings({ ...settings, roles: settings.roles.filter(r => r.name !== name) }, 'role');
   };
 
-  // Funcao corrigida para sanitizar permissoes legadas
+  // Funcao REVISADA E CORRIGIDA para sanitizar permissoes legadas
   const togglePermission = (roleName: string, permId: string) => {
      const role = settings.roles.find(r => r.name === roleName);
      if (!role) return;
 
-     // 1. Obter permissões atuais
-     let currentPerms = role.permissions || [];
+     // 1. Obter permissões atuais como Array
+     let currentPerms = role.permissions ? [...role.permissions] : [];
 
-     // 2. HIGIENIZAÇÃO: Remove chaves legadas que causam loop de migração no App.tsx
+     // 2. HIGIENIZAÇÃO: Remover incondicionalmente chaves legadas.
+     // Se estamos editando manualmente, queremos controle total granular.
+     // Chaves legadas como 'write:events' forçam o App.tsx a reativar 'events:update'.
      const legacyPrefixes = ['tab:', 'write:', 'view:phones'];
-     currentPerms = currentPerms.filter(p => {
-       if (p === permId) return true;
-       if (legacyPrefixes.some(prefix => p.startsWith(prefix))) return false;
-       return true;
-     });
+     
+     // Remove qualquer permissão que comece com os prefixos legados
+     currentPerms = currentPerms.filter(p => !legacyPrefixes.some(prefix => p.startsWith(prefix)));
 
      // 3. Toggle da permissão alvo
      if (currentPerms.includes(permId)) {
        currentPerms = currentPerms.filter(p => p !== permId);
      } else {
-       currentPerms = [...currentPerms, permId];
+       currentPerms.push(permId);
      }
-     
+
      const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, permissions: currentPerms } : r);
      saveSettings({ ...settings, roles: updatedRoles }, 'acl_update');
   };

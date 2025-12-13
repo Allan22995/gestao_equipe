@@ -76,7 +76,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
              });
         } else {
              if (settings.branchSectors) {
-                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...s]);
+                Object.values(settings.branchSectors).forEach((s: string[]) => sectorsPool = [...sectorsPool, ...s]);
              } else {
                 sectorsPool = settings.sectors || [];
              }
