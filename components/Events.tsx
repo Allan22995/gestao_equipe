@@ -233,6 +233,12 @@ export const Events: React.FC<EventsProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // VALIDATION DATE
+    if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
+        showToast('Erro: A data final não pode ser anterior à data inicial.', true);
+        return;
+    }
+
     const user = isManager ? 'Gestor/Admin' : (getColabName(userColabId || '') || 'Colaborador');
     
     // --- LÓGICA DE CRIAÇÃO (ADD) ---
@@ -561,6 +567,7 @@ export const Events: React.FC<EventsProps> = ({
               <input
                 required
                 type="date"
+                min={formData.startDate}
                 className="w-full border border-gray-300 rounded-lg p-2 pr-10 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 appearance-none"
                 value={formData.endDate}
                 onChange={e => setFormData({...formData, endDate: e.target.value})}

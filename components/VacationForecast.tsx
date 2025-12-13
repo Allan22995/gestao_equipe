@@ -169,6 +169,12 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
       return;
     }
 
+    // VALIDATION DATE
+    if (formData.startDate > formData.endDate) {
+        showToast('Erro: A data final não pode ser anterior à data inicial.', true);
+        return;
+    }
+
     const user = currentUserName;
 
     if (!editingId) {
@@ -293,6 +299,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
               <input
                 required
                 type="date"
+                min={formData.startDate}
                 className="w-full border border-gray-300 rounded-lg p-2 pr-10 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 appearance-none"
                 value={formData.endDate}
                 onChange={e => setFormData({...formData, endDate: e.target.value})}

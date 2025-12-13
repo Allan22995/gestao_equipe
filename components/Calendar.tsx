@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, VacationRequest, SystemSettings, UserProfile } from '../types';
 import { getFeriados, checkRotationDay } from '../utils/helpers';
@@ -445,16 +443,20 @@ export const Calendar: React.FC<CalendarProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 mb-2 z-10 relative">
-        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
-          <div key={day} className="text-center font-bold text-gray-500 text-xs uppercase py-2 bg-gray-50 rounded-md">
-            {day}
-          </div>
-        ))}
-      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[800px]">
+            <div className="grid grid-cols-7 gap-2 mb-2 z-10 relative">
+                {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
+                <div key={day} className="text-center font-bold text-gray-500 text-xs uppercase py-2 bg-gray-50 rounded-md">
+                    {day}
+                </div>
+                ))}
+            </div>
 
-      <div className="grid grid-cols-7 gap-2 z-0 relative">
-        {renderCalendarGrid()}
+            <div className="grid grid-cols-7 gap-2 z-0 relative">
+                {renderCalendarGrid()}
+            </div>
+        </div>
       </div>
 
       <div className="mt-6 flex flex-wrap gap-4 text-xs text-gray-600 bg-gray-50 p-4 rounded-lg">
