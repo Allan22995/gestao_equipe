@@ -133,7 +133,7 @@ export const Login: React.FC = () => {
               </div>
             )}
           </div>
-          <h1 className="text-3xl font-bold text-indigo-600 text-center text-outline-black">Nexo - Gestão de Equipes</h1>
+          <h1 className="text-3xl font-bold text-indigo-600 text-center">Nexo - Gestão de Equipes</h1>
           <p className="text-gray-500 text-sm text-center">Acesso restrito a colaboradores</p>
         </div>
 
