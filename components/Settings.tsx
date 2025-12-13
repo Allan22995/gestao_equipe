@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES, SeasonalEvent } from '../types';
 import { generateUUID } from '../utils/helpers';
 import { Modal } from './ui/Modal';
@@ -249,14 +249,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
      let currentPerms = role.permissions || [];
 
      // 2. HIGIENIZAÇÃO: Remove chaves legadas que causam loop de migração no App.tsx
-     // (Ex: 'tab:dashboard', 'write:collaborators')
-     // Mantém apenas permissões que existem na definição atual do sistema (SYSTEM_PERMISSIONS)
-     // OU remove explicitamente as chaves legadas conhecidas
      const legacyPrefixes = ['tab:', 'write:', 'view:phones'];
      currentPerms = currentPerms.filter(p => {
-       // Se for a permissão exata que estamos manipulando, deixa passar para o toggle abaixo
        if (p === permId) return true;
-       // Remove se for prefixo legado
        if (legacyPrefixes.some(prefix => p.startsWith(prefix))) return false;
        return true;
      });
@@ -346,6 +341,36 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
   const currentModuleDef = PERMISSION_MODULES.find(m => m.id === selectedModule);
+
+  // Group Event Types for Display
+  const groupedEvents = useMemo(() => {
+      const neutros = settings.eventTypes.filter(e => e.behavior === 'neutral');
+      const debitos = settings.eventTypes.filter(e => e.behavior === 'debit');
+      const creditos = settings.eventTypes.filter(e => e.behavior === 'credit_1x' || e.behavior === 'credit_2x');
+      return { neutros, debitos, creditos };
+  }, [settings.eventTypes]);
+
+  // Helper render function for event list items
+  const renderEventList = (events: EventTypeConfig[], emptyText: string) => {
+      if (events.length === 0) return <p className="text-gray-400 text-xs italic p-2">{emptyText}</p>;
+      
+      return events.map(e => (
+          <div key={e.id} className={`flex justify-between items-center p-2 border-b last:border-0 bg-white rounded mb-1 transition-colors ${editingEventId === e.id ? 'bg-indigo-50 border-indigo-200' : 'border-gray-100'}`}>
+              <div className="flex flex-col">
+                  <span className="font-bold text-sm text-gray-700">{e.label}</span>
+                  <span className="text-[10px] text-gray-400">{e.behavior === 'credit_2x' ? 'Crédito (2x)' : e.behavior === 'credit_1x' ? 'Crédito (1x)' : e.behavior === 'debit' ? 'Débito' : 'Neutro'}</span>
+              </div>
+              <div className="flex gap-2">
+                  <button onClick={() => handleEditEvent(e)} className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50" title="Editar">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                  </button>
+                  <button onClick={() => removeEvent(e.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50" title="Excluir">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+              </div>
+          </div>
+      ));
+  };
 
   return (
     <div className="space-y-6">
@@ -622,7 +647,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                  {editingEventId && <button onClick={cancelEditEvent} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
              </div>
              
-             <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 rounded-lg transition-colors ${editingEventId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50 border border-transparent'}`}>
+             <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 rounded-lg transition-colors ${editingEventId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50 border border-gray-200'}`}>
                 <input type="text" placeholder="Nome do Evento" className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventLabel} onChange={e => setNewEventLabel(e.target.value)} />
                 <select className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as EventBehavior)}>
                    <option value="neutral">Neutro</option>
@@ -634,16 +659,37 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                     {editingEventId ? 'Atualizar' : 'Adicionar'}
                 </button>
              </div>
-             <div className="space-y-2">
-                {settings.eventTypes.map(e => (
-                   <div key={e.id} className={`flex justify-between items-center p-2 border-b last:border-0 transition-colors ${editingEventId === e.id ? 'bg-indigo-50 border-indigo-200' : 'border-gray-100'}`}>
-                      <div><span className="font-bold">{e.label}</span> <span className="text-xs text-gray-500 ml-2">({e.behavior})</span></div>
-                      <div className="flex gap-2">
-                         <button onClick={() => handleEditEvent(e)} className="text-blue-500 text-xs font-bold bg-blue-50 px-2 py-1 rounded hover:bg-blue-100">Editar</button>
-                         <button onClick={() => removeEvent(e.id)} className="text-red-500 text-xs font-bold bg-red-50 px-2 py-1 rounded hover:bg-red-100">Excluir</button>
-                      </div>
-                   </div>
-                ))}
+
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 {/* BLOCO 1: NEUTROS */}
+                 <div className="bg-gray-50/50 rounded-lg border border-gray-200 p-3">
+                     <h3 className="font-bold text-sm text-gray-700 mb-3 border-b border-gray-200 pb-2 flex items-center gap-2">
+                         <span className="w-2 h-2 rounded-full bg-gray-400"></span> Eventos Neutros
+                     </h3>
+                     <div className="space-y-1">
+                         {renderEventList(groupedEvents.neutros, 'Nenhum evento neutro.')}
+                     </div>
+                 </div>
+
+                 {/* BLOCO 2: DÉBITOS */}
+                 <div className="bg-red-50/50 rounded-lg border border-red-200 p-3">
+                     <h3 className="font-bold text-sm text-red-800 mb-3 border-b border-red-200 pb-2 flex items-center gap-2">
+                         <span className="w-2 h-2 rounded-full bg-red-500"></span> Eventos Débitos
+                     </h3>
+                     <div className="space-y-1">
+                         {renderEventList(groupedEvents.debitos, 'Nenhum evento de débito.')}
+                     </div>
+                 </div>
+
+                 {/* BLOCO 3: CRÉDITOS */}
+                 <div className="bg-emerald-50/50 rounded-lg border border-emerald-200 p-3">
+                     <h3 className="font-bold text-sm text-emerald-800 mb-3 border-b border-emerald-200 pb-2 flex items-center gap-2">
+                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Eventos Créditos
+                     </h3>
+                     <div className="space-y-1">
+                         {renderEventList(groupedEvents.creditos, 'Nenhum evento de crédito.')}
+                     </div>
+                 </div>
              </div>
            </div>
 
