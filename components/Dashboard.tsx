@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
 import { weekDayMap, getWeekOfMonth, checkRotationDay } from '../utils/helpers';
@@ -35,6 +33,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterRoles, setFilterRoles] = useState<string[]>([]);
   const [filterSectors, setFilterSectors] = useState<string[]>([]);
+
+  // Card Selection Filter State
+  const [activeStatFilter, setActiveStatFilter] = useState<'total' | 'active' | 'inactive'>('total');
 
   // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
   const activeCollaborators = useMemo(() => {
@@ -528,6 +529,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     };
   }, [showSummary, activeCollaborators, events, onCalls, vacationRequests]);
 
+  const filteredDetails = useMemo(() => {
+      if (activeStatFilter === 'active') return details.filter(d => d.isActive);
+      if (activeStatFilter === 'inactive') return details.filter(d => !d.isActive);
+      return details;
+  }, [details, activeStatFilter]);
+
   const copySummaryToClipboard = () => {
      if (!summaryData) return;
      let text = `*Resumo Diário - ${summaryData.date}*\n\n`;
@@ -629,43 +636,53 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Cards de Status */}
+      {/* Cards de Status (Clickable) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-emerald-500 rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform">
+        <button 
+          onClick={() => setActiveStatFilter('total')}
+          className={`text-left w-full bg-emerald-500 rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none ${activeStatFilter === 'total' ? 'ring-4 ring-offset-2 ring-emerald-500' : ''}`}
+        >
           <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
             <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
           </div>
           <p className="text-emerald-100 font-bold uppercase text-xs tracking-wider">TOTAL (FILTRADO)</p>
           <p className="text-5xl font-bold mt-2">{stats.total}</p>
-        </div>
+        </button>
 
-        <div className="bg-[#667eea] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform">
+        <button 
+          onClick={() => setActiveStatFilter('active')}
+          className={`text-left w-full bg-[#667eea] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none ${activeStatFilter === 'active' ? 'ring-4 ring-offset-2 ring-[#667eea]' : ''}`}
+        >
            <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
             <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path></svg>
           </div>
           <p className="text-blue-100 font-bold uppercase text-xs tracking-wider">TRABALHANDO AGORA</p>
           <p className="text-5xl font-bold mt-2">{stats.active}</p>
-        </div>
+        </button>
 
-        <div className="bg-[#ff8c00] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform">
+        <button 
+          onClick={() => setActiveStatFilter('inactive')}
+          className={`text-left w-full bg-[#ff8c00] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none ${activeStatFilter === 'inactive' ? 'ring-4 ring-offset-2 ring-[#ff8c00]' : ''}`}
+        >
            <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
              <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd"></path></svg>
           </div>
           <p className="text-orange-100 font-bold uppercase text-xs tracking-wider">AUSENTES / FOLGA / FÉRIAS</p>
           <p className="text-5xl font-bold mt-2">{stats.inactive}</p>
-        </div>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 z-0 relative">
         {/* Lista Detalhada */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col h-[500px]">
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            Status em Tempo Real
+            Status em Tempo Real {activeStatFilter !== 'total' && <span className="text-sm font-normal text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">({activeStatFilter === 'active' ? 'Trabalhando' : 'Ausentes'})</span>}
           </h3>
           <p className="text-xs text-gray-500 mb-4">Lista de presença em tempo real.</p>
           
           <div className="overflow-y-auto flex-1 pr-2 space-y-3">
-             {details.map(d => (
+             {filteredDetails.length === 0 && <p className="text-center text-gray-400 py-8 italic">Nenhum colaborador neste status.</p>}
+             {filteredDetails.map(d => (
                <div 
                  key={d.id} 
                  className="flex justify-between items-center p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5" 
