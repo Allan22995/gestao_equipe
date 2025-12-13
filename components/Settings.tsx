@@ -44,8 +44,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');
 
-  // Filiais e Setores (Master-Detail)
+  // --- HIERARCHY STATE ---
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  
+  const [newCompanyName, setNewCompanyName] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
   const [newSectorName, setNewSectorName] = useState('');
 
@@ -78,14 +81,27 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newRotationId, setNewRotationId] = useState('');
 
   const [savingState, setSavingState] = useState<Record<string, 'idle' | 'saving' | 'success'>>({});
-  const [removingId, setRemovingId] = useState<string | null>(null);
 
-  // Inicializar seleção de filial
+  // Inicializar seleção
   useEffect(() => {
-     if (settings.branches.length > 0 && !selectedBranch) {
-        setSelectedBranch(settings.branches[0]);
+     // Se não tiver empresa selecionada, tenta selecionar a primeira
+     if (settings.companies && settings.companies.length > 0 && !selectedCompany) {
+         setSelectedCompany(settings.companies[0]);
      }
-  }, [settings.branches]);
+  }, [settings.companies]);
+
+  // Derived state for Orphaned Branches (Branches not assigned to any company)
+  const orphanedBranches = useMemo(() => {
+      const allLinked = Object.values(settings.companyBranches || {}).flat();
+      return settings.branches.filter(b => !allLinked.includes(b));
+  }, [settings.branches, settings.companyBranches]);
+
+  // Derived branches for current selection
+  const currentBranchesList = useMemo(() => {
+      if (!selectedCompany) return [];
+      if (selectedCompany === 'Sem Empresa') return orphanedBranches;
+      return settings.companyBranches?.[selectedCompany] || [];
+  }, [selectedCompany, settings.companyBranches, orphanedBranches]);
 
   useEffect(() => { if (settings.spreadsheetUrl) setSpreadsheetUrl(settings.spreadsheetUrl); }, [settings.spreadsheetUrl]);
   
@@ -108,21 +124,78 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     try { await setSettings(newSettings); setSaving(key, 'success'); if (callback) callback(); } catch (e) { console.error(e); setSaving(key, 'idle'); }
   };
 
-  // --- BRANCH & SECTOR LOGIC ---
+  // --- HIERARCHY LOGIC (Companies -> Branches -> Sectors) ---
+
+  const addCompany = () => {
+      if (!newCompanyName.trim()) return;
+      if (settings.companies?.includes(newCompanyName.trim())) {
+          showToast('Empresa já existe.', true);
+          return;
+      }
+      const updatedCompanies = [...(settings.companies || []), newCompanyName.trim()];
+      const updatedCompanyBranches = { ...(settings.companyBranches || {}), [newCompanyName.trim()]: [] };
+      
+      saveSettings({ ...settings, companies: updatedCompanies, companyBranches: updatedCompanyBranches }, 'company', () => {
+          setNewCompanyName('');
+          setSelectedCompany(newCompanyName.trim());
+      });
+  };
+
+  const removeCompany = (company: string) => {
+      if (company === 'Sem Empresa') return;
+      if (window.confirm(`Excluir empresa "${company}"? As filiais vinculadas ficarão "Sem Empresa".`)) {
+          const updatedCompanies = (settings.companies || []).filter(c => c !== company);
+          const updatedCompanyBranches = { ...(settings.companyBranches || {}) };
+          delete updatedCompanyBranches[company];
+          
+          saveSettings({ ...settings, companies: updatedCompanies, companyBranches: updatedCompanyBranches }, 'company', () => {
+              setSelectedCompany(null);
+          });
+      }
+  };
+
   const addBranch = () => {
      if (!newBranchName.trim()) return;
      if (settings.branches.includes(newBranchName)) {
-        showToast('Filial já existe.', true);
+        showToast('Filial já existe (verifique se já está em outra empresa).', true);
         return;
      }
+     
+     if (!selectedCompany) {
+         showToast('Selecione uma empresa antes de adicionar a filial.', true);
+         return;
+     }
+
      const updatedBranches = [...settings.branches, newBranchName];
      // Initialize sectors for new branch
      const updatedBranchSectors = { ...(settings.branchSectors || {}), [newBranchName]: [] };
      
-     saveSettings({ ...settings, branches: updatedBranches, branchSectors: updatedBranchSectors }, 'branch', () => {
+     // Link to Company
+     let updatedCompanyBranches = { ...(settings.companyBranches || {}) };
+     if (selectedCompany !== 'Sem Empresa') {
+         const existing = updatedCompanyBranches[selectedCompany] || [];
+         updatedCompanyBranches[selectedCompany] = [...existing, newBranchName];
+     }
+     
+     saveSettings({ ...settings, branches: updatedBranches, branchSectors: updatedBranchSectors, companyBranches: updatedCompanyBranches }, 'branch', () => {
          setNewBranchName('');
          setSelectedBranch(newBranchName);
      });
+  };
+
+  const assignBranchToCompany = (branch: string) => {
+      if (!selectedCompany || selectedCompany === 'Sem Empresa') return;
+      
+      // Remove from other companies if needed (shouldn't happen with current UI but good for safety)
+      let updatedCompanyBranches = { ...(settings.companyBranches || {}) };
+      Object.keys(updatedCompanyBranches).forEach(comp => {
+          updatedCompanyBranches[comp] = updatedCompanyBranches[comp].filter(b => b !== branch);
+      });
+
+      // Add to current
+      updatedCompanyBranches[selectedCompany] = [...(updatedCompanyBranches[selectedCompany] || []), branch];
+
+      saveSettings({ ...settings, companyBranches: updatedCompanyBranches }, 'branch_assign');
   };
 
   const removeBranch = (branch: string) => {
@@ -130,12 +203,19 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         const updatedBranches = settings.branches.filter(b => b !== branch);
         const updatedBranchSectors = { ...(settings.branchSectors || {}) };
         delete updatedBranchSectors[branch];
-        // Also remove links
+        
+        // Remove links
         const updatedBranchLinks = { ...(settings.branchLinks || {}) };
         delete updatedBranchLinks[branch];
         
-        saveSettings({ ...settings, branches: updatedBranches, branchSectors: updatedBranchSectors, branchLinks: updatedBranchLinks }, 'branch', () => {
-            if (selectedBranch === branch) setSelectedBranch(updatedBranches[0] || null);
+        // Remove from Companies
+        let updatedCompanyBranches = { ...(settings.companyBranches || {}) };
+        Object.keys(updatedCompanyBranches).forEach(comp => {
+            updatedCompanyBranches[comp] = updatedCompanyBranches[comp].filter(b => b !== branch);
+        });
+
+        saveSettings({ ...settings, branches: updatedBranches, branchSectors: updatedBranchSectors, branchLinks: updatedBranchLinks, companyBranches: updatedCompanyBranches }, 'branch', () => {
+            if (selectedBranch === branch) setSelectedBranch(null);
         });
      }
   };
@@ -152,7 +232,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       const updatedSectors = [...currentSectors, newSectorName];
       const updatedBranchSectors = { ...(settings.branchSectors || {}), [selectedBranch]: updatedSectors };
       
-      // Also update flat list for compatibility if needed, or ignore it
       const allSectors = new Set([...(settings.sectors || []), newSectorName]);
 
       saveSettings({ ...settings, branchSectors: updatedBranchSectors, sectors: Array.from(allSectors) }, 'sector', () => {
@@ -240,15 +319,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     if (window.confirm(`Excluir função ${name}?`)) saveSettings({ ...settings, roles: settings.roles.filter(r => r.name !== name) }, 'role');
   };
 
-  // Funcao corrigida para sanitizar permissoes legadas
   const togglePermission = (roleName: string, permId: string) => {
      const role = settings.roles.find(r => r.name === roleName);
      if (!role) return;
 
-     // 1. Obter permissões atuais
      let currentPerms = role.permissions || [];
-
-     // 2. HIGIENIZAÇÃO: Remove chaves legadas que causam loop de migração no App.tsx
      const legacyPrefixes = ['tab:', 'write:', 'view:phones'];
      currentPerms = currentPerms.filter(p => {
        if (p === permId) return true;
@@ -256,7 +331,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        return true;
      });
 
-     // 3. Toggle da permissão alvo
      if (currentPerms.includes(permId)) {
        currentPerms = currentPerms.filter(p => p !== permId);
      } else {
@@ -342,7 +416,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   const currentModuleDef = PERMISSION_MODULES.find(m => m.id === selectedModule);
 
-  // Group Event Types for Display
   const groupedEvents = useMemo(() => {
       const neutros = settings.eventTypes.filter(e => e.behavior === 'neutral');
       const debitos = settings.eventTypes.filter(e => e.behavior === 'debit');
@@ -350,7 +423,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       return { neutros, debitos, creditos };
   }, [settings.eventTypes]);
 
-  // Helper render function for event list items
   const renderEventList = (events: EventTypeConfig[], emptyText: string) => {
       if (events.length === 0) return <p className="text-gray-400 text-xs italic p-2">{emptyText}</p>;
       
@@ -498,51 +570,56 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                </div>
            </div>
 
-           {/* --- NOVO LAYOUT DE FILIAIS E SETORES (Mestre-Detalhe) --- */}
+           {/* --- NOVO LAYOUT DE FILIAIS E SETORES (Empresa -> Filial -> Setor) --- */}
            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                <div className="p-4 border-b border-gray-100 bg-gray-50">
                   <h2 className="text-lg font-bold text-gray-800">Gerenciar Filiais e Setores</h2>
-                  <p className="text-xs text-gray-500">Selecione uma filial à esquerda para gerenciar seus setores e vínculos à direita.</p>
+                  <p className="text-xs text-gray-500">Estrutura Hierárquica: Empresa {'>'} Filial {'>'} Setor.</p>
                </div>
                
-               <div className="flex flex-col md:flex-row h-[600px]">
-                  {/* COLUNA ESQUERDA: FILIAIS */}
-                  <div className="w-full md:w-1/3 border-r border-gray-200 flex flex-col bg-gray-50/30">
+               <div className="flex flex-col lg:flex-row h-[600px]">
+                  
+                  {/* COLUNA 1: EMPRESAS */}
+                  <div className="w-full lg:w-1/4 border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col bg-gray-50/50">
                      <div className="p-4 border-b border-gray-200">
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Filiais</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">1. Empresas</label>
                         <div className="flex gap-2">
                            <input 
                               type="text" 
                               className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
-                              placeholder="Nome da Filial..." 
-                              value={newBranchName}
-                              onChange={e => setNewBranchName(e.target.value)}
+                              placeholder="Nova Empresa..." 
+                              value={newCompanyName}
+                              onChange={e => setNewCompanyName(e.target.value)}
                            />
-                           <button 
-                              onClick={addBranch}
-                              disabled={!newBranchName.trim()}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 font-bold text-lg leading-none disabled:opacity-50"
-                           >
-                              +
-                           </button>
+                           <button onClick={addCompany} disabled={!newCompanyName.trim()} className="bg-gray-700 hover:bg-gray-800 text-white rounded-lg px-3 py-2 font-bold disabled:opacity-50">+</button>
                         </div>
                      </div>
                      <div className="overflow-y-auto flex-1 p-2 space-y-1">
-                        {settings.branches.map(branch => (
+                        {/* EMPRESA VIRTUAL: SEM EMPRESA */}
+                        <div 
+                           onClick={() => setSelectedCompany('Sem Empresa')}
+                           className={`flex justify-between items-center p-3 rounded-lg cursor-pointer transition-all border ${selectedCompany === 'Sem Empresa' ? 'bg-amber-50 border-amber-400 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300 opacity-70'}`}
+                        >
+                           <div>
+                              <span className={`font-bold block text-sm ${selectedCompany === 'Sem Empresa' ? 'text-amber-800' : 'text-gray-600'}`}>Sem Empresa</span>
+                              <span className="text-[10px] text-gray-400">{orphanedBranches.length} filiais órfãs</span>
+                           </div>
+                        </div>
+
+                        {(settings.companies || []).map(company => (
                            <div 
-                              key={branch}
-                              onClick={() => setSelectedBranch(branch)}
-                              className={`group flex justify-between items-center p-3 rounded-lg cursor-pointer transition-all border ${selectedBranch === branch ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'bg-white border-gray-200 hover:border-indigo-300'}`}
+                              key={company}
+                              onClick={() => setSelectedCompany(company)}
+                              className={`group flex justify-between items-center p-3 rounded-lg cursor-pointer transition-all border ${selectedCompany === company ? 'bg-slate-100 border-slate-400 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`}
                            >
                               <div>
-                                 <span className={`font-bold block ${selectedBranch === branch ? 'text-indigo-800' : 'text-gray-700'}`}>{branch}</span>
-                                 <span className="text-xs text-gray-400">
-                                     {(settings.branchSectors?.[branch] || []).length} setores
-                                     {(settings.branchLinks?.[branch] || []).length > 0 && <span className="ml-1 text-indigo-500">• {(settings.branchLinks?.[branch] || []).length} vínculos</span>}
+                                 <span className={`font-bold block text-sm ${selectedCompany === company ? 'text-slate-800' : 'text-gray-700'}`}>{company}</span>
+                                 <span className="text-[10px] text-gray-400">
+                                     {(settings.companyBranches?.[company] || []).length} filiais
                                  </span>
                               </div>
                               <button 
-                                 onClick={(e) => { e.stopPropagation(); removeBranch(branch); }}
+                                 onClick={(e) => { e.stopPropagation(); removeCompany(company); }}
                                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded transition-all"
                               >
                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -552,14 +629,92 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                      </div>
                   </div>
 
-                  {/* COLUNA DIREITA: SETORES DA FILIAL SELECIONADA */}
-                  <div className="w-full md:w-2/3 flex flex-col bg-white overflow-y-auto">
+                  {/* COLUNA 2: FILIAIS DA EMPRESA SELECIONADA */}
+                  <div className="w-full lg:w-1/3 border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col bg-white">
+                     <div className="p-4 border-b border-gray-200 bg-gray-50/20">
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">2. Filiais {selectedCompany && <span className="text-slate-600 font-normal">({selectedCompany})</span>}</label>
+                        <div className="flex gap-2">
+                           <input 
+                              type="text" 
+                              className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" 
+                              placeholder={selectedCompany ? "Nova Filial..." : "Selecione Empresa..."}
+                              value={newBranchName}
+                              onChange={e => setNewBranchName(e.target.value)}
+                              disabled={!selectedCompany || selectedCompany === 'Sem Empresa'}
+                           />
+                           <button 
+                              onClick={addBranch}
+                              disabled={!newBranchName.trim() || !selectedCompany || selectedCompany === 'Sem Empresa'}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 font-bold disabled:opacity-50"
+                           >
+                              +
+                           </button>
+                        </div>
+                     </div>
+                     <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                        {!selectedCompany ? (
+                            <div className="flex flex-col items-center justify-center h-full text-gray-400 text-sm p-4 text-center">
+                                <span className="text-2xl mb-2">🏢</span>
+                                Selecione uma empresa para ver suas filiais.
+                            </div>
+                        ) : (
+                            <>
+                                {currentBranchesList.length === 0 && <p className="text-center text-xs text-gray-400 py-4">Nenhuma filial nesta empresa.</p>}
+                                {currentBranchesList.map(branch => (
+                                   <div 
+                                      key={branch}
+                                      onClick={() => setSelectedBranch(branch)}
+                                      className={`group flex justify-between items-center p-3 rounded-lg cursor-pointer transition-all border ${selectedBranch === branch ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'bg-white border-gray-200 hover:border-indigo-300'}`}
+                                   >
+                                      <div>
+                                         <span className={`font-bold block text-sm ${selectedBranch === branch ? 'text-indigo-800' : 'text-gray-700'}`}>{branch}</span>
+                                         <span className="text-[10px] text-gray-400">
+                                             {(settings.branchSectors?.[branch] || []).length} setores
+                                         </span>
+                                      </div>
+                                      <div className="flex items-center">
+                                          {/* Se estiver "Sem Empresa", botão para mover (se tiver empresas) */}
+                                          {selectedCompany === 'Sem Empresa' && settings.companies && settings.companies.length > 0 && (
+                                              <select 
+                                                className="text-[10px] border border-gray-300 rounded p-1 mr-2 bg-white"
+                                                onChange={(e) => {
+                                                    const targetCompany = e.target.value;
+                                                    if(targetCompany) {
+                                                        const updatedCompanyBranches = { ...(settings.companyBranches || {}) };
+                                                        updatedCompanyBranches[targetCompany] = [...(updatedCompanyBranches[targetCompany] || []), branch];
+                                                        saveSettings({ ...settings, companyBranches: updatedCompanyBranches }, 'move_branch');
+                                                    }
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                value=""
+                                              >
+                                                  <option value="">Mover para...</option>
+                                                  {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
+                                              </select>
+                                          )}
+
+                                          <button 
+                                             onClick={(e) => { e.stopPropagation(); removeBranch(branch); }}
+                                             className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded transition-all"
+                                          >
+                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                          </button>
+                                      </div>
+                                   </div>
+                                ))}
+                            </>
+                        )}
+                     </div>
+                  </div>
+
+                  {/* COLUNA 3: SETORES DA FILIAL SELECIONADA */}
+                  <div className="w-full lg:w-5/12 flex flex-col bg-white">
                      {selectedBranch ? (
-                        <div className="p-4 space-y-6">
+                        <div className="p-4 space-y-6 overflow-y-auto h-full">
                            {/* SECTION SECTORS */}
                            <div>
                                <div className="flex justify-between items-center mb-3">
-                                  <h3 className="font-bold text-gray-800 text-lg">Setores: <span className="text-indigo-600 bg-indigo-50 px-2 rounded">{selectedBranch}</span></h3>
+                                  <h3 className="font-bold text-gray-800 text-sm">3. Setores: <span className="text-indigo-600 bg-indigo-50 px-2 rounded">{selectedBranch}</span></h3>
                                   <div className="flex gap-2 w-1/2">
                                      <input 
                                         type="text" 
@@ -572,9 +727,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                      <button 
                                         onClick={addSectorToBranch}
                                         disabled={!newSectorName.trim()}
-                                        className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-4 py-2 font-bold text-sm whitespace-nowrap disabled:opacity-50"
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 font-bold text-sm whitespace-nowrap disabled:opacity-50"
                                      >
-                                        Adicionar
+                                        Add
                                      </button>
                                   </div>
                                </div>
@@ -582,16 +737,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                <div className="bg-gray-50/50 rounded-lg border border-gray-100 p-3 max-h-60 overflow-y-auto">
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                      {(settings.branchSectors?.[selectedBranch] || []).length === 0 && (
-                                        <p className="col-span-full text-center text-gray-400 italic py-4">Nenhum setor cadastrado nesta filial.</p>
+                                        <p className="col-span-full text-center text-gray-400 italic py-4 text-xs">Nenhum setor cadastrado nesta filial.</p>
                                      )}
                                      {(settings.branchSectors?.[selectedBranch] || []).map(sector => (
                                         <div key={sector} className="flex justify-between items-center p-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
-                                           <span className="font-medium text-gray-700 text-sm">{sector}</span>
+                                           <span className="font-medium text-gray-700 text-xs truncate mr-2" title={sector}>{sector}</span>
                                            <button 
                                               onClick={() => removeSectorFromBranch(sector)}
                                               className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
                                            >
-                                              Excluir
+                                              ×
                                            </button>
                                         </div>
                                      ))}
@@ -601,39 +756,39 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
                            {/* SECTION LINKED BRANCHES (NEW) */}
                            <div className="pt-4 border-t border-gray-100">
-                               <h3 className="font-bold text-gray-800 text-lg mb-2">Filiais Vinculadas (Gestão Multilocal)</h3>
-                               <p className="text-xs text-gray-500 mb-4">
+                               <h3 className="font-bold text-gray-800 text-sm mb-2">Filiais Vinculadas (Gestão Multilocal)</h3>
+                               <p className="text-[10px] text-gray-500 mb-4">
                                    Selecione quais filiais estão conectadas à <b>{selectedBranch}</b>. 
-                                   Isso permitirá que colaboradores desta filial visualizem e selecionem líderes das filiais marcadas.
+                                   Isso permitirá que colaboradores desta filial visualizem líderes das filiais marcadas.
                                </p>
                                
                                <div className="bg-indigo-50/30 rounded-lg border border-indigo-100 p-4">
-                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                   <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto">
                                        {settings.branches.filter(b => b !== selectedBranch).map(b => {
                                            const isLinked = settings.branchLinks?.[selectedBranch]?.includes(b);
                                            return (
-                                               <label key={b} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isLinked ? 'bg-white border-indigo-300 shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
+                                               <label key={b} className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all ${isLinked ? 'bg-white border-indigo-300 shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
                                                    <input 
                                                        type="checkbox" 
                                                        checked={!!isLinked}
                                                        onChange={() => toggleBranchLink(b)}
-                                                       className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                                                       className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
                                                    />
-                                                   <span className={`text-sm font-bold ${isLinked ? 'text-indigo-800' : 'text-gray-600'}`}>{b}</span>
+                                                   <span className={`text-xs font-bold ${isLinked ? 'text-indigo-800' : 'text-gray-600'}`}>{b}</span>
                                                </label>
                                            );
                                        })}
                                        {settings.branches.length <= 1 && (
-                                           <p className="text-gray-400 text-sm italic">Cadastre mais filiais para criar vínculos.</p>
+                                           <p className="text-gray-400 text-xs italic">Cadastre mais filiais para criar vínculos.</p>
                                        )}
                                    </div>
                                </div>
                            </div>
                         </div>
                      ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-10">
-                           <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                           <p className="font-medium">Selecione uma filial para gerenciar seus setores e vínculos.</p>
+                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-10 text-center">
+                           <svg className="w-12 h-12 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                           <p className="font-medium text-sm">Selecione uma filial para gerenciar.</p>
                         </div>
                      )}
                   </div>

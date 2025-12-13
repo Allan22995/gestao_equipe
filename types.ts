@@ -95,6 +95,8 @@ export interface CoverageRule {
 }
 
 export interface SystemSettings {
+  companies?: string[]; // NOVO: Lista de Empresas
+  companyBranches?: Record<string, string[]>; // NOVO: Mapeamento Empresa -> Filiais
   branches: string[];
   sectors: string[]; // Mantido para retrocompatibilidade
   branchSectors?: Record<string, string[]>; // Mapeamento Filial -> Setores
