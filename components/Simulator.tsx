@@ -339,6 +339,15 @@ export const Simulator: React.FC<SimulatorProps> = ({
     return { days, results, grandTotals };
   }, [simStartDate, simEndDate, filterRoles, filterSectors, activeCollaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions, availableBranches]);
 
+  // --- Group days into weeks for rendering ---
+  const weeks = useMemo(() => {
+      if (!simulationData?.days) return [];
+      const chunks = [];
+      for (let i = 0; i < simulationData.days.length; i += 7) {
+          chunks.push(simulationData.days.slice(i, i + 7));
+      }
+      return chunks;
+  }, [simulationData]);
 
   // --- HANDLERS ---
 
@@ -360,6 +369,19 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
   const removeDraft = (id: string) => {
       setProposedEvents(proposedEvents.filter(e => e.id !== id));
+  };
+
+  const getCellStyles = (status: 'ok' | 'alert' | 'violation', available: number, isHoliday: boolean | null) => {
+      if (isHoliday) return 'bg-gray-50 text-gray-400 border border-gray-200 opacity-50';
+      
+      if (status === 'violation') return 'bg-red-100 text-red-800 border-red-300 font-bold shadow-sm';
+      if (status === 'alert') return 'bg-amber-100 text-amber-800 border-amber-300 font-bold shadow-sm';
+      
+      // Status OK
+      if (available > 0) return 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold shadow-sm';
+      
+      // Status OK but 0 available (Neutral/No work scheduled)
+      return 'bg-white text-gray-300 border border-dashed border-gray-200';
   };
 
   return (
@@ -563,47 +585,44 @@ export const Simulator: React.FC<SimulatorProps> = ({
                           <div className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-100 border border-emerald-400 rounded"></span> Cobertura OK</div>
                           <div className="flex items-center gap-1"><span className="w-3 h-3 bg-amber-100 border border-amber-400 rounded"></span> Alerta (No limite)</div>
                           <div className="flex items-center gap-1"><span className="w-3 h-3 bg-red-100 border border-red-400 rounded"></span> Violação</div>
+                          <div className="flex items-center gap-1"><span className="w-3 h-3 bg-white border border-gray-300 border-dashed rounded"></span> Neutro</div>
                       </div>
                   </div>
                   
-                  <div className="overflow-x-auto pb-4">
+                  <div className="overflow-x-auto pb-4 custom-scrollbar">
                       {Object.keys(simulationData.results).length === 0 && (
                           <p className="text-center text-gray-500 py-8">Nenhum dado para o setor/filtro selecionado.</p>
                       )}
 
-                      {/* TOTAL GERAL ROW */}
+                      {/* TOTAL GERAL ROW (Grouped by Week) */}
                       {Object.keys(simulationData.results).length > 0 && (
                           <div className="mb-8 px-4 pt-4 bg-indigo-50/50 border-b-2 border-indigo-200 pb-4">
                               <div className="flex items-center gap-2 mb-2">
                                   <h3 className="font-bold text-indigo-800 uppercase tracking-wide">TOTAL GERAL <span className="text-xs font-normal normal-case opacity-70">(Agrupado)</span></h3>
                               </div>
-                              <div className="flex gap-1 min-w-max">
-                                {simulationData.days.map((day) => {
-                                      const data = simulationData.grandTotals[day.date];
-                                      let colorClass = 'bg-gray-50 border-gray-200 text-gray-400'; 
-                                      
-                                      if (!day.isHoliday) {
-                                          if (data.status === 'ok') colorClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-                                          if (data.status === 'alert') colorClass = 'bg-amber-100 text-amber-800 border-amber-300';
-                                          if (data.status === 'violation') colorClass = 'bg-red-100 text-red-800 border-red-300';
-                                      } else {
-                                          colorClass = 'bg-gray-100 text-gray-400 border-gray-200 opacity-50';
-                                      }
+                              <div className="flex gap-4 min-w-max">
+                                {weeks.map((week, wIdx) => (
+                                    <div key={wIdx} className="flex gap-1 p-1 bg-white/50 rounded-lg border border-indigo-100">
+                                        {week.map((day) => {
+                                            const data = simulationData.grandTotals[day.date];
+                                            const colorClass = getCellStyles(data.status, data.available, day.isHoliday);
 
-                                      return (
-                                          <div key={day.date} className={`w-10 h-14 flex flex-col items-center justify-center border rounded ${colorClass}`}>
-                                              <span className="text-[10px] font-bold">{day.label}</span>
-                                              {!day.isHoliday ? (
-                                                  <span className="text-sm font-bold">{data.available}/{data.min}</span>
-                                              ) : <span className="text-xs">F</span>}
-                                          </div>
-                                      );
-                                })}
+                                            return (
+                                                <div key={day.date} className={`w-10 h-14 flex flex-col items-center justify-center border rounded ${colorClass}`}>
+                                                    <span className="text-[10px] font-bold">{day.label}</span>
+                                                    {!day.isHoliday ? (
+                                                        <span className="text-sm font-bold">{data.available}/{data.min}</span>
+                                                    ) : <span className="text-xs">F</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ))}
                               </div>
                           </div>
                       )}
 
-                      {/* Matrix Rows by Role */}
+                      {/* Matrix Rows by Role (Grouped by Week) */}
                       <div className="px-4 space-y-6">
                         {Object.keys(simulationData.results).map(role => (
                             <div key={role} className="border-b border-gray-100 pb-4 last:border-0">
@@ -611,25 +630,21 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                     <h3 className="font-bold text-gray-700">{role}</h3>
                                     <span className="text-xs text-gray-400 font-normal">(Meta: {getRuleForRole(role)})</span>
                                 </div>
-                                <div className="flex gap-1 min-w-max">
-                                    {simulationData.days.map((day) => {
-                                        const data = simulationData.results[role][day.date];
-                                        let colorClass = 'bg-gray-50 border-gray-200 text-gray-400';
-                                        
-                                        if (!day.isHoliday) {
-                                            if (data.status === 'ok') colorClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                                            if (data.status === 'alert') colorClass = 'bg-amber-100 text-amber-800 border-amber-200';
-                                            if (data.status === 'violation') colorClass = 'bg-red-100 text-red-800 border-red-200';
-                                        } else {
-                                            colorClass = 'bg-gray-100 text-gray-400 border-gray-200 opacity-50';
-                                        }
+                                <div className="flex gap-4 min-w-max">
+                                    {weeks.map((week, wIdx) => (
+                                        <div key={wIdx} className="flex gap-1">
+                                            {week.map((day) => {
+                                                const data = simulationData.results[role][day.date];
+                                                const colorClass = getCellStyles(data.status, data.available, day.isHoliday);
 
-                                        return (
-                                            <div key={`${role}-${day.date}`} className={`w-10 h-12 flex flex-col items-center justify-center border rounded text-xs ${colorClass}`} title={`${day.date}: ${data.available} disponíveis`}>
-                                                <span className="font-bold">{day.isHoliday ? 'F' : data.available}</span>
-                                            </div>
-                                        );
-                                    })}
+                                                return (
+                                                    <div key={`${role}-${day.date}`} className={`w-10 h-12 flex flex-col items-center justify-center border rounded text-xs ${colorClass}`} title={`${day.date}: ${data.available} disponíveis`}>
+                                                        <span className="font-bold">{day.isHoliday ? 'F' : data.available}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         ))}
