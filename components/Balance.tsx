@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
 
@@ -28,6 +28,22 @@ export const Balance: React.FC<BalanceProps> = ({
     days: '',
     reason: ''
   });
+
+  // Estado para o Dropdown Customizado
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [colabSearch, setColabSearch] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleAdjustmentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +88,8 @@ export const Balance: React.FC<BalanceProps> = ({
     );
     
     showToast('Ajuste lançado com sucesso!');
-    setAdjForm(prev => ({ ...prev, days: '', reason: '' }));
+    setAdjForm(prev => ({ ...prev, days: '', reason: '', collaboratorId: '' }));
+    setColabSearch('');
   };
 
   // Filter Collaborators First based on Sector Restrictions and Profile
@@ -92,8 +109,21 @@ export const Balance: React.FC<BalanceProps> = ({
          filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
      }
 
-     return filtered;
+     // Ordenação Alfabética A-Z
+     return filtered.sort((a, b) => a.name.localeCompare(b.name));
   }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
+
+  // Opções filtradas para o dropdown de busca
+  const filteredDropdownOptions = useMemo(() => {
+      return allowedCollaborators.filter(c => 
+          c.name.toLowerCase().includes(colabSearch.toLowerCase()) ||
+          c.colabId.toLowerCase().includes(colabSearch.toLowerCase())
+      );
+  }, [allowedCollaborators, colabSearch]);
+
+  const selectedCollaboratorName = useMemo(() => {
+      return collaborators.find(c => c.id === adjForm.collaboratorId)?.name;
+  }, [adjForm.collaboratorId, collaborators]);
 
   // Then calculate balances for allowed collaborators
   const balances = allowedCollaborators.map(c => {
@@ -211,19 +241,53 @@ export const Balance: React.FC<BalanceProps> = ({
            <h2 className="text-xl font-bold text-gray-800 mb-6">Lançamento Manual</h2>
            {canCreate ? (
            <form onSubmit={handleAdjustmentSubmit} className="space-y-4">
-             <div>
-               <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador (Beneficiário) *</label>
-               <select
-                  required
-                  className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700"
-                  value={adjForm.collaboratorId}
-                  onChange={e => setAdjForm({...adjForm, collaboratorId: e.target.value})}
+             <div className="relative" ref={dropdownRef}>
+               <label className="text-xs font-semibold text-gray-600 mb-1 block">Colaborador (Beneficiário) *</label>
+               
+               {/* Custom Select with Search */}
+               <div 
+                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                 className="w-full border border-gray-300 rounded-lg p-2 bg-white text-gray-700 cursor-pointer flex justify-between items-center focus:ring-2 focus:ring-indigo-500"
                >
-                  <option value="">Selecione...</option>
-                  {allowedCollaborators.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-               </select>
+                  <span className={adjForm.collaboratorId ? "text-gray-800" : "text-gray-400"}>
+                      {selectedCollaboratorName || "Selecione..."}
+                  </span>
+                  <svg className={`w-4 h-4 text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+               </div>
+
+               {isDropdownOpen && (
+                   <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col animate-fadeIn">
+                       <div className="p-2 border-b border-gray-100 bg-gray-50">
+                           <input 
+                               type="text" 
+                               autoFocus
+                               placeholder="Buscar por Nome ou ID..." 
+                               className="w-full border border-gray-300 rounded px-2 py-1 text-xs outline-none focus:border-indigo-500"
+                               value={colabSearch}
+                               onChange={e => setColabSearch(e.target.value)}
+                           />
+                       </div>
+                       <div className="overflow-y-auto flex-1 p-1 space-y-1">
+                           {filteredDropdownOptions.map(c => (
+                               <div 
+                                   key={c.id} 
+                                   onClick={() => {
+                                       setAdjForm({...adjForm, collaboratorId: c.id});
+                                       setIsDropdownOpen(false);
+                                       setColabSearch('');
+                                   }}
+                                   className={`flex items-center justify-between p-2 hover:bg-indigo-50 cursor-pointer rounded text-sm ${adjForm.collaboratorId === c.id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-700'}`}
+                               >
+                                   <span>{c.name}</span>
+                                   <span className="text-xs text-gray-400 font-mono">{c.colabId}</span>
+                               </div>
+                           ))}
+                           {filteredDropdownOptions.length === 0 && (
+                               <p className="text-center text-gray-400 text-xs py-2">Nada encontrado</p>
+                           )}
+                       </div>
+                   </div>
+               )}
              </div>
              
              <div className="grid grid-cols-2 gap-4">

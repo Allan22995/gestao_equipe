@@ -178,10 +178,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       }
     }
 
-    if (!formData.phone && !isNoc) {
+    // REMOVIDO: Validação obrigatória de telefone
+    /* if (!formData.phone && !isNoc) {
        showToast('Telefone é obrigatório para este perfil.', true);
        return;
-    }
+    } */
 
     const hasWorkDays = (Object.values(schedule) as DaySchedule[]).some(day => day.enabled && day.start && day.end);
     if (!hasWorkDays && !isNoc && formData.active) {
@@ -454,7 +455,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               <label className="text-xs font-semibold text-gray-600 mb-1">Telefone (Celular)</label>
               <input 
                 type="text" 
-                required={formData.profile !== 'noc'}
+                // required removido
                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-gray-100" 
                 placeholder={formData.profile === 'noc' ? 'Opcional para NOC' : '(XX) 9XXXX-XXXX'} 
                 value={formData.phone} 
