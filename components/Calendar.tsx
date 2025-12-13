@@ -185,6 +185,71 @@ export const Calendar: React.FC<CalendarProps> = ({
     return matchesName && matchesBranch && matchesRole && matchesSector;
   };
 
+  // --- CALCULAR TIPOS ATIVOS NO MÊS (PARA A LEGENDA DINÂMICA) ---
+  const activeTypesInMonth = useMemo(() => {
+      const types = new Set<string>();
+      const startOfMonth = new Date(year, month, 1);
+      const endOfMonth = new Date(year, month + 1, 0);
+      
+      // Helper para checar sobreposição de datas
+      const overlaps = (startStr: string, endStr: string) => {
+          const s = new Date(startStr + 'T00:00:00');
+          const e = new Date(endStr + 'T00:00:00');
+          return s <= endOfMonth && e >= startOfMonth;
+      };
+
+      // 1. Events
+      events.forEach(e => {
+          if (e.status === 'reprovado') return;
+          if (overlaps(e.startDate, e.endDate) && matchesFilters(e.collaboratorId)) {
+              types.add(e.type);
+              if (e.status && e.status !== 'aprovado') types.add('pendente');
+          }
+      });
+
+      // 2. Vacation Requests (Mapeia para 'ferias' na legenda para consistência)
+      vacationRequests.forEach(v => {
+          if (overlaps(v.startDate, v.endDate) && matchesFilters(v.collaboratorId)) {
+              types.add('ferias'); 
+              if (v.status !== 'aprovado') types.add('pendente');
+          }
+      });
+
+      // 3. OnCalls
+      onCalls.forEach(o => {
+          if (overlaps(o.startDate, o.endDate) && matchesFilters(o.collaboratorId)) {
+              types.add('plantao');
+          }
+      });
+
+      // 4. Rotations (Check Sundays)
+      const sundays = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+          const date = new Date(year, month, d);
+          if (date.getDay() === 0) sundays.push(date);
+      }
+      
+      if (sundays.length > 0) {
+           activeCollaborators.forEach(c => {
+              if (!matchesFilters(c.id)) return;
+              if (c.hasRotation && c.rotationGroup) {
+                  const hasOff = sundays.some(sunday => checkRotationDay(sunday, c.rotationStartDate));
+                  if (hasOff) types.add('rotation_off');
+              }
+          });
+      }
+
+      // 5. Holidays
+      const holidayDates = Object.keys(holidays);
+      const hasHoliday = holidayDates.some(dateStr => {
+           const d = new Date(dateStr + 'T00:00:00');
+           return d.getMonth() === month && d.getFullYear() === year;
+      });
+      if (hasHoliday) types.add('feriado');
+
+      return types;
+  }, [events, vacationRequests, onCalls, activeCollaborators, year, month, holidays, filterName, filterBranches, filterRoles, filterSectors]);
+
   const getEventsForDay = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const checkDate = new Date(dateStr + 'T00:00:00');
@@ -320,30 +385,36 @@ export const Calendar: React.FC<CalendarProps> = ({
   const legendItems = useMemo(() => {
       const items = [];
       
-      // 1. Tipos Padrão e Customizados do Settings
+      // 1. Tipos Padrão e Customizados do Settings (Apenas se existirem no mês)
       if (settings?.eventTypes) {
           settings.eventTypes.forEach(t => {
-              items.push({ 
-                  id: t.id, 
-                  label: t.label, 
-                  colorClass: getEventStyle(t.id, 'event', 'aprovado') 
-              });
+              // Verifica se o tipo existe no Set de tipos ativos
+              if (activeTypesInMonth.has(t.id)) {
+                  items.push({ 
+                      id: t.id, 
+                      label: t.label, 
+                      colorClass: getEventStyle(t.id, 'event', 'aprovado') 
+                  });
+              }
           });
-      } else {
-          // Fallback legacy
-          items.push({ id: 'ferias', label: 'Férias', colorClass: getEventStyle('ferias', 'event') });
-          items.push({ id: 'folga', label: 'Folga', colorClass: getEventStyle('folga', 'event') });
-          items.push({ id: 'trabalhado', label: 'Trabalhado', colorClass: getEventStyle('trabalhado', 'event') });
+      } 
+
+      // 2. Tipos Fixos Extras (Apenas se existirem no mês)
+      if (activeTypesInMonth.has('plantao')) {
+          items.push({ id: 'plantao', label: 'Plantão', colorClass: getEventStyle('', 'plantao') });
+      }
+      if (activeTypesInMonth.has('rotation_off')) {
+          items.push({ id: 'rotation_off', label: 'Folga de Escala', colorClass: getEventStyle('', 'rotation_off') });
+      }
+      if (activeTypesInMonth.has('pendente')) {
+          items.push({ id: 'pendente', label: 'Pendente / Previsão', colorClass: getEventStyle('', 'event', 'pendente') });
+      }
+      if (activeTypesInMonth.has('feriado')) {
+          items.push({ id: 'feriado', label: 'Feriado', colorClass: 'bg-amber-100 text-amber-800 border-amber-300' });
       }
 
-      // 2. Tipos Fixos Extras
-      items.push({ id: 'plantao', label: 'Plantão', colorClass: getEventStyle('', 'plantao') });
-      items.push({ id: 'rotation_off', label: 'Folga de Escala', colorClass: getEventStyle('', 'rotation_off') });
-      items.push({ id: 'pendente', label: 'Pendente / Previsão', colorClass: getEventStyle('', 'event', 'pendente') });
-      items.push({ id: 'feriado', label: 'Feriado', colorClass: 'bg-amber-100 text-amber-800 border-amber-300' }); // Specific for holiday
-
       return items;
-  }, [settings?.eventTypes]);
+  }, [settings?.eventTypes, activeTypesInMonth]);
 
   const renderCalendarGrid = () => {
     const grid = [];
@@ -359,10 +430,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       // Aplicar filtro da legenda AQUI
       const filteredEvents = filterEventsByLegend(allDayEvents, holiday);
       
-      // Lógica de exibição:
-      // Se houver filtro de feriado: só destaca se for feriado.
-      // Se houver filtro de evento: só destaca se tiver evento filtrado.
-      // Se não houver filtro: destaca se tiver feriado OU eventos.
+      // Lógica de exibição
       const hasEvents = filteredEvents.length > 0 || (holiday && (!legendFilter || legendFilter === 'feriado'));
       const showHoliday = holiday && (!legendFilter || legendFilter === 'feriado');
 
@@ -376,7 +444,6 @@ export const Calendar: React.FC<CalendarProps> = ({
         >
           <div className={`text-sm font-bold mb-1 flex justify-between items-center ${showHoliday ? 'text-amber-700' : 'text-gray-700'}`}>
               <span>{day}</span>
-              {/* Contador de eventos ocultos pelo filtro, se desejar implementar depois */}
           </div>
           
           {showHoliday && (
@@ -500,6 +567,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       </div>
 
       {/* Legenda Interativa */}
+      {legendItems.length > 0 ? (
       <div className="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
         <p className="text-xs font-bold text-gray-500 uppercase mb-3 flex justify-between items-center">
             Legenda Interativa (Clique para filtrar)
@@ -527,6 +595,11 @@ export const Calendar: React.FC<CalendarProps> = ({
             })}
         </div>
       </div>
+      ) : (
+          <div className="mt-6 text-center text-xs text-gray-400 bg-gray-50 p-2 rounded">
+              Nenhum evento registrado neste mês para os filtros selecionados.
+          </div>
+      )}
 
       {/* Modal de Detalhes do Dia */}
       <Modal 
