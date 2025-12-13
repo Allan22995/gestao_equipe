@@ -9,13 +9,25 @@ interface CalendarProps {
   events: EventRecord[];
   onCalls: OnCallRecord[];
   vacationRequests: VacationRequest[];
-  settings?: SystemSettings; // Opcional para compatibilidade, mas idealmente obrigatório
+  settings?: SystemSettings;
   currentUserProfile: UserProfile;
-  currentUserAllowedSectors: string[]; // Lista de setores permitidos para visualização
-  canViewPhones: boolean; // Permissão ACL
-  availableBranches: string[]; // Lista de filiais permitidas
+  currentUserAllowedSectors: string[];
+  canViewPhones: boolean;
+  availableBranches: string[];
   userColabId: string | null;
 }
+
+// Paleta de cores para eventos personalizados (Dinâmicos)
+const DYNAMIC_COLORS = [
+  'bg-purple-100 text-purple-800 border-purple-200',
+  'bg-pink-100 text-pink-800 border-pink-200',
+  'bg-cyan-100 text-cyan-800 border-cyan-200',
+  'bg-lime-100 text-lime-800 border-lime-200',
+  'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+  'bg-rose-100 text-rose-800 border-rose-200',
+  'bg-sky-100 text-sky-800 border-sky-200',
+  'bg-violet-100 text-violet-800 border-violet-200',
+];
 
 export const Calendar: React.FC<CalendarProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
@@ -24,53 +36,43 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<{ date: string, dayEvents: any[], holiday?: string } | null>(null);
   
+  // State para o filtro da legenda (Tipo de evento)
+  const [legendFilter, setLegendFilter] = useState<string | null>(null);
+
   // Filters (Multi-Select)
   const [filterName, setFilterName] = useState('');
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterRoles, setFilterRoles] = useState<string[]>([]);
   const [filterSectors, setFilterSectors] = useState<string[]>([]);
 
-  // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
+  // Filtrar colaboradores ativos primeiro
   const activeCollaborators = useMemo(() => {
      return collaborators.filter(c => c.active !== false);
   }, [collaborators]);
 
-  // If user is restricted to only 1 sector, force filter.
+  // Force filters based on permissions
   useEffect(() => {
-    if (currentUserAllowedSectors.length === 1) {
-      setFilterSectors([currentUserAllowedSectors[0]]);
-    }
-  }, [currentUserAllowedSectors]);
+    if (currentUserAllowedSectors.length === 1) setFilterSectors([currentUserAllowedSectors[0]]);
+    if (availableBranches.length === 1) setFilterBranches([availableBranches[0]]);
+  }, [currentUserAllowedSectors, availableBranches]);
 
-  // If user is restricted to only 1 branch, force filter.
-  useEffect(() => {
-    if (availableBranches.length === 1) {
-      setFilterBranches([availableBranches[0]]);
-    }
-  }, [availableBranches]);
-
-  // Available sectors for filter dropdown (Dynamic based on selected branch)
+  // Available sectors logic
   const availableSectors = useMemo(() => {
     if (!settings) return [];
-    
-    // Determine the source of sectors
     let sectorsPool: string[] = [];
 
     if (filterBranches.length > 0) {
-        // If specific branches selected, get sectors only from those branches
         filterBranches.forEach(branch => {
             const branchSectors = settings.branchSectors?.[branch] || [];
             sectorsPool = [...sectorsPool, ...branchSectors];
         });
     } else {
-        // If no branch selected, show all available sectors from available branches or global
         if (availableBranches.length > 0) {
              availableBranches.forEach(branch => {
                 const branchSectors = settings.branchSectors?.[branch] || [];
                 sectorsPool = [...sectorsPool, ...branchSectors];
              });
         } else {
-             // Fallback to legacy global list or all sectors from map
              if (settings.branchSectors) {
                 Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...s]);
              } else {
@@ -78,19 +80,14 @@ export const Calendar: React.FC<CalendarProps> = ({
              }
         }
     }
-    
-    // Unique values
     sectorsPool = Array.from(new Set(sectorsPool));
-
-    // Filter by User Permissions
     if (currentUserAllowedSectors.length > 0) {
         return sectorsPool.filter(s => currentUserAllowedSectors.includes(s));
     }
-    
     return sectorsPool.sort();
   }, [settings, currentUserAllowedSectors, filterBranches, availableBranches]);
 
-  // Reset sector filter if selected sector is no longer available
+  // Reset sector filter
   useEffect(() => {
       if (filterSectors.length > 0) {
           const validSectors = filterSectors.filter(s => availableSectors.includes(s));
@@ -100,41 +97,27 @@ export const Calendar: React.FC<CalendarProps> = ({
       }
   }, [availableSectors, filterSectors]);
 
-
-  // --- Lógica Dinâmica de Funções (Roles) ---
-  // Filtra as funções disponíveis baseando-se nos setores e filiais selecionados
+  // Available Roles logic
   const availableRoles = useMemo(() => {
     let filtered = activeCollaborators;
-
-    // 1. Aplica restrições de segurança de Setor
     if (currentUserAllowedSectors.length > 0) {
       filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
     }
-    
-    // 2. Aplica filtro de Filiais (Selecionado ou Restrito)
     if (filterBranches.length > 0) {
         filtered = filtered.filter(c => filterBranches.includes(c.branch));
     } else if (availableBranches.length > 0) {
         filtered = filtered.filter(c => availableBranches.includes(c.branch));
     }
-
-    // 3. Aplica filtro de Setores (Selecionado)
     if (filterSectors.length > 0) {
       filtered = filtered.filter(c => c.sector && filterSectors.includes(c.sector));
     }
-
-    // Se houver algum filtro ativo (Setor ou Filial) ou restrição de segurança,
-    // retorna apenas as roles presentes nos colaboradores filtrados.
     if (filterBranches.length > 0 || filterSectors.length > 0 || availableBranches.length > 0 || currentUserAllowedSectors.length > 0) {
        const rolesInUse = new Set(filtered.map(c => c.role));
        return Array.from(rolesInUse).sort();
     }
-
-    // Caso contrário, retorna todas as roles configuradas
     return settings?.roles.map(r => r.name).sort() || [];
   }, [activeCollaborators, filterBranches, filterSectors, currentUserAllowedSectors, settings?.roles, availableBranches]);
 
-  // Limpa filtro de roles se a role selecionada não estiver mais disponível na lista dinâmica
   useEffect(() => {
      if (filterRoles.length > 0) {
         const validRoles = filterRoles.filter(r => availableRoles.includes(r));
@@ -146,42 +129,56 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-
   const holidays = useMemo(() => getFeriados(year), [year]);
-
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, month, 1).getDay();
-
-  const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
-  // Helper to check filters against a collaborator ID
+  // --- HELPER: Cores e Estilos ---
+  const getEventStyle = (typeId: string, kind: string, status?: string) => {
+      // 1. Status Pendente (Visual diferenciado)
+      if (status && status !== 'aprovado') {
+          return 'bg-gray-100 text-gray-500 border border-dashed border-gray-400';
+      }
+
+      // 2. Tipos Fixos do Sistema
+      if (kind === 'plantao') return 'bg-orange-100 text-orange-800 border border-orange-200';
+      if (kind === 'rotation_off') return 'bg-teal-100 text-teal-800 border border-teal-200'; // Folga Escala distinct color
+      if (kind === 'vacation_req') return 'bg-blue-100 text-blue-800 border border-blue-200'; // Solicitacao de ferias aprovada vira 'ferias' visualmente
+
+      // 3. Mapeamento de Tipos de Eventos (Configurações)
+      if (typeId === 'ferias') return 'bg-blue-100 text-blue-800 border border-blue-200';
+      if (typeId === 'folga') return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+      if (typeId === 'trabalhado') return 'bg-red-100 text-red-800 border border-red-200';
+
+      // 4. Cores Dinâmicas para Tipos Personalizados
+      // Tenta encontrar o índice do tipo nas configurações para atribuir uma cor consistente
+      const customIndex = settings?.eventTypes.filter(t => !['ferias', 'folga', 'trabalhado'].includes(t.id)).findIndex(t => t.id === typeId);
+      
+      if (customIndex !== undefined && customIndex >= 0) {
+          return DYNAMIC_COLORS[customIndex % DYNAMIC_COLORS.length];
+      }
+
+      // Fallback
+      return 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+  };
+
   const matchesFilters = (colabId: string) => {
-    // 1. Strict Privacy for 'colaborador' profile
     if (currentUserProfile === 'colaborador' && userColabId) {
         if (colabId !== userColabId) return false;
     }
-
     const colab = activeCollaborators.find(c => c.id === colabId);
     if (!colab) return false;
 
-    // First check restriction permission (Sector)
     if (currentUserAllowedSectors.length > 0) {
-      if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) {
-        return false;
-      }
+      if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) return false;
     }
 
     const matchesName = filterName ? colab.name.toLowerCase().includes(filterName.toLowerCase()) : true;
-    
-    // Multi-Select Logic: If filter array is empty, it means "All" (of the available ones), otherwise check inclusion
-    const matchesBranch = filterBranches.length > 0 
-      ? filterBranches.includes(colab.branch) 
-      : (availableBranches.length > 0 ? availableBranches.includes(colab.branch) : true);
-
+    const matchesBranch = filterBranches.length > 0 ? filterBranches.includes(colab.branch) : (availableBranches.length > 0 ? availableBranches.includes(colab.branch) : true);
     const matchesRole = filterRoles.length > 0 ? filterRoles.includes(colab.role) : true;
     const matchesSector = filterSectors.length > 0 ? (colab.sector && filterSectors.includes(colab.sector)) : true;
 
@@ -194,9 +191,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
     // 1. Database Events
     let dayEvents = events.filter(e => {
-      // Ocultar eventos reprovados
       if (e.status === 'reprovado') return false;
-      
       const start = new Date(e.startDate + 'T00:00:00');
       const end = new Date(e.endDate + 'T00:00:00');
       return checkDate >= start && checkDate <= end;
@@ -216,31 +211,22 @@ export const Calendar: React.FC<CalendarProps> = ({
       return checkDate >= start && checkDate <= end;
     }).map(v => ({ ...v, kind: 'vacation_req' as const }));
 
-    // 4. Dynamic Rotation Rules (Escalas) - VIRTUAL EVENTS
+    // 4. Dynamic Rotation Rules (Escalas)
     const virtualRotationEvents: any[] = [];
-    
-    // Se for Domingo, verifica regras de escala
     if (checkDate.getDay() === 0) { 
         activeCollaborators.forEach(c => {
-            // Verifica filtros primeiro para não processar desnecessariamente
             if (!matchesFilters(c.id)) return;
-            
-            // Só aplica se o colaborador tem escala definida
             if (c.hasRotation && c.rotationGroup) {
-                // Nova Lógica: Baseada na data de referência (rotationStartDate)
                 const isRotationOff = checkRotationDay(checkDate, c.rotationStartDate);
-                
                 if (isRotationOff) {
-                    // Verifica se já existe um evento explícito (ex: Férias, Atestado) que sobrepõe
                     const hasExplicitEvent = [...dayEvents, ...dayVacationReqs].some(e => e.collaboratorId === c.id);
-                    
                     if (!hasExplicitEvent) {
                          virtualRotationEvents.push({
                              id: `rot-off-${c.id}-${dateStr}`,
                              collaboratorId: c.id,
                              kind: 'rotation_off',
                              typeLabel: 'Folga de Escala',
-                             rotationGroup: c.rotationGroup // Passar o nome do grupo para exibir
+                             rotationGroup: c.rotationGroup
                          });
                     }
                 }
@@ -248,7 +234,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         });
     }
 
-    // Apply filters to standard events
+    // Apply User Filters
     dayEvents = dayEvents.filter(e => matchesFilters(e.collaboratorId));
     dayOnCalls = dayOnCalls.filter(oc => matchesFilters(oc.collaboratorId));
     dayVacationReqs = dayVacationReqs.filter(v => matchesFilters(v.collaboratorId));
@@ -256,24 +242,61 @@ export const Calendar: React.FC<CalendarProps> = ({
     return [...dayEvents, ...dayOnCalls, ...dayVacationReqs, ...virtualRotationEvents];
   };
 
+  // --- FILTRO DE LEGENDA ---
+  const filterEventsByLegend = (eventsList: any[], holiday: string | undefined) => {
+      if (!legendFilter) return eventsList; // Sem filtro, retorna tudo
+
+      // Filtro especial para Feriado
+      if (legendFilter === 'feriado') {
+          return holiday ? eventsList : []; // Se for dia de feriado, mostra os eventos do dia (ou apenas o feriado)
+      }
+
+      return eventsList.filter(item => {
+          // Filtro por Pendente
+          if (legendFilter === 'pendente') {
+              return (item.status && item.status !== 'aprovado');
+          }
+          
+          // Filtro por Plantão
+          if (legendFilter === 'plantao') {
+              return item.kind === 'plantao';
+          }
+
+          // Filtro por Folga de Escala
+          if (legendFilter === 'rotation_off') {
+              return item.kind === 'rotation_off';
+          }
+
+          // Filtro por Tipo Genérico (Eventos e Férias)
+          // Se for 'ferias', pega tanto evento type='ferias' quanto vacation_req
+          if (legendFilter === 'ferias') {
+              return item.type === 'ferias' || item.kind === 'vacation_req';
+          }
+
+          // Filtros Específicos (Custom Types)
+          if (item.kind === 'event') {
+              // Se o filtro for igual ao ID do tipo do evento
+              return item.type === legendFilter;
+          }
+
+          return false;
+      });
+  };
+
   const handleDayClick = (day: number, dayEvents: any[], holiday?: string) => {
-    if (dayEvents.length > 0 || holiday) {
+    // Filtra os eventos da modal também
+    const filteredForModal = filterEventsByLegend(dayEvents, holiday);
+    
+    // Se tiver filtro de feriado ativo e for feriado, abre. Se não, verifica se tem eventos.
+    if ((legendFilter === 'feriado' && holiday) || filteredForModal.length > 0 || (holiday && !legendFilter)) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      setSelectedDay({ date: dateStr, dayEvents, holiday });
+      setSelectedDay({ date: dateStr, dayEvents: filteredForModal, holiday });
     }
   };
 
-  const getCollaboratorName = (id: string) => {
-    return activeCollaborators.find(c => c.id === id)?.name || 'Desconhecido';
-  };
-  
-  const getCollaboratorPhone = (id: string) => {
-    return activeCollaborators.find(c => c.id === id)?.phone || null;
-  };
-
-  const getCollaboratorOtherContact = (id: string) => {
-    return activeCollaborators.find(c => c.id === id)?.otherContact || null;
-  };
+  const getCollaboratorName = (id: string) => activeCollaborators.find(c => c.id === id)?.name || 'Desconhecido';
+  const getCollaboratorPhone = (id: string) => activeCollaborators.find(c => c.id === id)?.phone || null;
+  const getCollaboratorOtherContact = (id: string) => activeCollaborators.find(c => c.id === id)?.otherContact || null;
   
   const getCollaboratorScaleInfo = (id: string) => {
     const c = activeCollaborators.find(c => c.id === id);
@@ -281,16 +304,46 @@ export const Calendar: React.FC<CalendarProps> = ({
     return null;
   };
 
-  const getEventTypeLabel = (evt: EventRecord) => {
+  const getEventTypeLabel = (evt: any) => {
+    if (evt.kind === 'plantao') return 'Plantão';
+    if (evt.kind === 'rotation_off') return 'Folga de Escala';
+    if (evt.kind === 'vacation_req') return 'Férias (Prev.)';
+    
     if (evt.typeLabel) return evt.typeLabel;
-    // Fallback for legacy
-    if (evt.type === 'ferias') return 'Férias';
-    if (evt.type === 'folga') return 'Folga';
-    if (evt.type === 'trabalhado') return 'Trabalhado';
-    // Try to find in settings
     const found = settings?.eventTypes.find(t => t.id === evt.type);
-    return found ? found.label : evt.type;
+    return found ? found.label : formatLabel(evt.type);
   };
+
+  const formatLabel = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
+
+  // --- LEGEND ITEMS GENERATION ---
+  const legendItems = useMemo(() => {
+      const items = [];
+      
+      // 1. Tipos Padrão e Customizados do Settings
+      if (settings?.eventTypes) {
+          settings.eventTypes.forEach(t => {
+              items.push({ 
+                  id: t.id, 
+                  label: t.label, 
+                  colorClass: getEventStyle(t.id, 'event', 'aprovado') 
+              });
+          });
+      } else {
+          // Fallback legacy
+          items.push({ id: 'ferias', label: 'Férias', colorClass: getEventStyle('ferias', 'event') });
+          items.push({ id: 'folga', label: 'Folga', colorClass: getEventStyle('folga', 'event') });
+          items.push({ id: 'trabalhado', label: 'Trabalhado', colorClass: getEventStyle('trabalhado', 'event') });
+      }
+
+      // 2. Tipos Fixos Extras
+      items.push({ id: 'plantao', label: 'Plantão', colorClass: getEventStyle('', 'plantao') });
+      items.push({ id: 'rotation_off', label: 'Folga de Escala', colorClass: getEventStyle('', 'rotation_off') });
+      items.push({ id: 'pendente', label: 'Pendente / Previsão', colorClass: getEventStyle('', 'event', 'pendente') });
+      items.push({ id: 'feriado', label: 'Feriado', colorClass: 'bg-amber-100 text-amber-800 border-amber-300' }); // Specific for holiday
+
+      return items;
+  }, [settings?.eventTypes]);
 
   const renderCalendarGrid = () => {
     const grid = [];
@@ -301,64 +354,50 @@ export const Calendar: React.FC<CalendarProps> = ({
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const holiday = holidays[dateStr];
-      const dayEvents = getEventsForDay(day);
-      const hasEvents = dayEvents.length > 0 || holiday;
+      const allDayEvents = getEventsForDay(day);
+      
+      // Aplicar filtro da legenda AQUI
+      const filteredEvents = filterEventsByLegend(allDayEvents, holiday);
+      
+      // Lógica de exibição:
+      // Se houver filtro de feriado: só destaca se for feriado.
+      // Se houver filtro de evento: só destaca se tiver evento filtrado.
+      // Se não houver filtro: destaca se tiver feriado OU eventos.
+      const hasEvents = filteredEvents.length > 0 || (holiday && (!legendFilter || legendFilter === 'feriado'));
+      const showHoliday = holiday && (!legendFilter || legendFilter === 'feriado');
 
       grid.push(
         <div
           key={day}
-          onClick={() => handleDayClick(day, dayEvents, holiday)}
-          className={`min-h-[100px] p-2 border border-gray-200 rounded-lg transition-all ${
+          onClick={() => handleDayClick(day, allDayEvents, holiday)}
+          className={`min-h-[100px] p-2 border border-gray-200 rounded-lg transition-all relative ${
             hasEvents ? 'bg-white hover:shadow-md cursor-pointer' : 'bg-white'
-          } ${holiday ? 'bg-amber-50 border-amber-200' : ''}`}
+          } ${showHoliday ? 'bg-amber-50 border-amber-200' : ''} ${legendFilter && !hasEvents ? 'opacity-40' : ''}`}
         >
-          <div className={`text-sm font-bold mb-1 ${holiday ? 'text-amber-700' : 'text-gray-700'}`}>{day}</div>
+          <div className={`text-sm font-bold mb-1 flex justify-between items-center ${showHoliday ? 'text-amber-700' : 'text-gray-700'}`}>
+              <span>{day}</span>
+              {/* Contador de eventos ocultos pelo filtro, se desejar implementar depois */}
+          </div>
           
-          {holiday && (
-            <div className="mb-1 text-[10px] font-semibold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-md inline-block truncate w-full">
+          {showHoliday && (
+            <div className="mb-1 text-[10px] font-semibold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-md inline-block truncate w-full border border-amber-200">
               🎉 {holiday}
             </div>
           )}
 
           <div className="space-y-1">
-            {dayEvents.slice(0, 3).map((item: any, idx) => {
-              let colorClass = '';
+            {filteredEvents.slice(0, 3).map((item: any, idx) => {
+              const status = item.status || 'aprovado';
+              const colorClass = getEventStyle(item.type, item.kind, status);
               
-              if (item.kind === 'plantao') {
-                colorClass = 'bg-orange-100 text-orange-800';
-              } else if (item.kind === 'vacation_req') {
-                 if(item.status === 'aprovado') colorClass = 'bg-blue-100 text-blue-800 border border-blue-300';
-                 else if (item.status === 'nova_opcao') colorClass = 'bg-blue-100 text-blue-800 border border-blue-300';
-                 else colorClass = 'bg-gray-100 text-gray-600 border border-dashed border-gray-400';
-              } else if (item.kind === 'rotation_off') {
-                 colorClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200'; // Folga de Escala
-              } else if (item.kind === 'event') {
-                 // Check Status if exists (new feature)
-                 const isApproved = !item.status || item.status === 'aprovado';
-                 
-                 // Dynamic colors based on legacy type or default
-                 if (item.type === 'ferias') colorClass = 'bg-blue-100 text-blue-800';
-                 else if (item.type === 'folga') colorClass = 'bg-emerald-100 text-emerald-800';
-                 else if (item.type === 'trabalhado') colorClass = 'bg-red-100 text-red-800';
-                 else colorClass = 'bg-indigo-100 text-indigo-800'; // Default for custom
-
-                 // Apply Visual style for pending events
-                 if (!isApproved) {
-                    colorClass = 'bg-gray-100 text-gray-600 border border-dashed border-gray-400';
-                 }
-              }
-
               const isReq = item.kind === 'vacation_req';
               const reqLabel = isReq ? (item.status === 'aprovado' ? '(Aprov.)' : item.status === 'nova_opcao' ? '(Opção)' : '(Prev.)') : '';
-              
               const isEvent = item.kind === 'event';
               const eventLabel = isEvent && item.status && item.status !== 'aprovado' ? `(${item.status === 'nova_opcao' ? 'Opção' : 'Pend.'})` : '';
-
-              // Simplifica label para virtual events
               const virtualLabel = (item.kind === 'rotation_off') ? '(Folga)' : '';
 
               return (
-                <div key={idx} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 truncate ${colorClass}`}>
+                <div key={idx} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 truncate border ${colorClass}`}>
                   <div className={`w-1.5 h-1.5 rounded-full bg-current shrink-0`}></div>
                   <span className="truncate font-medium">
                     {getCollaboratorName(item.collaboratorId)} {reqLabel} {eventLabel} {virtualLabel}
@@ -366,9 +405,9 @@ export const Calendar: React.FC<CalendarProps> = ({
                 </div>
               );
             })}
-            {dayEvents.length > 3 && (
+            {filteredEvents.length > 3 && (
                <div className="text-[10px] text-gray-500 font-medium pl-1">
-                 +{dayEvents.length - 3} mais...
+                 +{filteredEvents.length - 3} mais...
                </div>
             )}
           </div>
@@ -443,6 +482,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         </div>
       </div>
 
+      {/* Grid Calendário */}
       <div className="overflow-x-auto">
         <div className="min-w-[800px]">
             <div className="grid grid-cols-7 gap-2 mb-2 z-10 relative">
@@ -459,34 +499,43 @@ export const Calendar: React.FC<CalendarProps> = ({
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-4 text-xs text-gray-600 bg-gray-50 p-4 rounded-lg">
-        <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded-full bg-blue-500"></span> Férias
-        </div>
-        <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded-full bg-emerald-500"></span> Folga
-        </div>
-        <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded-full bg-red-500"></span> Trabalhado
-        </div>
-        <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded-full bg-orange-500"></span> Plantão
-        </div>
-        <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded border border-gray-400 border-dashed bg-gray-100"></span> Pendente / Previsão
-        </div>
-        <div className="flex items-center gap-2">
-           <span className="w-3 h-3 rounded bg-amber-200 border border-amber-500"></span> Feriado
+      {/* Legenda Interativa */}
+      <div className="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
+        <p className="text-xs font-bold text-gray-500 uppercase mb-3 flex justify-between items-center">
+            Legenda Interativa (Clique para filtrar)
+            {legendFilter && (
+                <button onClick={() => setLegendFilter(null)} className="text-indigo-600 hover:underline cursor-pointer">
+                    Limpar Filtro ✕
+                </button>
+            )}
+        </p>
+        <div className="flex flex-wrap gap-2">
+            {legendItems.map((item) => {
+                const isActive = legendFilter === item.id;
+                const isInactive = legendFilter && !isActive;
+                return (
+                    <button
+                        key={item.id}
+                        onClick={() => setLegendFilter(isActive ? null : item.id)}
+                        className={`text-[10px] px-3 py-1.5 rounded-full font-bold flex items-center gap-2 border transition-all duration-200 transform active:scale-95 ${item.colorClass} ${isActive ? 'ring-2 ring-offset-1 ring-indigo-400 scale-105 shadow-md' : ''} ${isInactive ? 'opacity-40 grayscale-[50%]' : 'hover:shadow-sm'}`}
+                    >
+                        {/* Simular bolinha colorida usando cor do texto */}
+                        <div className="w-2 h-2 rounded-full bg-current opacity-70"></div>
+                        {item.label}
+                    </button>
+                );
+            })}
         </div>
       </div>
 
+      {/* Modal de Detalhes do Dia */}
       <Modal 
         isOpen={!!selectedDay} 
         onClose={() => setSelectedDay(null)} 
         title={selectedDay ? `Detalhes - ${new Date(selectedDay.date + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''}
       >
         <div className="space-y-3">
-           {selectedDay?.holiday && (
+           {selectedDay?.holiday && (!legendFilter || legendFilter === 'feriado') && (
              <div className="p-3 bg-amber-50 border-l-4 border-amber-400 rounded-r-md">
                <div className="font-bold text-amber-800">🎉 {selectedDay.holiday}</div>
                <div className="text-xs text-amber-600">Feriado</div>
@@ -498,46 +547,17 @@ export const Calendar: React.FC<CalendarProps> = ({
               const scaleInfo = getCollaboratorScaleInfo(e.collaboratorId);
               const phone = getCollaboratorPhone(e.collaboratorId);
               const otherContact = getCollaboratorOtherContact(e.collaboratorId);
-              let borderClass = '';
-              let bgClass = '';
-              let title = '';
               
-              if (e.kind === 'plantao') {
-                borderClass = 'border-orange-400';
-                bgClass = 'bg-orange-50';
-                title = 'Plantão';
-              } else if (e.kind === 'vacation_req') {
-                 if(e.status === 'aprovado') { borderClass = 'border-blue-500'; bgClass = 'bg-blue-50'; title = 'Férias Aprovadas'; }
-                 else if(e.status === 'nova_opcao') { borderClass = 'border-blue-500'; bgClass = 'bg-blue-50'; title = 'Nova Opção de Férias'; }
-                 else { borderClass = 'border-gray-400 border-dashed'; bgClass = 'bg-gray-50'; title = `Previsão (${e.status === 'negociacao' ? 'Em Negociação' : e.status})`; }
-              } else if (e.kind === 'rotation_off') {
-                 borderClass = 'border-emerald-400';
-                 bgClass = 'bg-emerald-50';
-                 title = `Folga de Escala (${e.rotationGroup})`;
-              } else if (e.kind === 'event') {
-                title = getEventTypeLabel(e);
-                const isApproved = !e.status || e.status === 'aprovado';
-
-                if (!isApproved) {
-                    borderClass = 'border-gray-400 border-dashed'; 
-                    bgClass = 'bg-gray-50';
-                    title = `${title} (${e.status})`;
-                } else {
-                    if (e.type === 'ferias') { borderClass = 'border-blue-400'; bgClass = 'bg-blue-50'; }
-                    else if (e.type === 'folga') { borderClass = 'border-emerald-400'; bgClass = 'bg-emerald-50'; }
-                    else if (e.type === 'trabalhado') { borderClass = 'border-red-400'; bgClass = 'bg-red-50'; }
-                    else { borderClass = 'border-indigo-400'; bgClass = 'bg-indigo-50'; }
-                }
-              }
+              const title = getEventTypeLabel(e);
+              const colorClass = getEventStyle(e.type, e.kind, e.status);
 
               return (
-                <div key={idx} className={`p-3 border-l-4 rounded-r-md ${borderClass} ${bgClass} transition-all hover:shadow-md`}>
+                <div key={idx} className={`p-3 border-l-4 rounded-r-md transition-all hover:shadow-md border ${colorClass.replace('bg-', 'bg-opacity-20 ')}`}>
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex flex-col min-w-0">
                         <span className="font-bold text-gray-800 text-sm leading-snug break-words">{name}</span>
                         {scaleInfo && <span className="text-[10px] font-bold text-purple-700 mt-0.5">{scaleInfo}</span>}
                         
-                         {/* Contacts inside the left column to align with name */}
                          {canViewPhones && (phone || otherContact) && (
                             <div className="flex flex-col gap-0.5 mt-1.5">
                                {phone && <div className="text-xs text-gray-600 font-medium flex items-center gap-1">📞 {phone}</div>}
@@ -547,7 +567,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                     </div>
                     
                     <div className="shrink-0 flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-white/60 border border-black/5 text-gray-700 shadow-sm text-right max-w-[120px] whitespace-normal leading-tight">
+                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded border shadow-sm text-right max-w-[120px] whitespace-normal leading-tight ${colorClass}`}>
                             {title}
                         </span>
                         {e.kind === 'plantao' && (
@@ -555,12 +575,17 @@ export const Calendar: React.FC<CalendarProps> = ({
                              {e.startTime} - {e.endTime}
                            </span>
                         )}
+                        {e.status && e.status !== 'aprovado' && (
+                            <span className="text-[9px] text-gray-500 font-medium bg-gray-100 px-1 rounded border border-gray-300">
+                                {e.status === 'nova_opcao' ? 'Contraproposta' : 'Aguardando'}
+                            </span>
+                        )}
                     </div>
                   </div>
 
                   {/* Observations */}
                   {((e.kind === 'vacation_req' && e.notes) || e.observation) && (
-                      <div className="mt-2 text-xs text-gray-600 bg-white/50 p-2 rounded border border-black/5">
+                      <div className="mt-2 text-xs text-gray-600 bg-white/60 p-2 rounded border border-black/5">
                           {(e.kind === 'vacation_req' && e.notes) && <div className="italic">Obs: {e.notes}</div>}
                           {e.observation && <div className="italic">Obs: {e.observation}</div>}
                       </div>
@@ -570,7 +595,9 @@ export const Calendar: React.FC<CalendarProps> = ({
            })}
 
            {!selectedDay?.holiday && selectedDay?.dayEvents.length === 0 && (
-             <div className="text-center text-gray-500 py-4">Nenhum evento filtrado neste dia.</div>
+             <div className="text-center text-gray-500 py-4">
+                 {legendFilter ? 'Nenhum evento deste tipo neste dia.' : 'Nenhum evento filtrado neste dia.'}
+             </div>
            )}
         </div>
       </Modal>
