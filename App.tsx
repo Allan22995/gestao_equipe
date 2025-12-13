@@ -459,7 +459,7 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 py-4">
            <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-xl md:text-3xl font-bold text-white drop-shadow-sm">Sistema de Gestão</h1>
+                <h1 className="text-xl md:text-3xl font-bold text-white text-outline-black">Nexo - Gestão de Equipes</h1>
                 <p className="text-white/80 text-xs md:text-sm mt-1 flex items-center gap-2">
                   <span className="bg-white/20 px-2 py-0.5 rounded text-white font-mono">{userProfile?.toUpperCase()}</span>
                   {user.email}
