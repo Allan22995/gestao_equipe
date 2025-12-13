@@ -196,15 +196,17 @@ export const Simulator: React.FC<SimulatorProps> = ({
     const start = new Date(simStartDate + 'T00:00:00');
     const end = new Date(simEndDate + 'T00:00:00');
     const days: { date: string, label: string, isHoliday: string | null }[] = [];
+    const weekDayShort = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
     // 1. Generate Date Range
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
         const year = d.getFullYear();
         const holidays = getFeriados(year);
+        const dayOfWeek = d.getDay();
         days.push({
             date: dateStr,
-            label: `${d.getDate()}/${d.getMonth() + 1}`,
+            label: `${weekDayShort[dayOfWeek]} ${d.getDate()}`,
             isHoliday: holidays[dateStr] || null
         });
     }
@@ -234,13 +236,11 @@ export const Simulator: React.FC<SimulatorProps> = ({
         ? settings.roles.map(r => r.name) 
         : filterRoles;
 
-    // Filter Optimization: If a specific sector is selected, only show roles present in that sector
-    // This avoids showing irrelevant roles (with 0 data) in the matrix
+    // Filter Optimization
     if (filterRoles.length === 0 && filterSectors.length > 0) {
         const rolesInSector = new Set(activeCollaboratorsFiltered.map(c => c.role));
         rolesToSimulate = rolesToSimulate.filter(r => rolesInSector.has(r));
     } else if (filterRoles.length === 0) {
-        // If no filter, restrict to available roles in the general context to avoid noise
         rolesToSimulate = rolesToSimulate.filter(r => availableRolesOptions.includes(r));
     }
 
@@ -259,41 +259,29 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
         days.forEach(day => {
             const dateObj = new Date(day.date + 'T00:00:00');
-            const dayOfWeek = dateObj.getDay(); // 0 = Dom, 1 = Seg...
+            const dayOfWeek = dateObj.getDay(); 
             const scheduleKey = weekDayMap[dayOfWeek] as keyof Schedule;
 
             let availableCount = 0;
 
             roleColabs.forEach(colab => {
-                // A. Check if standard schedule enables work this day
                 if (!colab.schedule[scheduleKey]?.enabled) return;
 
-                // A.5 Check Rotation Off Day (New 3x1 Logic)
                 if (dayOfWeek === 0 && colab.hasRotation && checkRotationDay(dateObj, colab.rotationStartDate)) {
-                    // It's an off day due to rotation -> Absent
                     return; 
                 }
 
-                // B. Check Historical Events (Absences)
                 const hasHistoryEvent = events.some(e => {
                     if (e.collaboratorId !== colab.id) return false;
                     const eStart = new Date(e.startDate + 'T00:00:00');
                     const eEnd = new Date(e.endDate + 'T00:00:00');
-                    
-                    // Consider absence if event type behaves like absence (ferias, folga, atestado, falta)
-                    // We assume 'trabalhado' adds (credit_2x), all others subtract or are neutral absences.
                     const evtType = settings.eventTypes.find(t => t.id === e.type);
-                    const isWorking = evtType && evtType.behavior === 'credit_2x'; // Only explicitly worked days count as presence override
-                    
-                    // Logic: If it's NOT a working credit event, it counts as absence for the schedule simulation
-                    // This covers: ferias, folga, atestado, falta, suspensao (assuming they are configured as neutral or debit)
+                    const isWorking = evtType && evtType.behavior === 'credit_2x';
                     const isAbsence = !isWorking; 
-                    
                     return isAbsence && dateObj >= eStart && dateObj <= eEnd;
                 });
                 if (hasHistoryEvent) return;
 
-                // C. Check Proposed Events (Drafts)
                 const hasDraftEvent = proposedEvents.some(e => {
                     if (e.collaboratorId !== colab.id) return false;
                     const eStart = new Date(e.startDate + 'T00:00:00');
@@ -302,11 +290,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
                 });
                 if (hasDraftEvent) return;
 
-                // If passed all checks, employee is available
                 availableCount++;
             });
 
-            // Determine Status for Role
             let status: 'ok' | 'alert' | 'violation' = 'ok';
             if (availableCount < roleMin) status = 'violation';
             else if (availableCount === roleMin) status = 'alert';
@@ -318,7 +304,6 @@ export const Simulator: React.FC<SimulatorProps> = ({
                 missing: roleMin - availableCount
             };
 
-            // Add to Grand Totals
             if (!day.isHoliday) {
                 grandTotals[day.date].available += availableCount;
                 grandTotals[day.date].min += roleMin;
@@ -326,7 +311,6 @@ export const Simulator: React.FC<SimulatorProps> = ({
         });
     });
 
-    // Calculate Grand Total Status per day
     days.forEach(d => {
         if (!d.isHoliday) {
             const t = grandTotals[d.date];
@@ -364,23 +348,23 @@ export const Simulator: React.FC<SimulatorProps> = ({
       };
 
       setProposedEvents([...proposedEvents, newDraft]);
-      setDraftForm({ ...draftForm, collaboratorId: '' }); // reset only colab for faster entry
+      setDraftForm({ ...draftForm, collaboratorId: '' }); 
   };
 
   const removeDraft = (id: string) => {
       setProposedEvents(proposedEvents.filter(e => e.id !== id));
   };
 
-  const getCellStyles = (status: 'ok' | 'alert' | 'violation', available: number, isHoliday: boolean | null) => {
+  const getCellStyles = (status: 'ok' | 'alert' | 'violation', available: number, isHoliday: string | null) => {
       if (isHoliday) return 'bg-gray-50 text-gray-400 border border-gray-200 opacity-50';
       
-      if (status === 'violation') return 'bg-red-100 text-red-800 border-red-300 font-bold shadow-sm';
-      if (status === 'alert') return 'bg-amber-100 text-amber-800 border-amber-300 font-bold shadow-sm';
+      if (status === 'violation') return 'bg-red-100 text-red-800 border-red-200 font-bold';
+      if (status === 'alert') return 'bg-amber-100 text-amber-800 border-amber-200 font-bold';
       
       // Status OK
-      if (available > 0) return 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold shadow-sm';
+      if (available > 0) return 'bg-emerald-100 text-emerald-800 border-emerald-200 font-bold';
       
-      // Status OK but 0 available (Neutral/No work scheduled)
+      // Status OK but 0 available (Neutral/No work scheduled) - Sutil
       return 'bg-white text-gray-300 border border-dashed border-gray-200';
   };
 
@@ -468,7 +452,6 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               <input type="date" value={simEndDate} onChange={e => setSimEndDate(e.target.value)} className="w-full border border-gray-300 rounded-md p-1.5 text-sm" />
                           </div>
                           
-                          {/* Branch Multi-Select Filter */}
                           <div>
                               <MultiSelect 
                                 label="FILTRAR POR FILIAL"
@@ -480,7 +463,6 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               />
                           </div>
 
-                          {/* Sector Filter (Multi) */}
                           <div>
                               <MultiSelect 
                                 label="FILTRAR POR SETOR"
@@ -492,7 +474,6 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               />
                           </div>
                           
-                          {/* Role Multi-Select Filter */}
                           <div>
                               <MultiSelect 
                                 label="FILTRAR POR FUNÇÃO"
@@ -522,13 +503,8 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                   <option value="">Selecione...</option>
                                   {activeCollaborators
                                     .filter(c => {
-                                      // 1. Restriction Check
                                       if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return false;
-                                      
-                                      // Branch Check
                                       if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
-
-                                      // 2. Simulator Sector Filter Check (Multi)
                                       if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
                                       return true;
                                     })
@@ -559,7 +535,6 @@ export const Simulator: React.FC<SimulatorProps> = ({
                           </button>
                       </form>
 
-                      {/* Draft List */}
                       {proposedEvents.length > 0 && (
                           <div className="mt-4 flex flex-wrap gap-2">
                               {proposedEvents.map(evt => {
@@ -582,37 +557,37 @@ export const Simulator: React.FC<SimulatorProps> = ({
                   <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                       <h2 className="text-lg font-bold text-gray-800">Resultado da Simulação</h2>
                       <div className="flex gap-4 text-xs font-bold">
-                          <div className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-100 border border-emerald-400 rounded"></span> Cobertura OK</div>
-                          <div className="flex items-center gap-1"><span className="w-3 h-3 bg-amber-100 border border-amber-400 rounded"></span> Alerta (No limite)</div>
-                          <div className="flex items-center gap-1"><span className="w-3 h-3 bg-red-100 border border-red-400 rounded"></span> Violação</div>
+                          <div className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-100 border border-emerald-200 rounded"></span> Cobertura OK</div>
+                          <div className="flex items-center gap-1"><span className="w-3 h-3 bg-amber-100 border border-amber-200 rounded"></span> Alerta</div>
+                          <div className="flex items-center gap-1"><span className="w-3 h-3 bg-red-100 border border-red-200 rounded"></span> Violação</div>
                           <div className="flex items-center gap-1"><span className="w-3 h-3 bg-white border border-gray-300 border-dashed rounded"></span> Neutro</div>
                       </div>
                   </div>
                   
-                  <div className="overflow-x-auto pb-4 custom-scrollbar">
+                  <div className="p-4 custom-scrollbar">
                       {Object.keys(simulationData.results).length === 0 && (
                           <p className="text-center text-gray-500 py-8">Nenhum dado para o setor/filtro selecionado.</p>
                       )}
 
                       {/* TOTAL GERAL ROW (Grouped by Week) */}
                       {Object.keys(simulationData.results).length > 0 && (
-                          <div className="mb-8 px-4 pt-4 bg-indigo-50/50 border-b-2 border-indigo-200 pb-4">
+                          <div className="mb-8 p-4 bg-indigo-50/50 border border-indigo-100 rounded-lg">
                               <div className="flex items-center gap-2 mb-2">
                                   <h3 className="font-bold text-indigo-800 uppercase tracking-wide">TOTAL GERAL <span className="text-xs font-normal normal-case opacity-70">(Agrupado)</span></h3>
                               </div>
-                              <div className="flex gap-4 min-w-max">
+                              <div className="flex gap-4 flex-wrap">
                                 {weeks.map((week, wIdx) => (
-                                    <div key={wIdx} className="flex gap-1 p-1 bg-white/50 rounded-lg border border-indigo-100">
+                                    <div key={wIdx} className="flex gap-1 p-1 bg-white/70 rounded-lg border border-indigo-100 shadow-sm">
                                         {week.map((day) => {
                                             const data = simulationData.grandTotals[day.date];
                                             const colorClass = getCellStyles(data.status, data.available, day.isHoliday);
 
                                             return (
-                                                <div key={day.date} className={`w-10 h-14 flex flex-col items-center justify-center border rounded ${colorClass}`}>
-                                                    <span className="text-[10px] font-bold">{day.label}</span>
+                                                <div key={day.date} className={`w-12 h-16 flex flex-col items-center justify-center border rounded ${colorClass}`}>
+                                                    <span className="text-[10px] font-bold opacity-80 leading-tight text-center">{day.label.split(' ').map((l, i) => <div key={i}>{l}</div>)}</span>
                                                     {!day.isHoliday ? (
-                                                        <span className="text-sm font-bold">{data.available}/{data.min}</span>
-                                                    ) : <span className="text-xs">F</span>}
+                                                        <span className="text-sm font-bold mt-1">{data.available}</span>
+                                                    ) : <span className="text-xs mt-1">F</span>}
                                                 </div>
                                             );
                                         })}
@@ -623,14 +598,14 @@ export const Simulator: React.FC<SimulatorProps> = ({
                       )}
 
                       {/* Matrix Rows by Role (Grouped by Week) */}
-                      <div className="px-4 space-y-6">
+                      <div className="space-y-6">
                         {Object.keys(simulationData.results).map(role => (
                             <div key={role} className="border-b border-gray-100 pb-4 last:border-0">
                                 <div className="flex items-center gap-2 mb-2">
                                     <h3 className="font-bold text-gray-700">{role}</h3>
-                                    <span className="text-xs text-gray-400 font-normal">(Meta: {getRuleForRole(role)})</span>
+                                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 rounded border border-gray-200">Meta: {getRuleForRole(role)} pessoas</span>
                                 </div>
-                                <div className="flex gap-4 min-w-max">
+                                <div className="flex gap-4 flex-wrap">
                                     {weeks.map((week, wIdx) => (
                                         <div key={wIdx} className="flex gap-1">
                                             {week.map((day) => {
@@ -638,8 +613,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                                 const colorClass = getCellStyles(data.status, data.available, day.isHoliday);
 
                                                 return (
-                                                    <div key={`${role}-${day.date}`} className={`w-10 h-12 flex flex-col items-center justify-center border rounded text-xs ${colorClass}`} title={`${day.date}: ${data.available} disponíveis`}>
-                                                        <span className="font-bold">{day.isHoliday ? 'F' : data.available}</span>
+                                                    <div key={`${role}-${day.date}`} className={`w-12 h-14 flex flex-col items-center justify-center border rounded text-xs ${colorClass}`} title={`${day.date}: ${data.available} disponíveis`}>
+                                                        <div className="text-[9px] opacity-60 leading-none mb-1">{day.label.split(' ')[0]}</div>
+                                                        <span className="font-bold text-sm">{day.isHoliday ? 'F' : data.available}</span>
                                                     </div>
                                                 );
                                             })}
