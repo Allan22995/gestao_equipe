@@ -66,6 +66,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState('');
+  const [templateBranch, setTemplateBranch] = useState(''); // Novo: Filial do modelo
   const [templateSchedule, setTemplateSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   
   const [newRoleName, setNewRoleName] = useState('');
@@ -398,16 +399,38 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const saveTemplate = () => {
     if (!templateName.trim()) { showToast('Nome obrigatório', true); return; }
     if (editingTemplateId) {
-        const updatedTemplates = (settings.scheduleTemplates || []).map(t => t.id === editingTemplateId ? { ...t, name: templateName.trim(), schedule: templateSchedule } : t);
-        saveSettings({ ...settings, scheduleTemplates: updatedTemplates }, 'template', () => { setTemplateName(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); setEditingTemplateId(null); });
+        const updatedTemplates = (settings.scheduleTemplates || []).map(t => t.id === editingTemplateId ? { ...t, name: templateName.trim(), branch: templateBranch, schedule: templateSchedule } : t);
+        saveSettings({ ...settings, scheduleTemplates: updatedTemplates }, 'template', () => { 
+            setTemplateName(''); 
+            setTemplateBranch('');
+            setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); 
+            setEditingTemplateId(null); 
+        });
     } else {
-        const newT: ScheduleTemplate = { id: generateUUID(), name: templateName.trim(), schedule: templateSchedule };
-        saveSettings({ ...settings, scheduleTemplates: [...(settings.scheduleTemplates || []), newT] }, 'template', () => { setTemplateName(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); });
+        const newT: ScheduleTemplate = { id: generateUUID(), name: templateName.trim(), branch: templateBranch, schedule: templateSchedule };
+        saveSettings({ ...settings, scheduleTemplates: [...(settings.scheduleTemplates || []), newT] }, 'template', () => { 
+            setTemplateName(''); 
+            setTemplateBranch('');
+            setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); 
+        });
     }
   };
 
-  const loadTemplateForEdit = (t: ScheduleTemplate) => { setEditingTemplateId(t.id); setTemplateName(t.name); setTemplateSchedule(JSON.parse(JSON.stringify(t.schedule))); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const cancelEditTemplate = () => { setEditingTemplateId(null); setTemplateName(''); setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); };
+  const loadTemplateForEdit = (t: ScheduleTemplate) => { 
+      setEditingTemplateId(t.id); 
+      setTemplateName(t.name); 
+      setTemplateBranch(t.branch || '');
+      setTemplateSchedule(JSON.parse(JSON.stringify(t.schedule))); 
+      window.scrollTo({ top: 0, behavior: 'smooth' }); 
+  };
+  
+  const cancelEditTemplate = () => { 
+      setEditingTemplateId(null); 
+      setTemplateName(''); 
+      setTemplateBranch('');
+      setTemplateSchedule(JSON.parse(JSON.stringify(initialSchedule))); 
+  };
+  
   const removeTemplate = (id: string) => { if (window.confirm('Excluir modelo?')) saveSettings({ ...settings, scheduleTemplates: (settings.scheduleTemplates || []).filter(t => t.id !== id) }, 'template'); };
 
   const saveSystemMessage = () => { saveSettings({ ...settings, systemMessage: { active: sysMsgActive, level: sysMsgLevel, message: sysMsgContent } }, 'system_msg'); };
@@ -571,6 +594,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            </div>
 
            {/* --- NOVO LAYOUT DE FILIAIS E SETORES (Empresa -> Filial -> Setor) --- */}
+           {/* ... Layout de Filiais (Sem alterações aqui) ... */}
+           {/* Para economizar espaço, mantive o layout de filiais anterior mas ele deve ser renderizado aqui. */}
            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                <div className="p-4 border-b border-gray-100 bg-gray-50">
                   <h2 className="text-lg font-bold text-gray-800">Gerenciar Filiais e Setores</h2>
@@ -797,6 +822,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
 
            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+             {/* Tipos de Evento - Sem alterações */}
              <div className="flex justify-between items-center mb-4">
                  <h2 className="text-lg font-bold text-gray-800">Tipos de Evento</h2>
                  {editingEventId && <button onClick={cancelEditEvent} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
@@ -858,11 +884,29 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                     {editingTemplateId && <button onClick={cancelEditTemplate} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
                  </div>
 
-                 <div className={`mb-4 flex gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''}`}>
-                    <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" placeholder="Nome (Ex: Escala 12x36)..." value={templateName} onChange={e => setTemplateName(e.target.value)} />
-                    <button onClick={saveTemplate} className={`${editingTemplateId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors`}>
-                       {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Modelo'}
-                    </button>
+                 <div className={`mb-4 flex flex-col md:flex-row gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''}`}>
+                    <div className="flex-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Nome do Modelo</label>
+                        <input type="text" className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" placeholder="Ex: Escala 12x36..." value={templateName} onChange={e => setTemplateName(e.target.value)} />
+                    </div>
+                    <div className="md:w-64">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Filial (Opcional)</label>
+                        <select 
+                            className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white"
+                            value={templateBranch}
+                            onChange={e => setTemplateBranch(e.target.value)}
+                        >
+                            <option value="">Todas (Global)</option>
+                            {settings.branches.map(b => (
+                                <option key={b} value={b}>{b}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex items-end">
+                        <button onClick={saveTemplate} className={`${editingTemplateId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors w-full md:w-auto`}>
+                        {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Modelo'}
+                        </button>
+                    </div>
                  </div>
                  
                  <div className="space-y-2 max-w-2xl">
@@ -887,10 +931,19 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos de Jornada Salvos</h2>
-                  <div className="flex flex-col gap-2">
-                      {(settings.scheduleTemplates || []).map(t => (
+                  <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
+                      {[...settings.scheduleTemplates]
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(t => (
                         <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
-                            <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
+                            <div className="flex flex-col overflow-hidden mr-2">
+                                <span className="font-bold text-gray-700 truncate">{t.name}</span>
+                                {t.branch ? (
+                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded w-fit mt-1 font-semibold">{t.branch}</span>
+                                ) : (
+                                    <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded w-fit mt-1">Global</span>
+                                )}
+                            </div>
                             <div className="flex gap-2 shrink-0">
                               <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
                               <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
@@ -937,6 +990,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         </div>
       )}
 
+      {/* ... (Restante do componente Acesso/Sistema sem alterações) ... */}
       {activeSubTab === 'acesso' && showAcesso && (
         <div className="animate-fadeIn space-y-8">
            
@@ -1090,6 +1144,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         </div>
       )}
       
+      {/* ... resto do componente sistema ... */}
       {activeSubTab === 'sistema' && showSistema && (
         <div className="animate-fadeIn">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

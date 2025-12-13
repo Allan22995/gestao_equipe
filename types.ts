@@ -19,6 +19,7 @@ export interface Schedule {
 export interface ScheduleTemplate {
   id: string;
   name: string;
+  branch?: string; // NOVO: Vincula o modelo a uma filial específica
   schedule: Schedule;
 }
 
