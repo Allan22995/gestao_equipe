@@ -250,6 +250,21 @@ export const Calendar: React.FC<CalendarProps> = ({
       return types;
   }, [events, vacationRequests, onCalls, activeCollaborators, year, month, holidays, filterName, filterBranches, filterRoles, filterSectors]);
 
+  // --- CALCULAR EVENTOS SAZONAIS ATIVOS NO MÊS ---
+  const activeSeasonalInMonth = useMemo(() => {
+      if (!settings?.seasonalEvents) return [];
+      const startOfMonth = new Date(year, month, 1);
+      const endOfMonth = new Date(year, month + 1, 0);
+
+      // Filtra apenas eventos ativos que se sobrepõem ao mês atual
+      return settings.seasonalEvents.filter(s => {
+          if (!s.active) return false;
+          const sStart = new Date(s.startDate + 'T00:00:00');
+          const sEnd = new Date(s.endDate + 'T00:00:00');
+          return sStart <= endOfMonth && sEnd >= startOfMonth;
+      });
+  }, [settings?.seasonalEvents, year, month]);
+
   const getEventsForDay = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const checkDate = new Date(dateStr + 'T00:00:00');
@@ -308,8 +323,19 @@ export const Calendar: React.FC<CalendarProps> = ({
   };
 
   // --- FILTRO DE LEGENDA ---
-  const filterEventsByLegend = (eventsList: any[], holiday: string | undefined) => {
+  const filterEventsByLegend = (eventsList: any[], holiday: string | undefined, seasonalEventId?: string) => {
       if (!legendFilter) return eventsList; // Sem filtro, retorna tudo
+
+      // Se o filtro selecionado for um evento sazonal
+      if (legendFilter.startsWith('seasonal-')) {
+          // A lógica de filtragem para sazonais é visual (não esconde eventos do dia, apenas destaca os dias do evento)
+          // Mas se quisermos ser estritos:
+          // Se o filtro for um sazonal e o dia atual pertencer a ele, mostramos os eventos.
+          // Se não, não mostramos nada?
+          // Melhor abordagem: O filtro de legenda afeta a OPACIDADE do dia.
+          // Aqui retornamos a lista normal para que a modal funcione.
+          return eventsList;
+      }
 
       // Filtro especial para Feriado
       if (legendFilter === 'feriado') {
@@ -348,13 +374,29 @@ export const Calendar: React.FC<CalendarProps> = ({
       });
   };
 
+  // Verifica se o dia cai num evento sazonal
+  const getSeasonalInfo = (dateStr: string) => {
+      if (!activeSeasonalInMonth.length) return null;
+      const d = new Date(dateStr + 'T00:00:00');
+      // Retorna o primeiro evento sazonal que cobre esta data
+      return activeSeasonalInMonth.find(s => {
+          const start = new Date(s.startDate + 'T00:00:00');
+          const end = new Date(s.endDate + 'T00:00:00');
+          return d >= start && d <= end;
+      });
+  };
+
   const handleDayClick = (day: number, dayEvents: any[], holiday?: string) => {
     // Filtra os eventos da modal também
     const filteredForModal = filterEventsByLegend(dayEvents, holiday);
     
     // Se tiver filtro de feriado ativo e for feriado, abre. Se não, verifica se tem eventos.
-    if ((legendFilter === 'feriado' && holiday) || filteredForModal.length > 0 || (holiday && !legendFilter)) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    // Ajuste: Se tiver filtro de sazonal, permite clicar nos dias do sazonal mesmo sem eventos
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const seasonal = getSeasonalInfo(dateStr);
+    const isSeasonalActive = legendFilter === `seasonal-${seasonal?.id}`;
+
+    if ((legendFilter === 'feriado' && holiday) || filteredForModal.length > 0 || (holiday && !legendFilter) || (isSeasonalActive)) {
       setSelectedDay({ date: dateStr, dayEvents: filteredForModal, holiday });
     }
   };
@@ -413,8 +455,18 @@ export const Calendar: React.FC<CalendarProps> = ({
           items.push({ id: 'feriado', label: 'Feriado', colorClass: 'bg-amber-100 text-amber-800 border-amber-300' });
       }
 
+      // 3. Eventos Sazonais (Se existirem no mês)
+      activeSeasonalInMonth.forEach(s => {
+          items.push({
+              id: `seasonal-${s.id}`,
+              label: s.label,
+              // Usamos style inline no render para a cor da borda, aqui simulamos uma classe ou passamos style custom
+              customStyle: { borderColor: s.color, borderWidth: '2px', borderStyle: 'solid', backgroundColor: '#fff' }
+          });
+      });
+
       return items;
-  }, [settings?.eventTypes, activeTypesInMonth]);
+  }, [settings?.eventTypes, activeTypesInMonth, activeSeasonalInMonth]);
 
   const renderCalendarGrid = () => {
     const grid = [];
@@ -427,20 +479,49 @@ export const Calendar: React.FC<CalendarProps> = ({
       const holiday = holidays[dateStr];
       const allDayEvents = getEventsForDay(day);
       
+      const seasonal = getSeasonalInfo(dateStr);
+
       // Aplicar filtro da legenda AQUI
-      const filteredEvents = filterEventsByLegend(allDayEvents, holiday);
+      const filteredEvents = filterEventsByLegend(allDayEvents, holiday, seasonal?.id);
       
-      // Lógica de exibição
+      // Lógica de destaque/opacidade com base no filtro
+      let isDimmed = false;
+      if (legendFilter) {
+          if (legendFilter.startsWith('seasonal-')) {
+              // Se o filtro é sazonal, destaca se o dia pertence ao evento sazonal
+              isDimmed = `seasonal-${seasonal?.id}` !== legendFilter;
+          } else {
+              // Se o filtro é de evento, destaca se tem eventos filtrados ou feriado (se filtro for feriado)
+              const hasFilteredEvents = filteredEvents.length > 0;
+              const matchesHoliday = legendFilter === 'feriado' && holiday;
+              isDimmed = !hasFilteredEvents && !matchesHoliday;
+          }
+      }
+
+      // Lógica de exibição de background/cursor
       const hasEvents = filteredEvents.length > 0 || (holiday && (!legendFilter || legendFilter === 'feriado'));
       const showHoliday = holiday && (!legendFilter || legendFilter === 'feriado');
+
+      // Estilo da borda sazonal
+      const borderStyle: React.CSSProperties = {};
+      if (seasonal) {
+          borderStyle.borderColor = seasonal.color;
+          borderStyle.borderWidth = '2px';
+          // Opcional: Adicionar um leve background tint se desejar
+      } else {
+          // Borda padrão
+          borderStyle.borderColor = '#e5e7eb'; // gray-200
+          borderStyle.borderWidth = '1px';
+      }
 
       grid.push(
         <div
           key={day}
           onClick={() => handleDayClick(day, allDayEvents, holiday)}
-          className={`min-h-[100px] p-2 border border-gray-200 rounded-lg transition-all relative ${
-            hasEvents ? 'bg-white hover:shadow-md cursor-pointer' : 'bg-white'
-          } ${showHoliday ? 'bg-amber-50 border-amber-200' : ''} ${legendFilter && !hasEvents ? 'opacity-40' : ''}`}
+          style={borderStyle}
+          className={`min-h-[100px] p-2 rounded-lg transition-all relative ${
+            hasEvents || (seasonal && !isDimmed) ? 'bg-white hover:shadow-md cursor-pointer' : 'bg-white'
+          } ${showHoliday ? 'bg-amber-50' : ''} ${isDimmed ? 'opacity-30 grayscale' : ''}`}
         >
           <div className={`text-sm font-bold mb-1 flex justify-between items-center ${showHoliday ? 'text-amber-700' : 'text-gray-700'}`}>
               <span>{day}</span>
@@ -450,6 +531,13 @@ export const Calendar: React.FC<CalendarProps> = ({
             <div className="mb-1 text-[10px] font-semibold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-md inline-block truncate w-full border border-amber-200">
               🎉 {holiday}
             </div>
+          )}
+
+          {/* Label Sazonal (Opcional, apenas se não tiver filtro ou se for o filtro ativo) */}
+          {seasonal && (!legendFilter || legendFilter === `seasonal-${seasonal.id}`) && (
+              <div className="mb-1 text-[9px] font-bold uppercase tracking-wider px-1 rounded text-white truncate" style={{ backgroundColor: seasonal.color }}>
+                  {seasonal.label}
+              </div>
           )}
 
           <div className="space-y-1">
@@ -578,17 +666,18 @@ export const Calendar: React.FC<CalendarProps> = ({
             )}
         </p>
         <div className="flex flex-wrap gap-2">
-            {legendItems.map((item) => {
+            {legendItems.map((item: any) => {
                 const isActive = legendFilter === item.id;
                 const isInactive = legendFilter && !isActive;
                 return (
                     <button
                         key={item.id}
                         onClick={() => setLegendFilter(isActive ? null : item.id)}
-                        className={`text-[10px] px-3 py-1.5 rounded-full font-bold flex items-center gap-2 border transition-all duration-200 transform active:scale-95 ${item.colorClass} ${isActive ? 'ring-2 ring-offset-1 ring-indigo-400 scale-105 shadow-md' : ''} ${isInactive ? 'opacity-40 grayscale-[50%]' : 'hover:shadow-sm'}`}
+                        style={item.customStyle ? item.customStyle : {}}
+                        className={`text-[10px] px-3 py-1.5 rounded-full font-bold flex items-center gap-2 border transition-all duration-200 transform active:scale-95 ${item.colorClass || ''} ${isActive ? 'ring-2 ring-offset-1 ring-indigo-400 scale-105 shadow-md' : ''} ${isInactive ? 'opacity-40 grayscale-[50%]' : 'hover:shadow-sm'}`}
                     >
-                        {/* Simular bolinha colorida usando cor do texto */}
-                        <div className="w-2 h-2 rounded-full bg-current opacity-70"></div>
+                        {/* Simular bolinha colorida usando cor do texto se não for customStyle */}
+                        {!item.customStyle && <div className="w-2 h-2 rounded-full bg-current opacity-70"></div>}
                         {item.label}
                     </button>
                 );
@@ -608,6 +697,24 @@ export const Calendar: React.FC<CalendarProps> = ({
         title={selectedDay ? `Detalhes - ${new Date(selectedDay.date + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''}
       >
         <div className="space-y-3">
+           {selectedDay && (
+               (() => {
+                   const seasonal = getSeasonalInfo(selectedDay.date);
+                   if (seasonal) {
+                       return (
+                           <div className="p-3 rounded-lg border-l-4 mb-3" style={{ backgroundColor: '#f9fafb', borderColor: seasonal.color }}>
+                               <div className="font-bold text-gray-800 flex items-center gap-2">
+                                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: seasonal.color }}></span>
+                                   {seasonal.label}
+                               </div>
+                               <div className="text-xs text-gray-500">Período Sazonal Ativo</div>
+                           </div>
+                       );
+                   }
+                   return null;
+               })()
+           )}
+
            {selectedDay?.holiday && (!legendFilter || legendFilter === 'feriado') && (
              <div className="p-3 bg-amber-50 border-l-4 border-amber-400 rounded-r-md">
                <div className="font-bold text-amber-800">🎉 {selectedDay.holiday}</div>

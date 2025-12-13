@@ -1,3 +1,4 @@
+
 export interface DaySchedule {
   enabled: boolean;
   start: string;
@@ -72,6 +73,16 @@ export interface EventTypeConfig {
   behavior: EventBehavior;
 }
 
+// NOVO: Interface para Eventos Sazonais
+export interface SeasonalEvent {
+  id: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  color: string; // Hex code
+  active: boolean;
+}
+
 export interface SystemMessage {
   active: boolean;
   level: 'info' | 'warning' | 'error';
@@ -91,6 +102,7 @@ export interface SystemSettings {
   roles: RoleConfig[]; 
   accessProfiles: AccessProfileConfig[]; 
   eventTypes: EventTypeConfig[];
+  seasonalEvents?: SeasonalEvent[]; // NOVO: Lista de eventos sazonais
   scheduleTemplates: ScheduleTemplate[]; 
   shiftRotations: RotationRule[];
   spreadsheetUrl?: string;

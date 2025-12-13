@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES } from '../types';
+import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES, SeasonalEvent } from '../types';
 import { generateUUID } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 
@@ -19,6 +19,17 @@ const initialSchedule: Schedule = {
   sabado: { enabled: false, start: '', end: '', startsPreviousDay: false },
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
 };
+
+// Cores predefinidas para eventos sazonais
+const SEASONAL_COLORS = [
+  { label: 'Preto (Black Friday)', value: '#000000' },
+  { label: 'Vermelho (Natal)', value: '#EF4444' },
+  { label: 'Dourado (Ano Novo)', value: '#EAB308' },
+  { label: 'Azul', value: '#3B82F6' },
+  { label: 'Roxo', value: '#A855F7' },
+  { label: 'Verde', value: '#22C55E' },
+  { label: 'Laranja', value: '#F97316' },
+];
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
   const showGeral = hasPermission('settings:manage_general');
@@ -42,6 +53,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<EventBehavior>('neutral');
   
+  // Seasonal Events State
+  const [seasonLabel, setSeasonLabel] = useState('');
+  const [seasonStart, setSeasonStart] = useState('');
+  const [seasonEnd, setSeasonEnd] = useState('');
+  const [seasonColor, setSeasonColor] = useState(SEASONAL_COLORS[0].value);
+
   const [newProfileName, setNewProfileName] = useState('');
 
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -253,6 +270,45 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const cancelEditEvent = () => { setEditingEventId(null); setNewEventLabel(''); setNewEventBehavior('neutral'); };
   const removeEvent = (id: string) => { if (window.confirm('Excluir?')) saveSettings({ ...settings, eventTypes: settings.eventTypes.filter(e => e.id !== id) }, 'event'); };
 
+  // --- SEASONAL EVENTS LOGIC ---
+  const saveSeasonalEvent = () => {
+      if (!seasonLabel.trim() || !seasonStart || !seasonEnd) {
+          showToast('Preencha nome, início e fim do evento.', true);
+          return;
+      }
+      if (seasonStart > seasonEnd) {
+          showToast('Data final deve ser maior que data inicial.', true);
+          return;
+      }
+
+      const newEvent: SeasonalEvent = {
+          id: generateUUID(),
+          label: seasonLabel.trim(),
+          startDate: seasonStart,
+          endDate: seasonEnd,
+          color: seasonColor,
+          active: true
+      };
+
+      saveSettings({ ...settings, seasonalEvents: [...(settings.seasonalEvents || []), newEvent] }, 'seasonal', () => {
+          setSeasonLabel('');
+          setSeasonStart('');
+          setSeasonEnd('');
+          setSeasonColor(SEASONAL_COLORS[0].value);
+      });
+  };
+
+  const removeSeasonalEvent = (id: string) => {
+      if (window.confirm('Excluir evento sazonal?')) {
+          saveSettings({ ...settings, seasonalEvents: (settings.seasonalEvents || []).filter(s => s.id !== id) }, 'seasonal');
+      }
+  };
+
+  const toggleSeasonalEvent = (id: string) => {
+      const updated = (settings.seasonalEvents || []).map(s => s.id === id ? { ...s, active: !s.active } : s);
+      saveSettings({ ...settings, seasonalEvents: updated }, 'seasonal');
+  };
+
   const saveTemplate = () => {
     if (!templateName.trim()) { showToast('Nome obrigatório', true); return; }
     if (editingTemplateId) {
@@ -308,6 +364,96 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                  <button onClick={() => saveSettings({ ...settings, spreadsheetUrl }, 'integration')} disabled={savingState['integration'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Salvar</button>
                </div>
              </div>
+           </div>
+
+           {/* --- SEÇÃO EVENTOS SAZONAIS --- */}
+           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+               <h2 className="text-lg font-bold text-gray-800 mb-2">Eventos Sazonais (Calendário)</h2>
+               <p className="text-sm text-gray-500 mb-4">Cadastre períodos especiais (Ex: Black Friday). O calendário exibirá uma borda colorida nestas datas.</p>
+               
+               <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4 p-4 rounded-lg bg-gray-50 border border-gray-100">
+                   <div className="md:col-span-2">
+                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Evento</label>
+                       <input 
+                           type="text" 
+                           className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
+                           placeholder="Ex: Black Friday" 
+                           value={seasonLabel}
+                           onChange={e => setSeasonLabel(e.target.value)}
+                       />
+                   </div>
+                   <div>
+                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Início</label>
+                       <input 
+                           type="date" 
+                           className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
+                           value={seasonStart}
+                           onChange={e => setSeasonStart(e.target.value)}
+                       />
+                   </div>
+                   <div>
+                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Fim</label>
+                       <input 
+                           type="date" 
+                           className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
+                           value={seasonEnd}
+                           onChange={e => setSeasonEnd(e.target.value)}
+                       />
+                   </div>
+                   <div>
+                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Cor da Borda</label>
+                       <select 
+                           className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white"
+                           value={seasonColor}
+                           onChange={e => setSeasonColor(e.target.value)}
+                       >
+                           {SEASONAL_COLORS.map(c => (
+                               <option key={c.value} value={c.value}>{c.label}</option>
+                           ))}
+                       </select>
+                   </div>
+                   <div className="md:col-span-5 flex justify-end">
+                       <button 
+                           onClick={saveSeasonalEvent}
+                           disabled={savingState['seasonal'] === 'saving'}
+                           className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50"
+                       >
+                           Adicionar Período
+                       </button>
+                   </div>
+               </div>
+
+               <div className="space-y-2">
+                   {(settings.seasonalEvents || []).map(s => (
+                       <div key={s.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white">
+                           <div className="flex items-center gap-3">
+                               <div className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: s.color }}></div>
+                               <div>
+                                   <div className="font-bold text-gray-700">{s.label}</div>
+                                   <div className="text-xs text-gray-500">
+                                       {new Date(s.startDate + 'T12:00:00').toLocaleDateString('pt-BR')} até {new Date(s.endDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                   </div>
+                               </div>
+                           </div>
+                           <div className="flex items-center gap-3">
+                               <label className="flex items-center cursor-pointer">
+                                   <span className="text-xs font-bold text-gray-500 mr-2">{s.active ? 'Ativo' : 'Inativo'}</span>
+                                   <div className="relative">
+                                       <input type="checkbox" className="sr-only" checked={s.active} onChange={() => toggleSeasonalEvent(s.id)} />
+                                       <div className={`block w-8 h-5 rounded-full transition-colors ${s.active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                       <div className={`absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition transform ${s.active ? 'translate-x-3' : 'translate-x-0'}`}></div>
+                                   </div>
+                               </label>
+                               <button onClick={() => removeSeasonalEvent(s.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full">
+                                   🗑️
+                               </button>
+                           </div>
+                       </div>
+                   ))}
+                   {(settings.seasonalEvents || []).length === 0 && (
+                       <p className="text-center text-gray-400 py-2">Nenhum evento sazonal cadastrado.</p>
+                   )}
+               </div>
            </div>
 
            {/* --- NOVO LAYOUT DE FILIAIS E SETORES (Mestre-Detalhe) --- */}
