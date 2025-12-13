@@ -816,33 +816,13 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                   border border-gray-100 
                   shadow-sm hover:shadow-xl hover:-translate-y-1 
                   transition-all duration-300 ease-in-out group
+                  flex flex-col h-full
                   ${!isActive ? 'grayscale opacity-75' : ''}
                 `}
               >
-                {/* Ações Hover (Edit/Delete) - Topo Direito */}
-                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                   {canUpdate && (
-                     <button 
-                       onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
-                       className="text-blue-500 bg-white hover:bg-blue-50 border border-blue-100 p-2 rounded-full shadow-sm transition-colors" 
-                       title="Editar"
-                     >
-                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                     </button>
-                   )}
-                   {canDelete && (
-                     <button 
-                       onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} 
-                       className="text-red-500 bg-white hover:bg-red-50 border border-red-100 p-2 rounded-full shadow-sm transition-colors" 
-                       title="Excluir"
-                     >
-                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                     </button>
-                   )}
-                </div>
-
+                
                 {/* Cabeçalho: Avatar e Nome */}
-                <div className="flex items-center gap-4 mb-5 border-b border-gray-50 pb-4">
+                <div className="flex items-center gap-4 mb-4 border-b border-gray-50 pb-4">
                   <div 
                     className={`
                       w-12 h-12 rounded-full flex items-center justify-center 
@@ -864,7 +844,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                 </div>
 
                 {/* Corpo: Informações (Grid) */}
-                <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs text-gray-600 mb-5">
+                <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs text-gray-600 mb-4 flex-1">
                    <div className="col-span-2 flex items-center gap-2 truncate" title="Filial">
                       <span className="text-gray-400">📍</span>
                       <span className="font-medium text-gray-800">{c.branch}</span>
@@ -897,31 +877,55 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    )}
                 </div>
 
-                {/* Rodapé: Tags/Pills */}
-                <div className="flex flex-wrap gap-2 pt-2">
-                   {c.shiftType && (
-                     <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full border border-indigo-100 font-bold">
-                       {c.shiftType}
-                     </span>
-                   )}
-                   
-                   {c.hasRotation && c.rotationGroup && (
-                     <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-1 rounded-full border border-purple-100 font-bold">
-                       Escala {c.rotationGroup}
-                     </span>
-                   )}
-                   
-                   {!isActive && (
-                     <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded-full border border-gray-300 font-bold uppercase">
-                       Inativo
-                     </span>
-                   )}
+                {/* Rodapé: Tags e Ações */}
+                <div className="flex items-center justify-between pt-4 mt-auto border-t border-gray-50">
+                   <div className="flex flex-wrap gap-2">
+                      {c.shiftType && (
+                        <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full border border-indigo-100 font-bold">
+                          {c.shiftType}
+                        </span>
+                      )}
+                      
+                      {c.hasRotation && c.rotationGroup && (
+                        <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-1 rounded-full border border-purple-100 font-bold">
+                          Escala {c.rotationGroup}
+                        </span>
+                      )}
+                      
+                      {!isActive && (
+                        <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded-full border border-gray-300 font-bold uppercase">
+                          Inativo
+                        </span>
+                      )}
 
-                   {c.role === 'admin' && (
-                     <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded-full border border-amber-100 font-bold">
-                       Admin
-                     </span>
-                   )}
+                      {c.role === 'admin' && (
+                        <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded-full border border-amber-100 font-bold">
+                          Admin
+                        </span>
+                      )}
+                   </div>
+
+                   {/* Ações (Hover) */}
+                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
+                      {canUpdate && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
+                          className="text-blue-500 bg-blue-50 hover:bg-blue-100 border border-blue-100 p-2 rounded-full shadow-sm transition-colors" 
+                          title="Editar"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} 
+                          className="text-red-500 bg-red-50 hover:bg-red-100 border border-red-100 p-2 rounded-full shadow-sm transition-colors" 
+                          title="Excluir"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      )}
+                   </div>
                 </div>
 
               </div>
