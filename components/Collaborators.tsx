@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -44,6 +43,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     otherContact: '',
     profile: 'colaborador' as UserProfile,
     branch: '',
+    secondaryBranches: [] as string[],
     role: '',
     sector: '',
     leaderId: '', 
@@ -90,6 +90,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     });
   };
 
+  const toggleSecondaryBranch = (branch: string) => {
+    setFormData(prev => {
+        const current = prev.secondaryBranches || [];
+        if (current.includes(branch)) {
+            return { ...prev, secondaryBranches: current.filter(b => b !== branch) };
+        } else {
+            return { ...prev, secondaryBranches: [...current, branch] };
+        }
+    });
+  };
+
   const selectedRoleConfig = settings.roles.find(r => r.name === formData.role);
   const isRoleRestricted = selectedRoleConfig ? !selectedRoleConfig.canViewAllSectors : false;
 
@@ -103,7 +114,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
     setFormData({ 
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', 
-      branch: initialBranch, 
+      branch: initialBranch, secondaryBranches: [],
       role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
       hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
@@ -122,6 +133,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       otherContact: colab.otherContact || '',
       profile: colab.profile || 'colaborador',
       branch: colab.branch,
+      secondaryBranches: colab.secondaryBranches || [],
       role: colab.role,
       sector: colab.sector || '',
       leaderId: colab.leaderId || '',
@@ -149,7 +161,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     setEditingId(null);
     setShowForm(false);
     setFormData({ 
-      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
+      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', secondaryBranches: [], role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
       hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
@@ -213,11 +225,15 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
     const standardizedName = formatTitleCase(formData.name);
 
+    // Clean secondary branches (remove duplicates and main branch if accidentally added)
+    const cleanedSecondary = Array.from(new Set(formData.secondaryBranches)).filter(b => b !== formData.branch);
+
     if (editingId) {
       onUpdate({
         id: editingId,
         ...formData,
         name: standardizedName,
+        secondaryBranches: cleanedSecondary,
         allowedSectors: finalAllowedSectors,
         rotationGroup: finalRotationGroup,
         rotationStartDate: finalRotationStart,
@@ -231,6 +247,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         id: generateUUID(),
         ...formData,
         name: standardizedName,
+        secondaryBranches: cleanedSecondary,
         allowedSectors: finalAllowedSectors,
         rotationGroup: finalRotationGroup,
         rotationStartDate: finalRotationStart,
@@ -316,7 +333,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       .filter(c => {
          if (c.active === false) return false;
          if (c.id === editingId) return false;
-         if (formData.branch && c.branch !== formData.branch) return false;
+         
+         // Leader branch check:
+         // 1. Leader's main branch matches the current user's branch
+         // OR
+         // 2. The current user's branch is listed in the Leader's secondary branches
+         // NOTE: formData.branch is the branch of the subordinate being edited/created.
+         const isSameMainBranch = c.branch === formData.branch;
+         const isSecondaryBranch = c.secondaryBranches?.includes(formData.branch);
+         
+         if (!isSameMainBranch && !isSecondaryBranch) return false;
+
          const roleName = c.role.toLowerCase();
          const isLeaderRole = leadershipKeywords.some(k => roleName.includes(k));
          const isAdminOrManager = ['admin', 'gerente'].includes(roleName);
@@ -473,15 +500,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             </div>
 
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Filial *</label>
+              <label className="text-xs font-semibold text-gray-600 mb-1">Filial Principal *</label>
               <select 
                 required 
                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
                 value={formData.branch} 
-                onChange={e => setFormData({...formData, branch: e.target.value, leaderId: '', sector: ''})}
-                // Se só existe uma filial disponível (restrição), desabilita a troca ou apenas exibe essa.
-                // Como filtramos o map abaixo, o usuário só verá as permitidas. 
-                // Se tiver apenas 1, já estará selecionada.
+                onChange={e => {
+                    const newBranch = e.target.value;
+                    // Remove new branch from secondary if present
+                    const newSecondary = (formData.secondaryBranches || []).filter(b => b !== newBranch);
+                    setFormData({...formData, branch: newBranch, leaderId: '', sector: '', secondaryBranches: newSecondary});
+                }}
               >
                  <option value="">Selecione...</option>
                  {availableBranches.map(b => (
@@ -498,6 +527,28 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    <option key={r.name} value={r.name}>{r.name}</option>
                  ))}
               </select>
+            </div>
+
+            {/* SELEÇÃO DE FILIAIS SECUNDÁRIAS (GESTÃO MULTILOCAL) */}
+            <div className="md:col-span-3 mt-2 mb-4">
+               <label className="text-xs font-bold text-gray-600 mb-2 block">Filiais de Atuação Adicional (Opcional - Para Gestão Multilocal)</label>
+               <div className="p-3 border border-gray-300 rounded-lg bg-white flex flex-wrap gap-4">
+                  {settings.branches.filter(b => b !== formData.branch).map(branch => (
+                      <label key={branch} className="flex items-center gap-2 cursor-pointer select-none">
+                          <input 
+                             type="checkbox" 
+                             checked={formData.secondaryBranches?.includes(branch)}
+                             onChange={() => toggleSecondaryBranch(branch)}
+                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                          />
+                          <span className="text-sm text-gray-700">{branch}</span>
+                      </label>
+                  ))}
+                  {settings.branches.filter(b => b !== formData.branch).length === 0 && (
+                      <span className="text-xs text-gray-400 italic">Nenhuma outra filial disponível.</span>
+                  )}
+               </div>
+               <p className="text-[10px] text-gray-500 mt-1">Marque filiais adicionais onde este colaborador também exerce função de liderança ou suporte.</p>
             </div>
 
             <div className="flex flex-col md:col-span-2">
@@ -537,13 +588,15 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               >
                  <option value="">Sem Líder (Topo Hierarquia)</option>
                  {potentialLeaders.map(l => (
-                   <option key={l.id} value={l.id}>{l.name} - {l.role} {l.sector ? `(${l.sector})` : ''}</option>
+                   <option key={l.id} value={l.id}>
+                       {l.name} - {l.role} {l.branch !== formData.branch ? `(${l.branch})` : ''}
+                   </option>
                  ))}
               </select>
               <span className="text-[10px] text-gray-400">
                  {!formData.branch 
                     ? "Selecione a Filial para carregar os líderes." 
-                    : "Exibindo apenas líderes da mesma filial."}
+                    : "Exibe líderes da filial principal e líderes de outras filiais com atuação aqui."}
               </span>
             </div>
             
@@ -820,6 +873,14 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                  <div className="text-xs text-gray-600 flex items-center gap-2">
                     <span className="text-gray-400">Filial:</span> {c.branch}
                  </div>
+                 {c.secondaryBranches && c.secondaryBranches.length > 0 && (
+                    <div className="text-xs text-gray-600 flex items-center gap-2 flex-wrap">
+                        <span className="text-gray-400">Atuação Secundária:</span> 
+                        {c.secondaryBranches.map(sb => (
+                            <span key={sb} className="bg-gray-100 px-1 rounded border border-gray-200">{sb}</span>
+                        ))}
+                    </div>
+                 )}
                  {c.sector && (
                    <div className="text-xs text-gray-600 flex items-center gap-2">
                       <span className="text-gray-400">Setor:</span> {c.sector}

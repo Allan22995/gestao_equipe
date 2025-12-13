@@ -1,5 +1,3 @@
-
-
 export interface DaySchedule {
   enabled: boolean;
   start: string;
@@ -52,6 +50,7 @@ export interface Collaborator {
   otherContact?: string;
   profile: UserProfile;
   branch: string;
+  secondaryBranches?: string[]; // NOVO: Filiais de atuação secundária
   role: string;
   sector?: string;
   allowedSectors?: string[];
