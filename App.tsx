@@ -233,17 +233,10 @@ function App() {
              if (perms.includes('write:coverage_rules')) newPerms.push('simulator:manage_rules');
              if (perms.includes('view:phones')) newPerms.push('dashboard:view_phones', 'calendar:view_phones');
 
-             // Settings mappings (FIXED: Avoid loop with new permissions)
-             // Only trigger if it's a legacy settings key that isn't one of the new valid ones
-             const validNewSettingsKeys = ['settings:view', 'settings:manage_general', 'settings:manage_access'];
-             const hasLegacySettings = perms.some((p: string) => p.startsWith('settings:') && !validNewSettingsKeys.includes(p));
-             
-             if (hasLegacySettings) {
+             // Settings mappings
+             if (perms.some((p: string) => p.startsWith('settings:'))) {
                  if (!newPerms.includes('settings:manage_general')) newPerms.push('settings:manage_general');
-             }
-             
-             if (perms.includes('settings:access_control') && !newPerms.includes('settings:manage_access')) {
-                 newPerms.push('settings:manage_access');
+                 if (perms.includes('settings:access_control')) newPerms.push('settings:manage_access');
              }
 
              return { ...r, permissions: Array.from(new Set(newPerms)) };

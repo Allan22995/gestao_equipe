@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES, SeasonalEvent } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -241,7 +240,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     if (window.confirm(`Excluir função ${name}?`)) saveSettings({ ...settings, roles: settings.roles.filter(r => r.name !== name) }, 'role');
   };
 
-  // Funcao corrigida para sanitizar permissoes legadas e garantir persistência correta
+  // Funcao corrigida para sanitizar permissoes legadas
   const togglePermission = (roleName: string, permId: string) => {
      const role = settings.roles.find(r => r.name === roleName);
      if (!role) return;
@@ -249,13 +248,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
      // 1. Obter permissões atuais
      let currentPerms = role.permissions || [];
 
-     // 2. HIGIENIZAÇÃO: Remove chaves legadas e específicas conhecidas que causam conflito
+     // 2. HIGIENIZAÇÃO: Remove chaves legadas que causam loop de migração no App.tsx
      const legacyPrefixes = ['tab:', 'write:', 'view:phones'];
-     const legacyExacts = ['settings:access_control', 'settings:general']; // Known legacy keys that might cause loops if left
-
      currentPerms = currentPerms.filter(p => {
-       if (p === permId) return true; // Keep the target permission even if it matches logic (safety)
-       if (legacyExacts.includes(p)) return false;
+       if (p === permId) return true;
        if (legacyPrefixes.some(prefix => p.startsWith(prefix))) return false;
        return true;
      });
