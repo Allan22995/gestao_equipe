@@ -74,7 +74,7 @@ export const Calendar: React.FC<CalendarProps> = ({
              });
         } else {
              if (settings.branchSectors) {
-                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...s]);
+                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...(s as string[])]);
              } else {
                 sectorsPool = settings.sectors || [];
              }

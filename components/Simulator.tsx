@@ -104,7 +104,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
              });
         } else {
              if (settings.branchSectors) {
-                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...s]);
+                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...(s as string[])]);
              } else {
                 sectorsPool = settings.sectors || [];
              }

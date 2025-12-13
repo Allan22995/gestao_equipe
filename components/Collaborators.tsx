@@ -178,12 +178,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       }
     }
 
-    // REMOVIDO: Validação obrigatória de telefone
-    /* if (!formData.phone && !isNoc) {
-       showToast('Telefone é obrigatório para este perfil.', true);
-       return;
-    } */
-
     const hasWorkDays = (Object.values(schedule) as DaySchedule[]).some(day => day.enabled && day.start && day.end);
     if (!hasWorkDays && !isNoc && formData.active) {
       showToast('Defina pelo menos um dia de trabalho com horários (ou inative o colaborador).', true);
@@ -283,6 +277,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     } finally {
       setIsFixingNames(false);
     }
+  };
+  
+  // Helper para gerar iniciais para o avatar
+  const getInitials = (name: string) => {
+    if (!name) return '??';
+    return name
+      .split(' ')
+      .slice(0, 2)
+      .map(part => part[0])
+      .join('')
+      .toUpperCase();
   };
 
   const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
@@ -795,74 +800,132 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
            </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCollaborators.length === 0 && <p className="text-gray-400 col-span-full text-center py-8">Nenhum colaborador encontrado.</p>}
           
           {filteredCollaborators.map(c => {
             const leaderName = getLeaderName(c.leaderId);
+            const initials = getInitials(c.name);
+            const isActive = c.active !== false;
+
             return (
-            <div key={c.id} className={`border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all bg-white group relative overflow-hidden ${c.active === false ? 'opacity-60 bg-gray-50' : ''}`}>
-              <div className={`absolute top-0 left-0 w-1 h-full ${c.active === false ? 'bg-gray-400' : 'bg-gradient-to-b from-indigo-400 to-purple-500'}`}></div>
-              
-              <div className="flex justify-between items-start mb-2 pl-2">
-                <div>
-                   <h3 className="font-bold text-gray-800">{c.name}</h3>
-                   <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                      <span className="font-mono bg-gray-100 px-1 rounded">#{c.colabId}</span>
-                      <span>•</span>
-                      <span>{c.role}</span>
-                      {c.active === false && (
-                          <span className="ml-1 px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 font-bold text-[10px] uppercase">
-                             Inativo
-                          </span>
-                      )}
-                   </div>
-                </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+              <div 
+                key={c.id} 
+                className={`
+                  relative bg-white rounded-2xl p-5 
+                  border border-gray-100 
+                  shadow-sm hover:shadow-xl hover:-translate-y-1 
+                  transition-all duration-300 ease-in-out group
+                  ${!isActive ? 'grayscale opacity-75' : ''}
+                `}
+              >
+                {/* Ações Hover (Edit/Delete) - Topo Direito */}
+                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                    {canUpdate && (
-                   <button onClick={() => handleEdit(c)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-full transition-colors" title="Editar">
-                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                   </button>
+                     <button 
+                       onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
+                       className="text-blue-500 bg-white hover:bg-blue-50 border border-blue-100 p-2 rounded-full shadow-sm transition-colors" 
+                       title="Editar"
+                     >
+                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                     </button>
                    )}
                    {canDelete && (
-                   <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors" title="Excluir">
-                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                   </button>
+                     <button 
+                       onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} 
+                       className="text-red-500 bg-white hover:bg-red-50 border border-red-100 p-2 rounded-full shadow-sm transition-colors" 
+                       title="Excluir"
+                     >
+                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                     </button>
                    )}
                 </div>
-              </div>
 
-              <div className="pl-2 mt-3 space-y-1">
-                 <div className="text-xs text-gray-600 flex items-center gap-2">
-                    <span className="text-gray-400">Filial:</span> {c.branch}
-                 </div>
-                 {c.sector && (
-                   <div className="text-xs text-gray-600 flex items-center gap-2">
-                      <span className="text-gray-400">Setor:</span> {c.sector}
+                {/* Cabeçalho: Avatar e Nome */}
+                <div className="flex items-center gap-4 mb-5 border-b border-gray-50 pb-4">
+                  <div 
+                    className={`
+                      w-12 h-12 rounded-full flex items-center justify-center 
+                      text-white font-bold text-lg shadow-sm shrink-0
+                      ${isActive ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-gray-400'}
+                    `}
+                  >
+                     {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                     <div className="flex items-center justify-between">
+                       <h3 className="font-bold text-gray-900 text-lg truncate pr-2">{c.name}</h3>
+                       <span className="bg-gray-100 text-gray-500 text-[10px] font-mono px-2 py-0.5 rounded-full border border-gray-200">
+                          #{c.colabId}
+                       </span>
+                     </div>
+                     <p className="text-sm font-medium text-indigo-600 truncate">{c.role}</p>
+                  </div>
+                </div>
+
+                {/* Corpo: Informações (Grid) */}
+                <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs text-gray-600 mb-5">
+                   <div className="col-span-2 flex items-center gap-2 truncate" title="Filial">
+                      <span className="text-gray-400">📍</span>
+                      <span className="font-medium text-gray-800">{c.branch}</span>
                    </div>
-                 )}
-                 {leaderName && (
-                   <div className="text-xs text-gray-600 flex items-center gap-2">
-                      <span className="text-gray-400">Líder:</span> <span className="font-medium text-indigo-600">{leaderName}</span>
+                   
+                   {c.sector && (
+                     <div className="col-span-2 flex items-center gap-2 truncate" title="Setor">
+                        <span className="text-gray-400">🏢</span>
+                        <span>{c.sector}</span>
+                     </div>
+                   )}
+                   
+                   {leaderName && (
+                     <div className="col-span-2 flex items-center gap-2 truncate" title="Líder">
+                        <span className="text-gray-400">👑</span>
+                        <span>Líder: <span className="font-medium">{leaderName}</span></span>
+                     </div>
+                   )}
+
+                   <div className="col-span-2 flex items-center gap-2 truncate" title="Email">
+                      <span className="text-gray-400">✉️</span>
+                      <span className="truncate">{c.email}</span>
                    </div>
-                 )}
-                 <div className="text-xs text-gray-600 flex items-center gap-2">
-                    <span className="text-gray-400">Email:</span> {c.email}
-                 </div>
-                 {c.phone && (
-                   <div className="text-xs text-gray-600 flex items-center gap-2">
-                      <span className="text-gray-400">Tel:</span> {c.phone}
-                   </div>
-                 )}
+
+                   {c.phone && (
+                     <div className="col-span-2 flex items-center gap-2 truncate" title="Telefone">
+                        <span className="text-gray-400">📞</span>
+                        <span>{c.phone}</span>
+                     </div>
+                   )}
+                </div>
+
+                {/* Rodapé: Tags/Pills */}
+                <div className="flex flex-wrap gap-2 pt-2">
+                   {c.shiftType && (
+                     <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full border border-indigo-100 font-bold">
+                       {c.shiftType}
+                     </span>
+                   )}
+                   
+                   {c.hasRotation && c.rotationGroup && (
+                     <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-1 rounded-full border border-purple-100 font-bold">
+                       Escala {c.rotationGroup}
+                     </span>
+                   )}
+                   
+                   {!isActive && (
+                     <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded-full border border-gray-300 font-bold uppercase">
+                       Inativo
+                     </span>
+                   )}
+
+                   {c.role === 'admin' && (
+                     <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded-full border border-amber-100 font-bold">
+                       Admin
+                     </span>
+                   )}
+                </div>
+
               </div>
-              
-              <div className="pl-2 mt-3 border-t border-gray-100 pt-2 flex flex-wrap gap-2">
-                 {c.shiftType && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold">{c.shiftType}</span>}
-                 {c.hasRotation && c.rotationGroup && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-bold">Escala: {c.rotationGroup}</span>}
-                 {c.role === 'admin' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-bold">Admin</span>}
-              </div>
-            </div>
-          );
+            );
           })}
         </div>
       </div>
