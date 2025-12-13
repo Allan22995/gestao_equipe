@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
     'Fábrica': ['Produção', 'Manutenção', 'Qualidade'],
     'Centro de Distribuição': ['Recebimento', 'Expedição', 'Transporte']
   },
+  branchLinks: {},
   roles: [
     { 
       name: 'Gerente', 
@@ -244,6 +245,10 @@ function App() {
           // Ensure branchSectors exists
           if (!loadedSettings.branchSectors) {
              loadedSettings.branchSectors = DEFAULT_SETTINGS.branchSectors;
+          }
+          // Ensure branchLinks exists
+          if (!loadedSettings.branchLinks) {
+             loadedSettings.branchLinks = DEFAULT_SETTINGS.branchLinks;
           }
 
           setSettings(loadedSettings);

@@ -50,7 +50,6 @@ export interface Collaborator {
   otherContact?: string;
   profile: UserProfile;
   branch: string;
-  secondaryBranches?: string[]; // NOVO: Filiais de atuação secundária
   role: string;
   sector?: string;
   allowedSectors?: string[];
@@ -86,8 +85,9 @@ export interface CoverageRule {
 
 export interface SystemSettings {
   branches: string[];
-  sectors: string[]; // Mantido para retrocompatibilidade, mas o uso principal será branchSectors
-  branchSectors?: Record<string, string[]>; // NOVO: Mapeamento Filial -> Setores
+  sectors: string[]; // Mantido para retrocompatibilidade
+  branchSectors?: Record<string, string[]>; // Mapeamento Filial -> Setores
+  branchLinks?: Record<string, string[]>; // NOVO: Mapeamento Filial -> Filiais Vinculadas (Líderes visíveis)
   roles: RoleConfig[]; 
   accessProfiles: AccessProfileConfig[]; 
   eventTypes: EventTypeConfig[];

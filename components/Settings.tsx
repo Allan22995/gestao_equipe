@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, EventTypeConfig, EventBehavior, Schedule, ScheduleTemplate, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -20,104 +18,6 @@ const initialSchedule: Schedule = {
   sexta: { enabled: false, start: '', end: '', startsPreviousDay: false },
   sabado: { enabled: false, start: '', end: '', startsPreviousDay: false },
   domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
-};
-
-const ManageList = ({ 
-  title, items, onAdd, onEdit, onRemove, saving, removingId, placeholder 
-}: {
-  title: string; 
-  items: string[]; 
-  onAdd: (val: string) => void; 
-  onEdit: (oldVal: string, newVal: string) => void; 
-  onRemove: (val: string) => void; 
-  saving: 'idle' | 'saving' | 'success'; 
-  removingId: string | null; 
-  placeholder: string;
-}) => {
-  const [newItem, setNewItem] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
-  
-  const [editingItem, setEditingItem] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-
-  const filteredItems = items.filter(i => i.toLowerCase().includes(searchTerm.toLowerCase()));
-
-  const handleAdd = () => { if (newItem.trim()) { onAdd(newItem); setNewItem(''); } };
-
-  const startEdit = (item: string) => {
-    setEditingItem(item);
-    setEditValue(item);
-  };
-
-  const cancelEdit = () => {
-    setEditingItem(null);
-    setEditValue('');
-  };
-
-  const saveEdit = () => {
-    if (editingItem && editValue.trim() && editValue !== editingItem) {
-      onEdit(editingItem, editValue.trim());
-    }
-    cancelEdit();
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">{title}</h2>
-      
-      <div className="flex gap-2 mb-4">
-        <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder={placeholder} value={newItem} onChange={e => setNewItem(e.target.value)} disabled={saving === 'saving'} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
-        <button onClick={handleAdd} disabled={saving === 'saving' || !newItem.trim()} className={`${saving === 'success' ? 'bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg transition-all font-semibold min-w-[80px]`}>{saving === 'saving' ? '...' : saving === 'success' ? '✓' : 'Add'}</button>
-      </div>
-
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <button onClick={() => setIsExpanded(!isExpanded)} className="w-full bg-gray-50 p-3 text-left text-sm font-semibold text-gray-700 flex justify-between items-center hover:bg-gray-100 transition-colors"><span>Ver Itens ({items.length})</span><span className={`transition-transform transform ${isExpanded ? 'rotate-180' : 'rotate-0'}`}>▼</span></button>
-        
-        {isExpanded && (
-          <div className="bg-white p-3 border-t border-gray-200 animate-fadeIn">
-            <input type="text" placeholder="🔍 Pesquisar..." className="w-full border border-gray-300 rounded-md p-2 text-sm mb-3 outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-            <div className="max-h-48 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-              {filteredItems.map(item => (
-                <div key={item} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded group border-b border-gray-50 last:border-0 min-h-[40px]">
-                  
-                  {editingItem === item ? (
-                    <div className="flex flex-1 items-center gap-2 animate-fadeIn">
-                      <input 
-                        type="text" 
-                        autoFocus
-                        className="flex-1 border border-indigo-300 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-indigo-500"
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') saveEdit();
-                          if (e.key === 'Escape') cancelEdit();
-                        }}
-                      />
-                      <button onClick={saveEdit} className="text-green-600 hover:bg-green-50 p-1 rounded" title="Salvar">✓</button>
-                      <button onClick={cancelEdit} className="text-gray-400 hover:bg-gray-100 p-1 rounded" title="Cancelar">✕</button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-sm text-gray-700 truncate flex-1">{item}</span>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button onClick={() => startEdit(item)} disabled={!!removingId} className="text-blue-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded transition-colors" title="Editar">
-                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                         </button>
-                         <button onClick={() => onRemove(item)} disabled={removingId === item} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors" title="Excluir">
-                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                         </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 };
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
@@ -213,8 +113,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         const updatedBranches = settings.branches.filter(b => b !== branch);
         const updatedBranchSectors = { ...(settings.branchSectors || {}) };
         delete updatedBranchSectors[branch];
+        // Also remove links
+        const updatedBranchLinks = { ...(settings.branchLinks || {}) };
+        delete updatedBranchLinks[branch];
         
-        saveSettings({ ...settings, branches: updatedBranches, branchSectors: updatedBranchSectors }, 'branch', () => {
+        saveSettings({ ...settings, branches: updatedBranches, branchSectors: updatedBranchSectors, branchLinks: updatedBranchLinks }, 'branch', () => {
             if (selectedBranch === branch) setSelectedBranch(updatedBranches[0] || null);
         });
      }
@@ -249,6 +152,26 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
           
           saveSettings({ ...settings, branchSectors: updatedBranchSectors }, 'sector');
       }
+  };
+
+  const toggleBranchLink = (targetBranch: string) => {
+      if (!selectedBranch) return;
+      
+      const currentLinks = settings.branchLinks?.[selectedBranch] || [];
+      let updatedLinks = [];
+      
+      if (currentLinks.includes(targetBranch)) {
+          updatedLinks = currentLinks.filter(b => b !== targetBranch);
+      } else {
+          updatedLinks = [...currentLinks, targetBranch];
+      }
+      
+      const updatedBranchLinks = { 
+          ...(settings.branchLinks || {}), 
+          [selectedBranch]: updatedLinks 
+      };
+      
+      saveSettings({ ...settings, branchLinks: updatedBranchLinks }, 'branch_link');
   };
 
   const addRotation = () => {
@@ -391,10 +314,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                <div className="p-4 border-b border-gray-100 bg-gray-50">
                   <h2 className="text-lg font-bold text-gray-800">Gerenciar Filiais e Setores</h2>
-                  <p className="text-xs text-gray-500">Selecione uma filial à esquerda para gerenciar seus setores à direita.</p>
+                  <p className="text-xs text-gray-500">Selecione uma filial à esquerda para gerenciar seus setores e vínculos à direita.</p>
                </div>
                
-               <div className="flex flex-col md:flex-row h-[500px]">
+               <div className="flex flex-col md:flex-row h-[600px]">
                   {/* COLUNA ESQUERDA: FILIAIS */}
                   <div className="w-full md:w-1/3 border-r border-gray-200 flex flex-col bg-gray-50/30">
                      <div className="p-4 border-b border-gray-200">
@@ -425,7 +348,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            >
                               <div>
                                  <span className={`font-bold block ${selectedBranch === branch ? 'text-indigo-800' : 'text-gray-700'}`}>{branch}</span>
-                                 <span className="text-xs text-gray-400">{(settings.branchSectors?.[branch] || []).length} setores</span>
+                                 <span className="text-xs text-gray-400">
+                                     {(settings.branchSectors?.[branch] || []).length} setores
+                                     {(settings.branchLinks?.[branch] || []).length > 0 && <span className="ml-1 text-indigo-500">• {(settings.branchLinks?.[branch] || []).length} vínculos</span>}
+                                 </span>
                               </div>
                               <button 
                                  onClick={(e) => { e.stopPropagation(); removeBranch(branch); }}
@@ -439,55 +365,87 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   </div>
 
                   {/* COLUNA DIREITA: SETORES DA FILIAL SELECIONADA */}
-                  <div className="w-full md:w-2/3 flex flex-col bg-white">
+                  <div className="w-full md:w-2/3 flex flex-col bg-white overflow-y-auto">
                      {selectedBranch ? (
-                        <>
-                           <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0">
-                              <div>
-                                 <h3 className="font-bold text-gray-800 text-lg">Setores: <span className="text-indigo-600 bg-indigo-50 px-2 rounded">{selectedBranch}</span></h3>
-                              </div>
-                              <div className="flex gap-2 w-1/2">
-                                 <input 
-                                    type="text" 
-                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none" 
-                                    placeholder={`Novo Setor em ${selectedBranch}...`} 
-                                    value={newSectorName}
-                                    onChange={e => setNewSectorName(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && addSectorToBranch()}
-                                 />
-                                 <button 
-                                    onClick={addSectorToBranch}
-                                    disabled={!newSectorName.trim()}
-                                    className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-4 py-2 font-bold text-sm whitespace-nowrap disabled:opacity-50"
-                                 >
-                                    Adicionar Setor
-                                 </button>
-                              </div>
+                        <div className="p-4 space-y-6">
+                           {/* SECTION SECTORS */}
+                           <div>
+                               <div className="flex justify-between items-center mb-3">
+                                  <h3 className="font-bold text-gray-800 text-lg">Setores: <span className="text-indigo-600 bg-indigo-50 px-2 rounded">{selectedBranch}</span></h3>
+                                  <div className="flex gap-2 w-1/2">
+                                     <input 
+                                        type="text" 
+                                        className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none" 
+                                        placeholder={`Novo Setor...`} 
+                                        value={newSectorName}
+                                        onChange={e => setNewSectorName(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && addSectorToBranch()}
+                                     />
+                                     <button 
+                                        onClick={addSectorToBranch}
+                                        disabled={!newSectorName.trim()}
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-4 py-2 font-bold text-sm whitespace-nowrap disabled:opacity-50"
+                                     >
+                                        Adicionar
+                                     </button>
+                                  </div>
+                               </div>
+                               
+                               <div className="bg-gray-50/50 rounded-lg border border-gray-100 p-3 max-h-60 overflow-y-auto">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                     {(settings.branchSectors?.[selectedBranch] || []).length === 0 && (
+                                        <p className="col-span-full text-center text-gray-400 italic py-4">Nenhum setor cadastrado nesta filial.</p>
+                                     )}
+                                     {(settings.branchSectors?.[selectedBranch] || []).map(sector => (
+                                        <div key={sector} className="flex justify-between items-center p-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
+                                           <span className="font-medium text-gray-700 text-sm">{sector}</span>
+                                           <button 
+                                              onClick={() => removeSectorFromBranch(sector)}
+                                              className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                           >
+                                              Excluir
+                                           </button>
+                                        </div>
+                                     ))}
+                                  </div>
+                               </div>
                            </div>
-                           
-                           <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                 {(settings.branchSectors?.[selectedBranch] || []).length === 0 && (
-                                    <p className="col-span-full text-center text-gray-400 italic py-10">Nenhum setor cadastrado nesta filial.</p>
-                                 )}
-                                 {(settings.branchSectors?.[selectedBranch] || []).map(sector => (
-                                    <div key={sector} className="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
-                                       <span className="font-medium text-gray-700">{sector}</span>
-                                       <button 
-                                          onClick={() => removeSectorFromBranch(sector)}
-                                          className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                                       >
-                                          Excluir
-                                       </button>
-                                    </div>
-                                 ))}
-                              </div>
+
+                           {/* SECTION LINKED BRANCHES (NEW) */}
+                           <div className="pt-4 border-t border-gray-100">
+                               <h3 className="font-bold text-gray-800 text-lg mb-2">Filiais Vinculadas (Gestão Multilocal)</h3>
+                               <p className="text-xs text-gray-500 mb-4">
+                                   Selecione quais filiais estão conectadas à <b>{selectedBranch}</b>. 
+                                   Isso permitirá que colaboradores desta filial visualizem e selecionem líderes das filiais marcadas.
+                               </p>
+                               
+                               <div className="bg-indigo-50/30 rounded-lg border border-indigo-100 p-4">
+                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                       {settings.branches.filter(b => b !== selectedBranch).map(b => {
+                                           const isLinked = settings.branchLinks?.[selectedBranch]?.includes(b);
+                                           return (
+                                               <label key={b} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isLinked ? 'bg-white border-indigo-300 shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
+                                                   <input 
+                                                       type="checkbox" 
+                                                       checked={!!isLinked}
+                                                       onChange={() => toggleBranchLink(b)}
+                                                       className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                                                   />
+                                                   <span className={`text-sm font-bold ${isLinked ? 'text-indigo-800' : 'text-gray-600'}`}>{b}</span>
+                                               </label>
+                                           );
+                                       })}
+                                       {settings.branches.length <= 1 && (
+                                           <p className="text-gray-400 text-sm italic">Cadastre mais filiais para criar vínculos.</p>
+                                       )}
+                                   </div>
+                               </div>
                            </div>
-                        </>
+                        </div>
                      ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-10">
                            <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                           <p className="font-medium">Selecione uma filial para gerenciar seus setores.</p>
+                           <p className="font-medium">Selecione uma filial para gerenciar seus setores e vínculos.</p>
                         </div>
                      )}
                   </div>
