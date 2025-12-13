@@ -63,18 +63,18 @@ export const Calendar: React.FC<CalendarProps> = ({
 
     if (filterBranches.length > 0) {
         filterBranches.forEach(branch => {
-            const branchSectors = settings.branchSectors?.[branch] || [];
+            const branchSectors: string[] = settings.branchSectors?.[branch] || [];
             sectorsPool = [...sectorsPool, ...branchSectors];
         });
     } else {
         if (availableBranches.length > 0) {
              availableBranches.forEach(branch => {
-                const branchSectors = settings.branchSectors?.[branch] || [];
+                const branchSectors: string[] = settings.branchSectors?.[branch] || [];
                 sectorsPool = [...sectorsPool, ...branchSectors];
              });
         } else {
              if (settings.branchSectors) {
-                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...s]);
+                Object.values(settings.branchSectors).forEach((s: string[]) => sectorsPool = [...sectorsPool, ...s]);
              } else {
                 sectorsPool = settings.sectors || [];
              }
