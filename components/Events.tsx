@@ -42,6 +42,9 @@ export const Events: React.FC<EventsProps> = ({
   const [isMultiDropdownOpen, setIsMultiDropdownOpen] = useState(false);
   const multiDropdownRef = useRef<HTMLDivElement>(null);
 
+  // State para Busca no Histórico
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
+
   const [formData, setFormData] = useState({
     collaboratorId: '',
     type: '',
@@ -129,6 +132,20 @@ export const Events: React.FC<EventsProps> = ({
         });
      }
 
+     // 2. Search Filtering (Histórico)
+     if (historySearchTerm.trim()) {
+        const term = historySearchTerm.toLowerCase();
+        filtered = filtered.filter(e => {
+            const colab = collaborators.find(c => c.id === e.collaboratorId);
+            const colabName = colab?.name.toLowerCase() || '';
+            const typeStr = e.type.toLowerCase();
+            const typeLabel = (e.typeLabel || '').toLowerCase();
+            const obsStr = (e.observation || '').toLowerCase();
+            
+            return colabName.includes(term) || typeStr.includes(term) || typeLabel.includes(term) || obsStr.includes(term);
+        });
+     }
+
      // Sort by startDate descending (newest first), then by creation date
      return [...filtered].sort((a, b) => {
          const dateA = a.startDate || '';
@@ -141,7 +158,7 @@ export const Events: React.FC<EventsProps> = ({
          const createdB = b.createdAt || '';
          return createdB.localeCompare(createdA);
      });
-  }, [events, collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
+  }, [events, collaborators, currentUserAllowedSectors, currentUserProfile, userColabId, historySearchTerm]);
 
 
   const resetForm = () => {
@@ -602,9 +619,24 @@ export const Events: React.FC<EventsProps> = ({
       )}
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Histórico de Eventos {currentUserAllowedSectors.length > 0 && <span className="text-sm font-normal text-gray-500">(Filtrado por setor)</span>}</h2>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                Histórico de Eventos 
+                {currentUserAllowedSectors.length > 0 && <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded">(Filtrado por setor)</span>}
+            </h2>
+            <div className="w-full md:w-72">
+                <input
+                    type="text"
+                    placeholder="🔍 Buscar por nome, tipo ou obs..."
+                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all hover:border-indigo-300"
+                    value={historySearchTerm}
+                    onChange={e => setHistorySearchTerm(e.target.value)}
+                />
+            </div>
+        </div>
+
         <div className="space-y-3">
-          {allowedEvents.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhum evento registrado.</p> : allowedEvents.map(e => {
+          {allowedEvents.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhum evento encontrado.</p> : allowedEvents.map(e => {
             // Determine visual style based on status
             let statusColor = 'bg-gray-100 text-gray-600 border-gray-200';
             let statusLabel = 'Pendente';
