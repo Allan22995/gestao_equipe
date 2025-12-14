@@ -508,6 +508,10 @@ export const Calendar: React.FC<CalendarProps> = ({
           borderStyle.borderColor = seasonal.color;
           borderStyle.borderWidth = '2px';
           // Opcional: Adicionar um leve background tint se desejar
+      } else if (holiday) {
+          // Novo: Estilo de borda para feriados
+          borderStyle.borderColor = '#fbbf24'; // amber-400 (Dourado sutil)
+          borderStyle.borderWidth = '1px';
       } else {
           // Borda padrão
           borderStyle.borderColor = '#e5e7eb'; // gray-200
