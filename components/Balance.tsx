@@ -221,6 +221,18 @@ export const Balance: React.FC<BalanceProps> = ({
                   <div className="mb-2 sm:mb-0 text-center sm:text-left">
                     <div className="font-bold text-gray-800 flex items-center justify-center sm:justify-start gap-2">
                       {c.name}
+                      
+                      {/* Indicator */}
+                      {c.balance > 0 && (
+                         <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 text-[10px]" title="Saldo Positivo">▲</span>
+                      )}
+                      {c.balance < 0 && (
+                         <span className="flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 text-[10px]" title="Saldo Negativo">▼</span>
+                      )}
+                      {c.balance === 0 && (
+                         <span className="flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-[10px]" title="Zerado">−</span>
+                      )}
+
                       <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">ID: {c.colabId}</span>
                     </div>
                     <div className="text-xs text-gray-500">
