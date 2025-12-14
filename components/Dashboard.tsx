@@ -13,12 +13,13 @@ interface DashboardProps {
   currentUserProfile: UserProfile;
   currentUserAllowedSectors: string[];
   canViewPhones: boolean; // Permissão ACL
+  canViewCharts?: boolean; // Permissão ACL para Gráficos
   availableBranches: string[]; // Lista de filiais permitidas
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
   collaborators, events, onCalls, vacationRequests, settings, currentUserProfile,
-  currentUserAllowedSectors, canViewPhones, availableBranches
+  currentUserAllowedSectors, canViewPhones, canViewCharts = false, availableBranches
 }) => {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [details, setDetails] = useState<any[]>([]);
@@ -138,6 +139,71 @@ export const Dashboard: React.FC<DashboardProps> = ({
      }
   }, [availableRoles, filterRoles]);
 
+  // --- FILTERED LIST MEMO (Centralizado para uso em toda a tela) ---
+  const filteredDashboardList = useMemo(() => {
+      return activeCollaborators.filter(c => {
+        if (currentUserAllowedSectors.length > 0) {
+            if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
+        }
+
+        // Branch Restriction (Available Branches)
+        if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
+
+        const matchesName = filterName ? c.name.toLowerCase().includes(filterName.toLowerCase()) : true;
+        const matchesBranch = filterBranches.length > 0 ? filterBranches.includes(c.branch) : true;
+        const matchesRole = filterRoles.length > 0 ? filterRoles.includes(c.role) : true;
+        const matchesSector = filterSectors.length > 0 ? (c.sector && filterSectors.includes(c.sector)) : true;
+
+        return matchesName && matchesBranch && matchesRole && matchesSector;
+      });
+  }, [activeCollaborators, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors, availableBranches]);
+
+  // --- STATS CALCULATION FOR CHARTS ---
+  const scalesStats = useMemo(() => {
+      const counts: Record<string, number> = { 'A': 0, 'B': 0, 'C': 0, 'D': 0, 'NA': 0 };
+      let total = 0;
+
+      filteredDashboardList.forEach(c => {
+          total++;
+          if (c.hasRotation && c.rotationGroup) {
+              const grp = c.rotationGroup.toUpperCase();
+              if (counts[grp] !== undefined) counts[grp]++;
+              else counts['NA']++; // Fallback se grupo desconhecido
+          } else {
+              counts['NA']++;
+          }
+      });
+
+      return { counts, total };
+  }, [filteredDashboardList]);
+
+  const shiftsStats = useMemo(() => {
+      const counts: Record<string, number> = {};
+      let total = 0;
+
+      filteredDashboardList.forEach(c => {
+          total++;
+          const shift = c.shiftType || 'Não Definido';
+          counts[shift] = (counts[shift] || 0) + 1;
+      });
+
+      // Sort by count desc
+      const sorted = Object.entries(counts)
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, count]) => ({ label, count }));
+
+      return { sorted, total };
+  }, [filteredDashboardList]);
+
+  const getShiftStyle = (shift: string) => {
+      const s = shift.toLowerCase();
+      if (s.includes('adm') || s.includes('geral')) return { icon: '🏢', color: 'bg-blue-500', bg: 'bg-blue-50', text: 'text-blue-700' };
+      if (s.includes('1º') || s.includes('manhã')) return { icon: '🌅', color: 'bg-orange-500', bg: 'bg-orange-50', text: 'text-orange-700' };
+      if (s.includes('2º') || s.includes('tarde')) return { icon: '🌇', color: 'bg-purple-500', bg: 'bg-purple-50', text: 'text-purple-700' };
+      if (s.includes('3º') || s.includes('noite') || s.includes('noturno')) return { icon: '🌙', color: 'bg-indigo-600', bg: 'bg-indigo-50', text: 'text-indigo-800' };
+      return { icon: '⏱️', color: 'bg-gray-500', bg: 'bg-gray-50', text: 'text-gray-700' };
+  };
+
   const getPrevDayKey = (dayIndex: number): keyof Schedule => {
     const prevIndex = dayIndex === 0 ? 6 : dayIndex - 1;
     return weekDayMap[prevIndex] as keyof Schedule;
@@ -167,22 +233,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     let activeCount = 0;
     let inactiveCount = 0;
     const tempDetails: any[] = [];
-
-    const filteredCollaborators = activeCollaborators.filter(c => {
-      if (currentUserAllowedSectors.length > 0) {
-        if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
-      }
-
-      // Branch Restriction (Available Branches)
-      if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
-
-      const matchesName = filterName ? c.name.toLowerCase().includes(filterName.toLowerCase()) : true;
-      const matchesBranch = filterBranches.length > 0 ? filterBranches.includes(c.branch) : true;
-      const matchesRole = filterRoles.length > 0 ? filterRoles.includes(c.role) : true;
-      const matchesSector = filterSectors.length > 0 ? (c.sector && filterSectors.includes(c.sector)) : true;
-
-      return matchesName && matchesBranch && matchesRole && matchesSector;
-    });
 
     // Helper para verificar horário
     const isTimeInRange = (startStr: string, endStr: string, startsPreviousDay: boolean, context: 'today' | 'yesterday' | 'tomorrow') => {
@@ -222,7 +272,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
          return isTimeInRange(scheduleDay.start, scheduleDay.end, !!scheduleDay.startsPreviousDay, context);
     };
 
-    filteredCollaborators.forEach(c => {
+    filteredDashboardList.forEach(c => {
       const approvedVacation = vacationRequests.find(v => {
         if (v.collaboratorId !== c.id || v.status !== 'aprovado') return false;
         const start = new Date(v.startDate + 'T00:00:00');
@@ -317,11 +367,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
              statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
              
              // --- LÓGICA DE HORÁRIO EM DIA EXTRA ---
-             // Tenta usar o horário do dia atual. Se não houver, busca um dia padrão (fallback).
              let refSchedule = c.schedule[currentDayKey];
              let useSchedule = refSchedule;
              
-             // Se o dia atual não estiver habilitado (ex: Domingo), busca a primeira jornada válida (ex: Segunda)
              if (!refSchedule.enabled) {
                  const weekdays: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
                  const fallbackDay = weekdays.find(d => c.schedule[d].enabled);
@@ -330,12 +378,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  }
              }
 
-             // Verifica se está dentro do horário usando a jornada de referência
              if (useSchedule && useSchedule.start && useSchedule.end) {
-                 // Usa contexto 'today' pois estamos verificando o momento presente em relação ao horário de início/fim
                  isActive = isTimeInRange(useSchedule.start, useSchedule.end, !!useSchedule.startsPreviousDay, 'today');
              } else {
-                 isActive = false; // Se não achou nenhuma jornada, assume inativo
+                 isActive = false; 
              }
 
              if (!isActive) {
@@ -374,12 +420,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
 
     setStats({
-      total: filteredCollaborators.length,
+      total: filteredDashboardList.length,
       active: activeCount,
       inactive: inactiveCount
     });
     
-    // Sort details alphabetically by name before setting state
     setDetails(tempDetails.sort((a, b) => a.name.localeCompare(b.name)));
 
     // Upcoming Events Logic (Próximos 7 dias)
@@ -393,16 +438,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays >= 0 && diffDays <= 7) {
-             const colab = activeCollaborators.find(c => c.id === e.collaboratorId);
+             const colab = filteredDashboardList.find(c => c.id === e.collaboratorId);
              if (colab) {
-                 if (currentUserAllowedSectors.length > 0 && (!colab.sector || !currentUserAllowedSectors.includes(colab.sector))) return;
-                 if (availableBranches.length > 0 && !availableBranches.includes(colab.branch)) return;
-
-                 if (filterName && !colab.name.toLowerCase().includes(filterName.toLowerCase())) return;
-                 if (filterBranches.length > 0 && !filterBranches.includes(colab.branch)) return;
-                 if (filterRoles.length > 0 && !filterRoles.includes(colab.role)) return;
-                 if (filterSectors.length > 0 && (!colab.sector || !filterSectors.includes(colab.sector))) return;
-
                  const evtLabel = settings.eventTypes.find(t => t.id === e.type)?.label || e.type;
                  let displayLabel = evtLabel;
                  if (e.type === 'trabalhado') displayLabel = `Folga Trabalhada - Extra`;
@@ -422,7 +459,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
     });
 
-    // 2. Process Vacations (Starting in next 7 days)
+    // 2. Process Vacations
     vacationRequests.forEach(v => {
         if (v.status !== 'aprovado') return;
         const start = new Date(v.startDate + 'T00:00:00');
@@ -430,12 +467,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays >= 0 && diffDays <= 7) {
-             const colab = activeCollaborators.find(c => c.id === v.collaboratorId);
+             const colab = filteredDashboardList.find(c => c.id === v.collaboratorId);
              if (colab) {
-                 if (currentUserAllowedSectors.length > 0 && (!colab.sector || !currentUserAllowedSectors.includes(colab.sector))) return;
-                 if (availableBranches.length > 0 && !availableBranches.includes(colab.branch)) return;
-                 if (filterSectors.length > 0 && (!colab.sector || !filterSectors.includes(colab.sector))) return;
-
                  let colabNameDisplay = colab.name;
                  if (colab.hasRotation && colab.rotationGroup) colabNameDisplay += ` [${colab.rotationGroup}]`;
 
@@ -451,30 +484,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
     });
 
-    // 3. Process Dynamic Rotation Off Days (Virtual Events) for Next 7 Days
+    // 3. Process Dynamic Rotation Off Days
     for (let i = 0; i <= 7; i++) {
         const targetDate = new Date(todayTime + (i * 24 * 60 * 60 * 1000));
         const dateStr = targetDate.toISOString().split('T')[0];
         
-        // Only verify Sundays
         if (targetDate.getDay() === 0) {
-            
-            activeCollaborators.forEach(c => {
+            filteredDashboardList.forEach(c => {
                 if (!c.hasRotation || !c.rotationGroup) return;
-
-                // Apply Filters
-                if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return;
-                if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return;
-                if (filterName && !c.name.toLowerCase().includes(filterName.toLowerCase())) return;
-                if (filterBranches.length > 0 && !filterBranches.includes(c.branch)) return;
-                if (filterRoles.length > 0 && !filterRoles.includes(c.role)) return;
-                if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return;
-
-                // Nova Lógica 3x1
                 const isOff = checkRotationDay(targetDate, c.rotationStartDate);
 
                 if (isOff) {
-                    // Check if explicit event overrides this
                     const hasExplicitEvent = events.some(e => e.collaboratorId === c.id && e.startDate <= dateStr && e.endDate >= dateStr);
                     const hasVacation = vacationRequests.some(v => v.collaboratorId === c.id && v.startDate <= dateStr && v.endDate >= dateStr && v.status === 'aprovado');
                     
@@ -495,7 +515,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     setUpcoming(nextWeekEvents.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
 
-  }, [activeCollaborators, events, onCalls, vacationRequests, filterName, filterBranches, filterRoles, filterSectors, currentUserAllowedSectors, settings.eventTypes, settings.roles, availableBranches, settings.shiftRotations]);
+  }, [filteredDashboardList, events, onCalls, vacationRequests, settings.eventTypes, settings.shiftRotations]);
 
   const summaryData = useMemo(() => {
     if (!showSummary) return null;
@@ -504,12 +524,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const todayStr = today.toISOString().split('T')[0];
     const todayLocale = today.toLocaleDateString('pt-BR');
 
-    // Helper: Check if date string matches today (ignoring time if full ISO)
     const isToday = (isoString?: string) => {
         if (!isoString) return false;
-        // Simple check: starts with YYYY-MM-DD
         if (isoString.startsWith(todayStr)) return true;
-        // Check with timezone adjustment if needed (assuming server saves UTC but we want local day match)
         const d = new Date(isoString);
         return d.toLocaleDateString('pt-BR') === todayLocale;
     };
@@ -538,13 +555,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const copySummaryToClipboard = () => {
      if (!summaryData) return;
      let text = `*Resumo Diário - ${summaryData.date}*\n\n`;
-     
+     // ... (mantido igual) ...
      if (summaryData.colabs.length > 0) {
          text += `👤 *Novos Colaboradores (${summaryData.colabs.length}):*\n`;
          summaryData.colabs.forEach(c => text += `- ${c.name} (${c.role})\n`);
          text += '\n';
      }
-
      if (summaryData.events.length > 0) {
          text += `📅 *Eventos/Ausências (${summaryData.events.length}):*\n`;
          summaryData.events.forEach(e => {
@@ -554,7 +570,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
          });
          text += '\n';
      }
-
      if (summaryData.onCalls.length > 0) {
          text += `🚨 *Plantões Criados (${summaryData.onCalls.length}):*\n`;
          summaryData.onCalls.forEach(o => {
@@ -563,7 +578,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
          });
          text += '\n';
      }
-
      if (summaryData.vacations.length > 0) {
          text += `✈️ *Solicitações de Férias (${summaryData.vacations.length}):*\n`;
          summaryData.vacations.forEach(v => {
@@ -571,9 +585,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
              text += `- ${name}: ${new Date(v.startDate).toLocaleDateString('pt-BR')} a ${new Date(v.endDate).toLocaleDateString('pt-BR')} (${v.status})\n`;
          });
      }
-
      if (summaryData.total === 0) text += "Nenhum registro hoje.";
-
      navigator.clipboard.writeText(text);
      alert("Resumo copiado para a área de transferência!");
   };
@@ -671,6 +683,105 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-5xl font-bold mt-2">{stats.inactive}</p>
         </button>
       </div>
+
+      {/* --- NOVOS GRÁFICOS DE DISTRIBUIÇÃO --- */}
+      {canViewCharts && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fadeIn">
+            
+            {/* DISTRIBUIÇÃO POR ESCALAS */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800">Distribuição por Escalas</h3>
+                        <p className="text-xs text-gray-500">Total da equipe (Considerando filtros atuais)</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    {['A', 'B', 'C', 'D'].map(group => {
+                        const count = scalesStats.counts[group] || 0;
+                        const percent = scalesStats.total > 0 ? Math.round((count / scalesStats.total) * 100) : 0;
+                        
+                        let colorClass = 'border-indigo-500 text-indigo-700';
+                        let barColor = 'bg-indigo-500';
+                        if (group === 'B') { colorClass = 'border-emerald-500 text-emerald-700'; barColor = 'bg-emerald-500'; }
+                        if (group === 'C') { colorClass = 'border-amber-500 text-amber-700'; barColor = 'bg-amber-500'; }
+                        if (group === 'D') { colorClass = 'border-rose-500 text-rose-700'; barColor = 'bg-rose-500'; }
+
+                        return (
+                            <div key={group} className={`bg-white border-l-4 ${colorClass} shadow-sm rounded p-3 hover:shadow-md transition-transform hover:scale-105`}>
+                                <div className="text-xs font-bold uppercase text-gray-500 mb-1">Grupo {group}</div>
+                                <div className="flex items-end gap-1">
+                                    <span className="text-2xl font-bold">{count}</span>
+                                    <span className="text-xs mb-1 text-gray-400">{percent}%</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2 overflow-hidden">
+                                    <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${percent}%` }}></div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div className="mt-auto bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="bg-slate-200 text-slate-600 font-bold text-xs px-2 py-1 rounded">N/A</span>
+                        <span className="text-xs font-bold text-slate-600 uppercase">Sem Escala (ADM/Geral)</span>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-xl font-bold text-slate-700">{scalesStats.counts['NA']}</div>
+                        <div className="text-[10px] text-slate-400">{scalesStats.total > 0 ? Math.round((scalesStats.counts['NA'] / scalesStats.total) * 100) : 0}% do total</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* DISTRIBUIÇÃO POR TURNOS */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800">Distribuição por Turnos</h3>
+                        <p className="text-xs text-gray-500">Total da equipe (Considerando filtros atuais)</p>
+                    </div>
+                </div>
+
+                <div className="space-y-4 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
+                    {shiftsStats.sorted.map((item) => {
+                        const style = getShiftStyle(item.label);
+                        const percent = shiftsStats.total > 0 ? Math.round((item.count / shiftsStats.total) * 100) : 0;
+
+                        return (
+                            <div key={item.label} className={`p-3 rounded-lg border border-gray-100 hover:border-gray-200 transition-all ${style.bg}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-sm bg-white`}>
+                                            {style.icon}
+                                        </div>
+                                        <span className={`font-bold text-sm ${style.text}`}>{item.label}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-xl font-bold text-gray-800">{item.count}</span>
+                                    </div>
+                                </div>
+                                <div className="w-full bg-white/50 rounded-full h-2 overflow-hidden border border-white">
+                                    <div className={`h-2 rounded-full ${style.color}`} style={{ width: `${percent}%` }}></div>
+                                </div>
+                                <div className="text-right text-[10px] text-gray-400 mt-1">{percent}%</div>
+                            </div>
+                        );
+                    })}
+                    {shiftsStats.sorted.length === 0 && (
+                        <p className="text-center text-gray-400 italic py-4">Nenhum dado de turno disponível.</p>
+                    )}
+                </div>
+            </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 z-0 relative">
         {/* Lista Detalhada */}

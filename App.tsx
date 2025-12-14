@@ -1,513 +1,329 @@
-
-import React, { useState, useEffect } from 'react';
-import { TabType, Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, UserProfile, RoleConfig, SYSTEM_PERMISSIONS, AccessProfileConfig, RotationRule, PERMISSION_MODULES } from './types';
-import { dbService } from './services/storage'; 
-import { auth, onAuthStateChanged, signOut, User } from './services/firebase'; 
-import { Calendar } from './components/Calendar';
+import React, { useState, useEffect, useMemo } from 'react';
+import { auth, onAuthStateChanged, signOut } from './services/firebase';
+import { dbService } from './services/storage';
+import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
+import { Calendar } from './components/Calendar';
 import { Collaborators } from './components/Collaborators';
 import { Events } from './components/Events';
 import { OnCall } from './components/OnCall';
 import { Balance } from './components/Balance';
 import { VacationForecast } from './components/VacationForecast';
 import { Settings } from './components/Settings';
-import { CommunicationGenerator } from './components/CommunicationGenerator';
 import { Simulator } from './components/Simulator';
-import { Login } from './components/Login';
-import { generateUUID } from './utils/helpers';
+import { CommunicationGenerator } from './components/CommunicationGenerator';
+import { 
+  Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, 
+  VacationRequest, SystemSettings, TabType, UserProfile 
+} from './types';
 
-// Helper to get all permission IDs
-const ALL_PERMISSIONS = SYSTEM_PERMISSIONS.map(p => p.id);
-
-const DEFAULT_SETTINGS: SystemSettings = {
-  branches: ['Matriz', 'Filial Norte', 'Fábrica', 'Centro de Distribuição'],
-  sectors: ['Administrativo', 'TI', 'RH', 'Comercial'], // Fallback
-  branchSectors: {
-    'Matriz': ['Administrativo', 'TI', 'RH', 'Comercial'],
-    'Filial Norte': ['Vendas', 'Estoque', 'Logística'],
-    'Fábrica': ['Produção', 'Manutenção', 'Qualidade'],
-    'Centro de Distribuição': ['Recebimento', 'Expedição', 'Transporte']
-  },
-  branchLinks: {},
-  roles: [
-    { 
-      name: 'Gerente', 
-      canViewAllSectors: true, 
-      permissions: ALL_PERMISSIONS, 
-      manageableProfiles: ['admin', 'colaborador', 'noc', 'liderança'] 
-    },
-    { 
-      name: 'Liderança', 
-      canViewAllSectors: false, 
-      permissions: [
-        'dashboard:view', 'dashboard:view_phones',
-        'calendar:view', 'calendar:view_phones',
-        'collaborators:view', 
-        'events:view', 'events:create', 'events:update', 
-        'on_calls:view', 'on_calls:create', 'on_calls:update', 
-        'vacation:view', 'vacation:create', 'vacation:update', 'vacation:manage_status',
-        'balance:view', 'balance:create',
-        'simulator:view',
-        'comms:view'
-      ], 
-      manageableProfiles: ['colaborador', 'liderança'] 
-    },
-    { 
-      name: 'Coordenador', 
-      canViewAllSectors: false, 
-      permissions: [
-        'dashboard:view', 'dashboard:view_phones',
-        'calendar:view', 'calendar:view_phones',
-        'collaborators:view', 
-        'events:view', 'events:create', 'events:update',
-        'on_calls:view', 'on_calls:create', 'on_calls:update',
-        'vacation:view'
-      ], 
-      manageableProfiles: ['colaborador'] 
-    },
-    { 
-      name: 'Vendedor', 
-      canViewAllSectors: false, 
-      permissions: ['dashboard:view', 'calendar:view'] 
-    },
-    { 
-      name: 'NOC', 
-      canViewAllSectors: true, 
-      permissions: ['dashboard:view', 'calendar:view', 'dashboard:view_phones', 'calendar:view_phones'] 
-    }
-  ],
-  accessProfiles: [
-    { id: 'admin', name: 'admin', active: true },
-    { id: 'colaborador', name: 'colaborador', active: true },
-    { id: 'noc', name: 'noc', active: true },
-    { id: 'liderança', name: 'liderança', active: true }
-  ],
-  eventTypes: [
-    { id: 'ferias', label: 'Férias', behavior: 'neutral' },
-    { id: 'folga', label: 'Folga', behavior: 'debit' },
-    { id: 'trabalhado', label: 'Trabalhado', behavior: 'credit_2x' }
-  ],
+// Default settings
+const defaultSettings: SystemSettings = {
+  branches: [],
+  sectors: [],
+  roles: [],
+  accessProfiles: [],
+  eventTypes: [],
   scheduleTemplates: [],
-  shiftRotations: [
-    { id: 'A', label: 'Escala A' }, 
-    { id: 'B', label: 'Escala B' },
-    { id: 'C', label: 'Escala C' },
-    { id: 'D', label: 'Escala D' }
-  ],
-  spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1mZiuHggQ3L_fS3rESZ9VOs1dizo_Zl5OTqKArwtQBoU/edit?gid=1777395781#gid=1777395781',
-  systemMessage: { active: false, level: 'info', message: '' },
-  coverageRules: []
+  shiftRotations: [],
+  companyBranches: {},
+  companies: []
 };
 
 function App() {
-  // Auth State
-  const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   
-  // Current User Context
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [userColabId, setUserColabId] = useState<string | null>(null);
-  const [userBranch, setUserBranch] = useState<string | null>(null);
-  const [currentUserAllowedSectors, setCurrentUserAllowedSectors] = useState<string[]>([]);
-  const [currentUserPermissions, setCurrentUserPermissions] = useState<string[]>([]);
-  const [currentUserRole, setCurrentUserRole] = useState<string>('');
-
-  const [activeTab, setActiveTab] = useState<TabType>('calendario');
-  
-  // Data State (Realtime from Firestore)
+  // Data States
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [onCalls, setOnCalls] = useState<OnCallRecord[]>([]);
   const [adjustments, setAdjustments] = useState<BalanceAdjustment[]>([]);
   const [vacationRequests, setVacationRequests] = useState<VacationRequest[]>([]);
-  const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
+  
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [systemMsgClosed, setSystemMsgClosed] = useState(false);
 
-  // Toast Logic
-  const [toast, setToast] = useState<{msg: string, error: boolean} | null>(null);
-  const showToast = (msg: string, error = false) => {
-    setToast({ msg, error });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  // Listen for Auth Changes
+  // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setAuthLoading(false);
+      setLoading(false);
     });
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
 
-  // Match Authenticated User with Collaborator Data
+  // Data Subscriptions
   useEffect(() => {
-    if (user && collaborators.length > 0) {
-      const foundColab = collaborators.find(c => c.email === user.email);
-      if (foundColab) {
-        setUserProfile(foundColab.profile || 'colaborador');
-        setUserColabId(foundColab.id);
-        setUserBranch(foundColab.branch || null);
-        setCurrentUserRole(foundColab.role || '');
-        
-        // 1. Encontrar a Role Config
-        let roleConfig = settings.roles.find(r => r.name === foundColab.role);
-        
-        // Se for admin hardcoded no profile, dá acesso total independente da role
-        if (foundColab.profile === 'admin') {
-           setCurrentUserAllowedSectors([]); 
-           setCurrentUserPermissions(ALL_PERMISSIONS); // Full access
-        } else {
-           // 2. Definir Setores Permitidos
-           if (roleConfig && roleConfig.canViewAllSectors) {
-              setCurrentUserAllowedSectors([]); 
-           } else {
-              const allowed = foundColab.allowedSectors && foundColab.allowedSectors.length > 0 
-                ? foundColab.allowedSectors 
-                : (foundColab.sector ? [foundColab.sector] : []);
-              setCurrentUserAllowedSectors(allowed);
-           }
+    if (!user) return;
 
-           // 3. Definir Permissões
-           if (roleConfig && roleConfig.permissions) {
-              setCurrentUserPermissions(roleConfig.permissions);
-           } else {
-              // Permissões padrão para legados/migração
-              const defaults = [
-                 'dashboard:view', 'calendar:view', 'comms:view',
-                 'events:view', 'events:create', // pode solicitar
-                 'vacation:view', 'vacation:create' // pode solicitar
-              ];
-              setCurrentUserPermissions(defaults);
-           }
-        }
-      } else {
-        setUserProfile(null); 
-        setCurrentUserAllowedSectors([]);
-        setCurrentUserPermissions([]);
-        setUserBranch(null);
-        setCurrentUserRole('');
-      }
-    }
-  }, [user, collaborators, settings.roles]);
-
-  // Initial Data Loading
-  useEffect(() => {
-    if (!user) return; 
-
-    console.log('🚀 Inicializando App e Listeners...');
-
-    const unsubColabs = dbService.subscribeToCollaborators(setCollaborators);
-    const unsubEvents = dbService.subscribeToEvents(setEvents);
-    const unsubOnCalls = dbService.subscribeToOnCalls(setOnCalls);
-    const unsubAdjustments = dbService.subscribeToAdjustments(setAdjustments);
-    const unsubVacation = dbService.subscribeToVacationRequests(setVacationRequests);
-    
-    const unsubSettings = dbService.subscribeToSettings(
-      (data: SystemSettings | null) => {
-        if (data) {
-          let loadedSettings = { ...DEFAULT_SETTINGS, ...data };
-          
-          // MIGRATION LOGIC FOR OLD PERMISSIONS TO NEW GRANULAR
-          loadedSettings.roles = loadedSettings.roles.map((r: any) => {
-             const perms = r.permissions || [];
-             let newPerms: string[] = [...perms];
-             
-             // Map old 'tab:x' to 'x:view'
-             if (perms.includes('tab:dashboard') && !newPerms.includes('dashboard:view')) newPerms.push('dashboard:view');
-             if (perms.includes('tab:calendario') && !newPerms.includes('calendar:view')) newPerms.push('calendar:view');
-             if (perms.includes('tab:colaboradores') && !newPerms.includes('collaborators:view')) newPerms.push('collaborators:view');
-             if (perms.includes('tab:eventos') && !newPerms.includes('events:view')) newPerms.push('events:view');
-             if (perms.includes('tab:plantoes') && !newPerms.includes('on_calls:view')) newPerms.push('on_calls:view');
-             if (perms.includes('tab:saldo') && !newPerms.includes('balance:view')) newPerms.push('balance:view');
-             if (perms.includes('tab:previsao_ferias') && !newPerms.includes('vacation:view')) newPerms.push('vacation:view');
-             if (perms.includes('tab:comunicados') && !newPerms.includes('comms:view')) newPerms.push('comms:view');
-             if (perms.includes('tab:configuracoes') && !newPerms.includes('settings:view')) newPerms.push('settings:view');
-             if (perms.includes('tab:simulador') && !newPerms.includes('simulator:view')) newPerms.push('simulator:view');
-
-             // Map 'write:x' to create/update/delete
-             if (perms.includes('write:collaborators')) newPerms.push('collaborators:create', 'collaborators:update', 'collaborators:delete');
-             if (perms.includes('write:events')) newPerms.push('events:create', 'events:update', 'events:delete');
-             if (perms.includes('write:on_calls')) newPerms.push('on_calls:create', 'on_calls:update', 'on_calls:delete');
-             if (perms.includes('write:vacation')) newPerms.push('vacation:create', 'vacation:update', 'vacation:delete');
-             if (perms.includes('write:vacation_status')) newPerms.push('vacation:manage_status');
-             if (perms.includes('write:balance')) newPerms.push('balance:create');
-             if (perms.includes('write:coverage_rules')) newPerms.push('simulator:manage_rules');
-             if (perms.includes('view:phones')) newPerms.push('dashboard:view_phones', 'calendar:view_phones');
-
-             // Settings mappings
-             if (perms.some((p: string) => p.startsWith('settings:'))) {
-                 if (!newPerms.includes('settings:manage_general')) newPerms.push('settings:manage_general');
-                 if (perms.includes('settings:access_control')) newPerms.push('settings:manage_access');
-             }
-
-             return { ...r, permissions: Array.from(new Set(newPerms)) };
-          });
-
-          // Ensure branchSectors exists
-          if (!loadedSettings.branchSectors) {
-             loadedSettings.branchSectors = DEFAULT_SETTINGS.branchSectors;
-          }
-          // Ensure branchLinks exists
-          if (!loadedSettings.branchLinks) {
-             loadedSettings.branchLinks = DEFAULT_SETTINGS.branchLinks;
-          }
-
-          setSettings(loadedSettings);
-        } else {
-          dbService.saveSettings(DEFAULT_SETTINGS).catch(console.error);
-          setSettings(DEFAULT_SETTINGS);
-        }
-      },
-      (errorMsg: string) => showToast(errorMsg, true)
-    );
+    const unsubs = [
+      dbService.subscribeToCollaborators(setCollaborators),
+      dbService.subscribeToEvents(setEvents),
+      dbService.subscribeToOnCalls(setOnCalls),
+      dbService.subscribeToAdjustments(setAdjustments),
+      dbService.subscribeToVacationRequests(setVacationRequests),
+      dbService.subscribeToSettings((data) => {
+        if (data) setSettings(data);
+      })
+    ];
 
     return () => {
-      unsubColabs(); unsubEvents(); unsubOnCalls(); unsubAdjustments(); unsubVacation(); unsubSettings();
+      unsubs.forEach(unsub => unsub());
     };
   }, [user]);
 
-  // Helpers
-  const hasPermission = (perm: string) => {
-    if (userProfile === 'admin') return true;
-    return currentUserPermissions.includes(perm);
+  // Derived User Info
+  const currentUserColab = useMemo(() => {
+    if (!user || !collaborators.length) return null;
+    return collaborators.find(c => c.email === user.email);
+  }, [user, collaborators]);
+
+  const userProfile: UserProfile = currentUserColab?.profile || 'colaborador';
+  const userRoleName = currentUserColab?.role || '';
+  
+  // Permissions Logic
+  const roleConfig = useMemo(() => {
+     return settings.roles.find(r => r.name === userRoleName);
+  }, [settings.roles, userRoleName]);
+
+  const hasPermission = (permId: string) => {
+      if (userProfile === 'admin') return true;
+      if (!roleConfig) return false;
+      return roleConfig.permissions.includes(permId);
   };
 
+  const allowedSectors = useMemo(() => {
+      if (userProfile === 'admin') return []; 
+      if (roleConfig?.canViewAllSectors) return [];
+      return currentUserColab?.allowedSectors || [];
+  }, [userProfile, roleConfig, currentUserColab]);
+
+  const availableBranches = useMemo(() => {
+      if (userProfile === 'admin') return settings.branches;
+      if (roleConfig?.canViewAllSectors) return settings.branches;
+
+      if (currentUserColab?.branch) {
+          const linked = settings.branchLinks?.[currentUserColab.branch] || [];
+          return [currentUserColab.branch, ...linked];
+      }
+      return [];
+  }, [userProfile, roleConfig, settings.branches, currentUserColab, settings.branchLinks]);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
+
+  const showToast = (msg: string, isError = false) => {
+    alert(msg);
+  };
+  
   const logAction = (action: string, entity: string, details: string, user: string) => {
-    const log: AuditLog = {
-      id: generateUUID(),
-      action: action as any,
-      entity: entity as any,
-      details,
-      performedBy: user,
-      timestamp: new Date().toISOString()
-    };
-    dbService.logAudit(log);
+      dbService.logAudit({
+          id: '',
+          action: action as any,
+          entity: entity as any,
+          details,
+          performedBy: user,
+          timestamp: new Date().toISOString()
+      });
   };
 
-  // CRUD Wrappers
-  const handleAddCollaborator = async (c: Collaborator) => { try { const { id, ...rest } = c; await dbService.addCollaborator(rest as any); } catch (e) { console.error(e); showToast('Erro ao salvar', true); } };
-  const handleUpdateCollaborator = async (c: Collaborator) => { try { await dbService.updateCollaborator(c.id, c); } catch (e) { console.error(e); showToast('Erro ao atualizar', true); } };
-  const handleDeleteCollaborator = async (id: string) => { try { await dbService.deleteCollaborator(id); } catch (e) { console.error(e); showToast('Erro ao excluir', true); } };
-  const handleAddEvent = async (e: EventRecord) => { try { await dbService.addEvent(e); } catch (err) { showToast('Erro ao criar evento', true); } };
-  const handleUpdateEvent = async (e: EventRecord) => { try { await dbService.updateEvent(e.id, e); } catch (err) { showToast('Erro ao atualizar evento', true); } };
-  const handleDeleteEvent = async (id: string) => { try { await dbService.deleteEvent(id); } catch (err) { showToast('Erro ao excluir evento', true); } };
-  const handleAddOnCall = async (o: OnCallRecord) => { try { await dbService.addOnCall(o); } catch (err) { showToast('Erro ao criar plantão', true); } };
-  const handleUpdateOnCall = async (o: OnCallRecord) => { try { await dbService.updateOnCall(o.id, o); } catch (err) { showToast('Erro ao atualizar plantão', true); } };
-  const handleDeleteOnCall = async (id: string) => { try { await dbService.deleteOnCall(id); } catch (err) { showToast('Erro ao excluir plantão', true); } };
-  const handleAddAdjustment = async (a: BalanceAdjustment) => { try { await dbService.addAdjustment(a); } catch (err) { showToast('Erro ao lançar ajuste', true); } };
-  const handleAddVacation = async (v: VacationRequest) => { try { await dbService.addVacationRequest(v); } catch (err) { showToast('Erro ao solicitar férias', true); } };
-  const handleUpdateVacation = async (v: VacationRequest) => { try { await dbService.updateVacationRequest(v.id, v); } catch (err) { showToast('Erro ao atualizar solicitação', true); } };
-  const handleDeleteVacation = async (id: string) => { try { await dbService.deleteVacationRequest(id); } catch (err) { showToast('Erro ao excluir solicitação', true); } };
-  const handleSaveSettings = async (s: SystemSettings) => { try { await dbService.saveSettings(s); showToast('Configurações salvas!'); } catch (err: any) { console.error(err); showToast(err.message || 'Erro ao salvar.', true); throw err; } };
+  if (loading) return <div className="flex items-center justify-center h-screen">Carregando...</div>;
 
-  const currentUserName = userColabId ? (collaborators.find(c => c.id === userColabId)?.name || user?.email) : user?.email || 'Sistema';
-
-  const availableBranches = (userProfile === 'admin' || !userBranch)
-    ? settings.branches
-    : [userBranch];
-
-  // --- TAB CONTROL LOGIC ---
-  const allTabs: {id: TabType, label: string, icon: string, requiredPerm: string}[] = [
-    { id: 'calendario', label: 'Calendário', icon: '📆', requiredPerm: 'calendar:view' },
-    { id: 'dashboard', label: 'Dashboard', icon: '📊', requiredPerm: 'dashboard:view' },
-    { id: 'simulador', label: 'Simulador', icon: '🧪', requiredPerm: 'simulator:view' },
-    { id: 'colaboradores', label: 'Colaboradores', icon: '👥', requiredPerm: 'collaborators:view' },
-    { id: 'eventos', label: 'Eventos', icon: '📅', requiredPerm: 'events:view' },
-    { id: 'plantoes', label: 'Plantões', icon: '🌙', requiredPerm: 'on_calls:view' },
-    { id: 'saldo', label: 'Saldo', icon: '💰', requiredPerm: 'balance:view' },
-    { id: 'previsao_ferias', label: 'Prev. Férias', icon: '✈️', requiredPerm: 'vacation:view' },
-    { id: 'comunicados', label: 'Comunicados', icon: '📢', requiredPerm: 'comms:view' },
-    { id: 'configuracoes', label: 'Configurações', icon: '⚙️', requiredPerm: 'settings:view' },
-  ];
-
-  const visibleTabs = allTabs.filter(t => hasPermission(t.requiredPerm));
-
-  useEffect(() => {
-    if (visibleTabs.length > 0) {
-      const isAllowed = visibleTabs.some(t => t.id === activeTab);
-      if (!isAllowed) setActiveTab(visibleTabs[0].id);
-    }
-  }, [currentUserPermissions, visibleTabs]);
+  if (!user) {
+    return <Login />;
+  }
 
   const renderContent = () => {
-    if (!userProfile) return null;
-    const currentTabObj = allTabs.find(t => t.id === activeTab);
-    if (!currentTabObj || !hasPermission(currentTabObj.requiredPerm)) return <div className="p-8 text-center text-gray-500">Acesso Negado a esta aba.</div>;
-
     switch (activeTab) {
-      case 'calendario':
-        return <Calendar 
-            collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} 
-            settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={currentUserAllowedSectors}
-            canViewPhones={hasPermission('calendar:view_phones')}
-            availableBranches={availableBranches}
-            userColabId={userColabId}
-          />;
       case 'dashboard':
         return <Dashboard 
             collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} 
-            settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={currentUserAllowedSectors}
+            settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={allowedSectors}
             canViewPhones={hasPermission('dashboard:view_phones')}
+            canViewCharts={hasPermission('dashboard:view_charts')}
             availableBranches={availableBranches}
           />;
-      case 'simulador':
-        return <Simulator 
-            collaborators={collaborators} events={events} settings={settings} onSaveSettings={handleSaveSettings}
-            currentUserAllowedSectors={currentUserAllowedSectors} 
-            canEditRules={hasPermission('simulator:manage_rules')}
+      case 'calendario':
+        return <Calendar 
+            collaborators={collaborators} events={events} onCalls={onCalls} vacationRequests={vacationRequests} 
+            settings={settings} currentUserProfile={userProfile} currentUserAllowedSectors={allowedSectors}
+            canViewPhones={hasPermission('calendar:view_phones')}
             availableBranches={availableBranches}
+            userColabId={currentUserColab?.id || null}
           />;
       case 'colaboradores':
         return <Collaborators 
-          collaborators={collaborators} onAdd={handleAddCollaborator} onUpdate={handleUpdateCollaborator} onDelete={handleDeleteCollaborator}
-          showToast={showToast} settings={settings} currentUserProfile={userProfile}
-          canCreate={hasPermission('collaborators:create')}
-          canUpdate={hasPermission('collaborators:update')}
-          canDelete={hasPermission('collaborators:delete')}
-          currentUserAllowedSectors={currentUserAllowedSectors}
-          currentUserRole={currentUserRole}
-          availableBranches={availableBranches} // Passando as filiais permitidas
+            collaborators={collaborators} 
+            onAdd={(c) => { dbService.addCollaborator(c); logAction('create', 'colaborador', `Criou ${c.name}`, user.email); }}
+            onUpdate={(c) => { dbService.updateCollaborator(c.id, c); logAction('update', 'colaborador', `Editou ${c.name}`, user.email); }}
+            onDelete={(id) => { dbService.deleteCollaborator(id); logAction('delete', 'colaborador', `Excluiu ID ${id}`, user.email); }}
+            showToast={showToast}
+            settings={settings}
+            currentUserProfile={userProfile}
+            canCreate={hasPermission('collaborators:create')}
+            canUpdate={hasPermission('collaborators:update')}
+            canDelete={hasPermission('collaborators:delete')}
+            currentUserAllowedSectors={allowedSectors}
+            currentUserRole={userRoleName}
+            availableBranches={availableBranches}
         />;
       case 'eventos':
         return <Events 
-          collaborators={collaborators} events={events} onAdd={handleAddEvent} onUpdate={handleUpdateEvent} onDelete={handleDeleteEvent}
-          showToast={showToast} logAction={logAction} settings={settings} 
-          canCreate={hasPermission('events:create')}
-          canUpdate={hasPermission('events:update')}
-          canDelete={hasPermission('events:delete')}
-          currentUserAllowedSectors={currentUserAllowedSectors}
-          currentUserProfile={userProfile}
-          userColabId={userColabId}
+            collaborators={collaborators} events={events}
+            onAdd={(e) => dbService.addEvent(e)}
+            onUpdate={(e) => dbService.updateEvent(e.id, e)}
+            onDelete={(id) => dbService.deleteEvent(id)}
+            showToast={showToast}
+            logAction={logAction}
+            settings={settings}
+            canCreate={hasPermission('events:create')}
+            canUpdate={hasPermission('events:update')}
+            canDelete={hasPermission('events:delete')}
+            currentUserAllowedSectors={allowedSectors}
+            currentUserProfile={userProfile}
+            userColabId={currentUserColab?.id || null}
         />;
       case 'plantoes':
         return <OnCall 
-          collaborators={collaborators} onCalls={onCalls} onAdd={handleAddOnCall} onUpdate={handleUpdateOnCall} onDelete={handleDeleteOnCall}
-          showToast={showToast} logAction={logAction} settings={settings} 
-          canCreate={hasPermission('on_calls:create')}
-          canUpdate={hasPermission('on_calls:update')}
-          canDelete={hasPermission('on_calls:delete')}
-          currentUserProfile={userProfile}
-          userColabId={userColabId}
+            collaborators={collaborators} onCalls={onCalls}
+            onAdd={(o) => dbService.addOnCall(o)}
+            onUpdate={(o) => dbService.updateOnCall(o.id, o)}
+            onDelete={(id) => dbService.deleteOnCall(id)}
+            showToast={showToast}
+            logAction={logAction}
+            settings={settings}
+            canCreate={hasPermission('on_calls:create')}
+            canUpdate={hasPermission('on_calls:update')}
+            canDelete={hasPermission('on_calls:delete')}
+            currentUserProfile={userProfile}
+            userColabId={currentUserColab?.id || null}
         />;
       case 'saldo':
         return <Balance 
-          collaborators={collaborators} events={events} adjustments={adjustments} onAddAdjustment={handleAddAdjustment}
-          showToast={showToast} logAction={logAction} currentUserName={currentUserName as string}
-          canCreate={hasPermission('balance:create')}
-          currentUserAllowedSectors={currentUserAllowedSectors}
-          currentUserProfile={userProfile}
-          userColabId={userColabId}
+            collaborators={collaborators} events={events} adjustments={adjustments}
+            onAddAdjustment={(a) => dbService.addAdjustment(a)}
+            showToast={showToast}
+            logAction={logAction}
+            currentUserName={currentUserColab?.name || user.email}
+            canCreate={hasPermission('balance:create')}
+            currentUserAllowedSectors={allowedSectors}
+            currentUserProfile={userProfile}
+            userColabId={currentUserColab?.id || null}
         />;
       case 'previsao_ferias':
         return <VacationForecast 
-          collaborators={collaborators} requests={vacationRequests} onAdd={handleAddVacation} onUpdate={handleUpdateVacation} onDelete={handleDeleteVacation}
-          showToast={showToast} logAction={logAction} currentUserProfile={userProfile} currentUserName={currentUserName as string}
-          canCreate={hasPermission('vacation:create')}
-          canUpdate={hasPermission('vacation:update')}
-          canDelete={hasPermission('vacation:delete')}
-          canManageStatus={hasPermission('vacation:manage_status')}
-          currentUserAllowedSectors={currentUserAllowedSectors}
-          userColabId={userColabId}
+            collaborators={collaborators} requests={vacationRequests}
+            onAdd={(r) => dbService.addVacationRequest(r)}
+            onUpdate={(r) => dbService.updateVacationRequest(r.id, r)}
+            onDelete={(id) => dbService.deleteVacationRequest(id)}
+            showToast={showToast}
+            logAction={logAction}
+            currentUserProfile={userProfile}
+            currentUserName={currentUserColab?.name || user.email}
+            canCreate={hasPermission('vacation:create')}
+            canUpdate={hasPermission('vacation:update')}
+            canDelete={hasPermission('vacation:delete')}
+            canManageStatus={hasPermission('vacation:manage_status')}
+            currentUserAllowedSectors={allowedSectors}
+            userColabId={currentUserColab?.id || null}
         />;
-      case 'comunicados': return <CommunicationGenerator />;
-      case 'configuracoes': return <Settings settings={settings} setSettings={handleSaveSettings} showToast={showToast} hasPermission={hasPermission} />;
-      default: return null;
+      case 'simulador':
+        return <Simulator 
+            collaborators={collaborators} events={events} settings={settings}
+            onSaveSettings={(s) => { dbService.saveSettings(s); logAction('update', 'configuracao', 'Atualizou Regras de Cobertura', user.email); }}
+            currentUserAllowedSectors={allowedSectors}
+            canEditRules={hasPermission('simulator:manage_rules')}
+            availableBranches={availableBranches}
+        />;
+      case 'comunicados':
+          return <CommunicationGenerator />;
+      case 'configuracoes':
+        return <Settings 
+            settings={settings} 
+            setSettings={async (s) => { await dbService.saveSettings(s); logAction('update', 'configuracao', 'Atualizou Configurações Gerais', user.email); }}
+            showToast={showToast}
+            hasPermission={hasPermission}
+        />;
+      default:
+        return <div>Em construção</div>;
     }
   };
 
-  if (authLoading) return <div className="min-h-screen bg-[#1E90FF] flex items-center justify-center text-white"><div className="animate-pulse text-xl font-bold">Carregando Sistema...</div></div>;
-  if (!user) return <Login />;
-  
-  if (!userProfile && collaborators.length > 0) { 
-     return (
-      <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-white p-8 rounded-xl shadow-xl max-w-md">
-          <div className="text-amber-500 mb-4 flex justify-center"><svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Acesso Pendente</h2>
-          <p className="text-gray-600 mb-6">Seu e-mail <b>{user.email}</b> foi autenticado, mas não consta na base.</p>
-          <button onClick={() => signOut(auth)} className="bg-gray-800 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors">Sair / Tentar outra conta</button>
-        </div>
-      </div>
-     );
-  }
-
-  if (collaborators.length === 0 && !userProfile) {
-      return (
-        <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center p-6">
-           <div className="bg-white p-8 rounded-xl shadow-lg max-w-lg text-center">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Configuração Inicial</h2>
-              <p className="text-gray-600 mb-6">Não existem colaboradores. Crie manualmente o registro para: <b>{user.email}</b> com perfil <b>admin</b> no Firebase.</p>
-              <button onClick={() => signOut(auth)} className="text-indigo-600 underline">Sair</button>
-           </div>
-        </div>
-      );
-  }
-
   return (
-    <div className="min-h-screen bg-[#1E90FF] font-sans flex flex-col">
-      {settings.systemMessage?.active && (
-        <div className={`w-full px-4 py-3 text-center font-bold text-sm md:text-base flex items-center justify-center gap-3 shadow-md animate-slideIn transition-colors relative z-50 ${
-          settings.systemMessage.level === 'error' ? 'bg-red-600 text-white' :
-          settings.systemMessage.level === 'warning' ? 'bg-amber-400 text-gray-900' :
-          'bg-white text-blue-700'
-        }`}>
-          <span className="text-xl">{settings.systemMessage.level === 'error' ? '🚨' : settings.systemMessage.level === 'warning' ? '⚠️' : 'ℹ️'}</span>
-          <span>{settings.systemMessage.message}</span>
-        </div>
-      )}
+    <div className="min-h-screen bg-gray-100 font-sans text-gray-900 flex">
+       <aside className="w-64 bg-indigo-900 text-white flex flex-col fixed h-full z-30">
+          <div className="p-6 text-center border-b border-indigo-800">
+             <h1 className="text-xl font-bold tracking-wider">Nexo</h1>
+             <p className="text-xs text-indigo-300 mt-1">Gestão de Equipes</p>
+          </div>
+          
+          <div className="p-4 border-b border-indigo-800 flex items-center gap-3">
+             <div className="w-10 h-10 rounded-full bg-indigo-700 flex items-center justify-center font-bold">
+                 {currentUserColab?.name ? currentUserColab.name.charAt(0) : user.email?.charAt(0).toUpperCase()}
+             </div>
+             <div className="overflow-hidden">
+                 <p className="text-sm font-bold truncate">{currentUserColab?.name || 'Usuário'}</p>
+                 <p className="text-xs text-indigo-300 truncate">{userProfile}</p>
+             </div>
+          </div>
 
-      <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-           <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-xl md:text-3xl font-bold text-white text-outline-black">Nexo - Gestão de Equipes</h1>
-                <p className="text-white/80 text-xs md:text-sm mt-1 flex items-center gap-2">
-                  <span className="bg-white/20 px-2 py-0.5 rounded text-white font-mono">{userProfile?.toUpperCase()}</span>
-                  {user.email}
-                  {currentUserAllowedSectors && currentUserAllowedSectors.length > 0 && (
-                    <span className="bg-indigo-600 px-2 py-0.5 rounded text-white text-xs" title="Setores Permitidos">{currentUserAllowedSectors.length} Setor(es)</span>
-                  )}
-                </p>
-              </div>
-              <button onClick={() => signOut(auth)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">Sair <span>➜</span></button>
-           </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 mt-4">
-           <div className="flex space-x-1 overflow-x-auto pb-2 custom-scrollbar">
-             {visibleTabs.map(tab => (
-               <button 
-                key={tab.id} 
-                onClick={() => setActiveTab(tab.id)} 
-                className={`px-4 py-3 rounded-t-lg text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'bg-white text-[#1E90FF] shadow-lg transform translate-y-0.5' : 'bg-white/10 text-white hover:bg-white/20 hover:text-white text-outline-black'}`}
-               >
-                 <span>{tab.icon}</span> {tab.label}
-               </button>
-             ))}
-           </div>
-        </div>
-      </header>
+          <nav className="flex-1 overflow-y-auto py-4">
+             <SidebarItem label="Dashboard" icon="📊" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} visible={hasPermission('dashboard:view')} />
+             <SidebarItem label="Calendário" icon="📅" active={activeTab === 'calendario'} onClick={() => setActiveTab('calendario')} visible={hasPermission('calendar:view')} />
+             <SidebarItem label="Colaboradores" icon="👥" active={activeTab === 'colaboradores'} onClick={() => setActiveTab('colaboradores')} visible={hasPermission('collaborators:view')} />
+             <SidebarItem label="Eventos / Folgas" icon="📝" active={activeTab === 'eventos'} onClick={() => setActiveTab('eventos')} visible={hasPermission('events:view')} />
+             <SidebarItem label="Plantões" icon="🌙" active={activeTab === 'plantoes'} onClick={() => setActiveTab('plantoes')} visible={hasPermission('on_calls:view')} />
+             <SidebarItem label="Férias" icon="✈️" active={activeTab === 'previsao_ferias'} onClick={() => setActiveTab('previsao_ferias')} visible={hasPermission('vacation:view')} />
+             <SidebarItem label="Banco de Horas" icon="💰" active={activeTab === 'saldo'} onClick={() => setActiveTab('saldo')} visible={hasPermission('balance:view')} />
+             <SidebarItem label="Simulador" icon="🧪" active={activeTab === 'simulador'} onClick={() => setActiveTab('simulador')} visible={hasPermission('simulator:view')} />
+             <SidebarItem label="Gerador Comunicados" icon="📢" active={activeTab === 'comunicados'} onClick={() => setActiveTab('comunicados')} visible={hasPermission('comms:view')} />
+             <SidebarItem label="Configurações" icon="⚙️" active={activeTab === 'configuracoes'} onClick={() => setActiveTab('configuracoes')} visible={hasPermission('settings:view')} />
+          </nav>
+          
+          <div className="p-4 border-t border-indigo-800">
+             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-indigo-800 hover:bg-indigo-700 text-white py-2 rounded-lg transition-colors">
+                <span>🚪</span> Sair
+             </button>
+          </div>
+       </aside>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
-        {renderContent()}
-      </main>
-
-      <footer className="py-6 text-center text-white/80 text-sm">
-        <p>Desenvolvido por <a href="https://app.humand.co/profile/4970892" target="_blank" className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all">Fabio de Moraes</a> e <a href="https://app.humand.co/profile/4968748" target="_blank" className="font-bold hover:text-white underline decoration-transparent hover:decoration-white transition-all">Alan Matheus</a></p>
-      </footer>
-
-      {toast && (
-        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-lg shadow-2xl text-white font-bold animate-slideIn z-50 ${toast.error ? 'bg-red-500' : 'bg-emerald-500'}`}>{toast.msg}</div>
-      )}
-      
-      <style>{`
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .animate-slideIn { animation: slideIn 0.3s ease-out; }
-        .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
+       <main className="flex-1 ml-64 p-8">
+          {settings.systemMessage?.active && !systemMsgClosed && (
+            <div className={`mb-6 rounded-lg p-4 flex justify-between items-start shadow-sm border-l-4 ${
+              settings.systemMessage.level === 'error' ? 'bg-red-50 border-red-500 text-red-800' :
+              settings.systemMessage.level === 'warning' ? 'bg-amber-50 border-amber-500 text-amber-800' :
+              'bg-blue-50 border-blue-500 text-blue-800'
+            }`}>
+               <div>
+                  <h3 className="font-bold uppercase text-sm mb-1 flex items-center gap-2">
+                     {settings.systemMessage.level === 'error' ? '🚨 MANUTENÇÃO / ERRO' : 
+                      settings.systemMessage.level === 'warning' ? '⚠️ ATENÇÃO' : 'ℹ️ INFORMAÇÃO'}
+                  </h3>
+                  <p className="text-sm whitespace-pre-wrap">{settings.systemMessage.message}</p>
+               </div>
+               <button onClick={() => setSystemMsgClosed(true)} className="text-current opacity-60 hover:opacity-100">✕</button>
+            </div>
+          )}
+          {renderContent()}
+       </main>
     </div>
   );
 }
+
+const SidebarItem = ({ label, icon, active, onClick, visible }: any) => {
+    if (!visible) return null;
+    return (
+        <button 
+          onClick={onClick}
+          className={`w-full flex items-center gap-3 px-6 py-3 transition-colors ${active ? 'bg-indigo-800 text-white border-r-4 border-emerald-400' : 'text-indigo-200 hover:bg-indigo-800 hover:text-white'}`}
+        >
+            <span className="text-lg">{icon}</span>
+            <span className="font-medium text-sm">{label}</span>
+        </button>
+    );
+};
 
 export default App;

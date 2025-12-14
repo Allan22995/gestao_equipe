@@ -204,7 +204,8 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     icon: '📊',
     actions: [
       { id: 'dashboard:view', label: 'Visualizar Tela', type: 'view' },
-      { id: 'dashboard:view_phones', label: 'Ver Telefones', type: 'special' }
+      { id: 'dashboard:view_phones', label: 'Ver Telefones', type: 'special' },
+      { id: 'dashboard:view_charts', label: 'Ver Gráficos Distribuição', type: 'special' }
     ]
   },
   {
