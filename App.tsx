@@ -46,7 +46,6 @@ function App() {
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
   
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  const [systemMsgClosed, setSystemMsgClosed] = useState(false);
 
   // Auth Listener
   useEffect(() => {
@@ -305,8 +304,11 @@ function App() {
              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-indigo-800 hover:bg-indigo-700 text-white py-2.5 rounded-lg transition-colors border border-indigo-700 shadow-lg">
                 <span>🚪</span> <span className="font-semibold text-sm">Sair do Sistema</span>
              </button>
-             <div className="text-center mt-3 text-[10px] text-indigo-400 opacity-60">
-                v1.2.0 • Nexo System
+             <div className="text-center mt-4 text-[10px] text-indigo-300 opacity-80">
+                <p>v1.2.0 • Nexo System</p>
+                <p className="mt-1">
+                    Desenvolvido por <a href="#" className="font-bold hover:text-white transition-colors underline decoration-indigo-500">Squad - Sistemas Logísticos</a>
+                </p>
              </div>
           </div>
        </aside>
@@ -335,27 +337,26 @@ function App() {
              {!isSidebarOpen && <h2 className="text-xl font-bold text-gray-800 tracking-tight">Nexo</h2>}
           </div>
 
-          {/* Banner de Comunicado (Dentro do fluxo, não sobrepõe) */}
-          {settings.systemMessage?.active && !systemMsgClosed && (
-            <div className={`mb-6 rounded-lg p-4 flex justify-between items-start shadow-sm border-l-4 animate-fadeIn ${
-              settings.systemMessage.level === 'error' ? 'bg-red-50 border-red-500 text-red-800' :
-              settings.systemMessage.level === 'warning' ? 'bg-amber-50 border-amber-500 text-amber-800' :
-              'bg-blue-50 border-blue-500 text-blue-800'
+          {/* Banner de Comunicado (Sem Botão de Fechar e Cores Densas) */}
+          {settings.systemMessage?.active && (
+            <div className={`mb-6 rounded-lg p-4 shadow-lg flex items-start animate-fadeIn ${
+              settings.systemMessage.level === 'error' ? 'bg-red-600 text-white' :
+              settings.systemMessage.level === 'warning' ? 'bg-amber-600 text-white' :
+              'bg-blue-600 text-white'
             }`}>
-               <div className="flex gap-3">
-                  <div className="mt-0.5 text-xl">
+               <div className="flex gap-3 w-full">
+                  <div className="mt-0.5 text-2xl">
                     {settings.systemMessage.level === 'error' ? '🚨' : 
                      settings.systemMessage.level === 'warning' ? '⚠️' : 'ℹ️'}
                   </div>
                   <div>
-                      <h3 className="font-bold uppercase text-sm mb-1">
+                      <h3 className="font-bold uppercase text-sm mb-1 tracking-wide">
                         {settings.systemMessage.level === 'error' ? 'MANUTENÇÃO / ERRO CRÍTICO' : 
                          settings.systemMessage.level === 'warning' ? 'ATENÇÃO NECESSÁRIA' : 'COMUNICADO'}
                       </h3>
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed opacity-90">{settings.systemMessage.message}</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed opacity-95 font-medium">{settings.systemMessage.message}</p>
                   </div>
                </div>
-               <button onClick={() => setSystemMsgClosed(true)} className="text-current opacity-50 hover:opacity-100 p-1 hover:bg-black/5 rounded">✕</button>
             </div>
           )}
 
