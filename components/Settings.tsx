@@ -32,14 +32,17 @@ const SEASONAL_COLORS = [
 ];
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
+  // Permissões granulares para cada aba
   const showGeral = hasPermission('settings:manage_general');
   const showAcesso = hasPermission('settings:manage_access');
-  const showSistema = hasPermission('settings:view'); 
+  const showSistema = hasPermission('settings:manage_system_msg'); 
 
+  // Define a aba ativa inicial baseada na primeira permissão disponível
   const [activeSubTab, setActiveSubTab] = useState<'geral' | 'acesso' | 'sistema'>(() => {
     if (showGeral) return 'geral';
     if (showAcesso) return 'acesso';
-    return 'sistema';
+    if (showSistema) return 'sistema';
+    return 'geral'; // Fallback
   });
 
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(settings.spreadsheetUrl || '');

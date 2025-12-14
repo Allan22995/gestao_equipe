@@ -302,9 +302,10 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     description: 'Administração do sistema.',
     icon: '⚙️',
     actions: [
-      { id: 'settings:view', label: 'Acessar Configurações', type: 'view' },
-      { id: 'settings:manage_general', label: 'Gerenciar Cadastros', type: 'update' },
-      { id: 'settings:manage_access', label: 'Controle de Acesso', type: 'special' }
+      { id: 'settings:view', label: 'Acessar Tela', type: 'view' },
+      { id: 'settings:manage_general', label: 'Geral e Cadastros', type: 'update' },
+      { id: 'settings:manage_access', label: 'Controle de Acesso', type: 'special' },
+      { id: 'settings:manage_system_msg', label: 'Avisos do Sistema', type: 'special' }
     ]
   }
 ];
