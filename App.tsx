@@ -34,6 +34,9 @@ function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
+  // Controle do Menu Lateral
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
   // Data States
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
@@ -253,24 +256,38 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans text-gray-900 flex">
-       <aside className="w-64 bg-indigo-900 text-white flex flex-col fixed h-full z-30">
-          <div className="p-6 text-center border-b border-indigo-800">
-             <h1 className="text-xl font-bold tracking-wider">Nexo</h1>
-             <p className="text-xs text-indigo-300 mt-1">Gestão de Equipes</p>
+    <div className="min-h-screen bg-gray-100 font-sans text-gray-900 flex overflow-hidden">
+       {/* MENU LATERAL */}
+       <aside 
+         className={`
+           bg-indigo-900 text-white flex flex-col fixed h-full z-30 shadow-2xl
+           transition-all duration-300 ease-in-out
+           ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full'}
+         `}
+       >
+          <div className="p-6 text-center border-b border-indigo-800 flex justify-between items-center">
+             <div>
+               <h1 className="text-xl font-bold tracking-wider">Nexo</h1>
+               <p className="text-xs text-indigo-300 mt-1">Gestão de Equipes</p>
+             </div>
+             {/* Botão de Fechar no Mobile ou Desktop se desejar */}
+             <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-indigo-300 hover:text-white">
+                ✕
+             </button>
           </div>
           
-          <div className="p-4 border-b border-indigo-800 flex items-center gap-3">
-             <div className="w-10 h-10 rounded-full bg-indigo-700 flex items-center justify-center font-bold">
+          {/* User Info */}
+          <div className="p-4 border-b border-indigo-800 flex items-center gap-3 bg-indigo-800/50">
+             <div className="w-10 h-10 rounded-full bg-indigo-700 flex items-center justify-center font-bold border-2 border-indigo-500 shadow-sm text-sm">
                  {currentUserColab?.name ? currentUserColab.name.charAt(0) : user.email?.charAt(0).toUpperCase()}
              </div>
              <div className="overflow-hidden">
                  <p className="text-sm font-bold truncate">{currentUserColab?.name || 'Usuário'}</p>
-                 <p className="text-xs text-indigo-300 truncate">{userProfile}</p>
+                 <p className="text-[10px] text-indigo-300 truncate uppercase font-medium tracking-wide">{userProfile}</p>
              </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto py-4">
+          <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
              <SidebarItem label="Dashboard" icon="📊" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} visible={hasPermission('dashboard:view')} />
              <SidebarItem label="Calendário" icon="📅" active={activeTab === 'calendario'} onClick={() => setActiveTab('calendario')} visible={hasPermission('calendar:view')} />
              <SidebarItem label="Colaboradores" icon="👥" active={activeTab === 'colaboradores'} onClick={() => setActiveTab('colaboradores')} visible={hasPermission('collaborators:view')} />
@@ -283,30 +300,66 @@ function App() {
              <SidebarItem label="Configurações" icon="⚙️" active={activeTab === 'configuracoes'} onClick={() => setActiveTab('configuracoes')} visible={hasPermission('settings:view')} />
           </nav>
           
-          <div className="p-4 border-t border-indigo-800">
-             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-indigo-800 hover:bg-indigo-700 text-white py-2 rounded-lg transition-colors">
-                <span>🚪</span> Sair
+          {/* Rodapé / Assinatura */}
+          <div className="p-4 border-t border-indigo-800 bg-indigo-900">
+             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-indigo-800 hover:bg-indigo-700 text-white py-2.5 rounded-lg transition-colors border border-indigo-700 shadow-lg">
+                <span>🚪</span> <span className="font-semibold text-sm">Sair do Sistema</span>
              </button>
+             <div className="text-center mt-3 text-[10px] text-indigo-400 opacity-60">
+                v1.2.0 • Nexo System
+             </div>
           </div>
        </aside>
 
-       <main className="flex-1 ml-64 p-8">
+       {/* ÁREA PRINCIPAL */}
+       <main 
+         className={`
+           flex-1 p-8 min-h-screen
+           transition-all duration-300 ease-in-out
+           ${isSidebarOpen ? 'ml-64' : 'ml-0'}
+         `}
+       >
+          {/* Header da Área Principal (Toggle Button) */}
+          <div className="mb-6 flex items-center gap-3">
+             <button 
+               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+               className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all focus:outline-none"
+               title={isSidebarOpen ? "Ocultar Menu" : "Mostrar Menu"}
+             >
+                {isSidebarOpen ? (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                )}
+             </button>
+             {!isSidebarOpen && <h2 className="text-xl font-bold text-gray-800 tracking-tight">Nexo</h2>}
+          </div>
+
+          {/* Banner de Comunicado (Dentro do fluxo, não sobrepõe) */}
           {settings.systemMessage?.active && !systemMsgClosed && (
-            <div className={`mb-6 rounded-lg p-4 flex justify-between items-start shadow-sm border-l-4 ${
+            <div className={`mb-6 rounded-lg p-4 flex justify-between items-start shadow-sm border-l-4 animate-fadeIn ${
               settings.systemMessage.level === 'error' ? 'bg-red-50 border-red-500 text-red-800' :
               settings.systemMessage.level === 'warning' ? 'bg-amber-50 border-amber-500 text-amber-800' :
               'bg-blue-50 border-blue-500 text-blue-800'
             }`}>
-               <div>
-                  <h3 className="font-bold uppercase text-sm mb-1 flex items-center gap-2">
-                     {settings.systemMessage.level === 'error' ? '🚨 MANUTENÇÃO / ERRO' : 
-                      settings.systemMessage.level === 'warning' ? '⚠️ ATENÇÃO' : 'ℹ️ INFORMAÇÃO'}
-                  </h3>
-                  <p className="text-sm whitespace-pre-wrap">{settings.systemMessage.message}</p>
+               <div className="flex gap-3">
+                  <div className="mt-0.5 text-xl">
+                    {settings.systemMessage.level === 'error' ? '🚨' : 
+                     settings.systemMessage.level === 'warning' ? '⚠️' : 'ℹ️'}
+                  </div>
+                  <div>
+                      <h3 className="font-bold uppercase text-sm mb-1">
+                        {settings.systemMessage.level === 'error' ? 'MANUTENÇÃO / ERRO CRÍTICO' : 
+                         settings.systemMessage.level === 'warning' ? 'ATENÇÃO NECESSÁRIA' : 'COMUNICADO'}
+                      </h3>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed opacity-90">{settings.systemMessage.message}</p>
+                  </div>
                </div>
-               <button onClick={() => setSystemMsgClosed(true)} className="text-current opacity-60 hover:opacity-100">✕</button>
+               <button onClick={() => setSystemMsgClosed(true)} className="text-current opacity-50 hover:opacity-100 p-1 hover:bg-black/5 rounded">✕</button>
             </div>
           )}
+
+          {/* Conteúdo da Aba */}
           {renderContent()}
        </main>
     </div>
@@ -318,10 +371,11 @@ const SidebarItem = ({ label, icon, active, onClick, visible }: any) => {
     return (
         <button 
           onClick={onClick}
-          className={`w-full flex items-center gap-3 px-6 py-3 transition-colors ${active ? 'bg-indigo-800 text-white border-r-4 border-emerald-400' : 'text-indigo-200 hover:bg-indigo-800 hover:text-white'}`}
+          className={`w-full flex items-center gap-3 px-6 py-3 transition-all duration-200 group relative overflow-hidden ${active ? 'bg-indigo-800 text-white border-r-4 border-emerald-400' : 'text-indigo-200 hover:bg-indigo-800 hover:text-white'}`}
         >
-            <span className="text-lg">{icon}</span>
-            <span className="font-medium text-sm">{label}</span>
+            <span className={`text-lg transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>{icon}</span>
+            <span className="font-medium text-sm tracking-wide">{label}</span>
+            {active && <div className="absolute inset-0 bg-white/5 pointer-events-none"></div>}
         </button>
     );
 };
