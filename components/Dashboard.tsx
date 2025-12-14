@@ -786,15 +786,44 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  </div>
                )}
                
-               <div className="mt-4 pt-4 border-t border-gray-100">
-                  <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Escala Padrão</h4>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+               <div className="mt-5 pt-4 border-t border-gray-100">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                     📅 Escala Semanal Detalhada
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                      {sortOrderWeek.map(dayKey => {
                         const sch = selectedColab.schedule[dayKey];
+                        const isEnabled = sch.enabled;
+
                         return (
-                          <div key={dayKey} className={`flex justify-between p-1.5 rounded ${sch.enabled ? 'bg-indigo-50 text-indigo-800' : 'bg-gray-50 text-gray-400'}`}>
-                             <span className="capitalize font-bold">{dayKey}</span>
-                             <span>{sch.enabled ? `${sch.start} - ${sch.end}` : 'Folga'}</span>
+                          <div key={dayKey} className={`
+                             relative flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all
+                             ${isEnabled 
+                                ? 'bg-white border-indigo-200 shadow-sm hover:border-indigo-300' 
+                                : 'bg-gray-50 border-gray-100 opacity-60'
+                             }
+                          `}>
+                             {isEnabled && <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-green-500"></div>}
+                             
+                             <span className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isEnabled ? 'text-indigo-600' : 'text-gray-400'}`}>
+                                {dayKey}
+                             </span>
+                             
+                             {isEnabled ? (
+                                <div className="flex items-center gap-1 text-xs font-bold text-gray-800 font-mono bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
+                                   {sch.start} <span className="text-indigo-300 mx-0.5">➝</span> {sch.end}
+                                </div>
+                             ) : (
+                                <div className="text-xs font-medium text-gray-400 italic py-1">
+                                   Folga
+                                </div>
+                             )}
+
+                             {isEnabled && sch.startsPreviousDay && (
+                                <div className="mt-1 text-[9px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">
+                                   Inicia dia anterior
+                                </div>
+                             )}
                           </div>
                         );
                      })}
