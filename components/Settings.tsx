@@ -17,9 +17,15 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newBranch, setNewBranch] = useState('');
   const [newSector, setNewSector] = useState('');
   const [newRole, setNewRole] = useState('');
+  const [newRoleMirrorSource, setNewRoleMirrorSource] = useState(''); // Estado para o dropdown de espelhamento na criação
   
   // Modal states
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  
+  // Mirroring Modal States (Para editar funções existentes)
+  const [isMirrorModalOpen, setIsMirrorModalOpen] = useState(false);
+  const [mirrorTargetRole, setMirrorTargetRole] = useState(''); // Quem recebe
+  const [mirrorSourceRole, setMirrorSourceRole] = useState(''); // Quem doa
   
   // Helper to update settings
   const updateSettings = async (newSettings: SystemSettings) => {
@@ -72,13 +78,32 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       showToast('Função já existe.', true);
       return;
     }
+
+    // Lógica de Espelhamento na Criação
+    let initialPermissions: string[] = [];
+    let initialViewAll = false;
+
+    if (newRoleMirrorSource) {
+        const sourceRole = settings.roles.find(r => r.name === newRoleMirrorSource);
+        if (sourceRole) {
+            initialPermissions = [...sourceRole.permissions];
+            initialViewAll = sourceRole.canViewAllSectors;
+        }
+    }
+
     const newRoleObj: RoleConfig = {
       name: newRole.trim(),
-      canViewAllSectors: false,
-      permissions: []
+      canViewAllSectors: initialViewAll,
+      permissions: initialPermissions
     };
+    
     updateSettings({ ...settings, roles: [...settings.roles, newRoleObj] });
     setNewRole('');
+    setNewRoleMirrorSource('');
+    
+    if (newRoleMirrorSource) {
+        showToast(`Função criada espelhando ${newRoleMirrorSource}!`);
+    }
   };
 
   const removeRole = (roleName: string) => {
@@ -93,6 +118,38 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       return r;
     });
     updateSettings({ ...settings, roles: updatedRoles });
+  };
+
+  // --- MIRRORING HANDLER (EXISTING ROLES) ---
+  const openMirrorModal = (targetRole: string) => {
+      setMirrorTargetRole(targetRole);
+      setMirrorSourceRole('');
+      setIsMirrorModalOpen(true);
+  };
+
+  const executeMirroring = () => {
+      if (!mirrorTargetRole || !mirrorSourceRole) {
+          showToast('Selecione uma função de origem.', true);
+          return;
+      }
+
+      const sourceRoleConfig = settings.roles.find(r => r.name === mirrorSourceRole);
+      if (!sourceRoleConfig) return;
+
+      const updatedRoles = settings.roles.map(r => {
+          if (r.name === mirrorTargetRole) {
+              return {
+                  ...r,
+                  permissions: [...sourceRoleConfig.permissions],
+                  canViewAllSectors: sourceRoleConfig.canViewAllSectors
+              };
+          }
+          return r;
+      });
+
+      updateSettings({ ...settings, roles: updatedRoles });
+      setIsMirrorModalOpen(false);
+      showToast(`Permissões de ${mirrorSourceRole} copiadas para ${mirrorTargetRole}!`);
   };
 
   // --- PERMISSIONS HANDLERS ---
@@ -265,7 +322,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            <div className="space-y-6">
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                    <h3 className="text-lg font-bold text-gray-800 mb-4">Funções e Cargos</h3>
-                   <div className="flex gap-2 mb-6">
+                   <div className="flex flex-col md:flex-row gap-2 mb-6">
                        <input 
                          type="text" 
                          value={newRole} 
@@ -273,7 +330,19 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                          placeholder="Nova Função (Ex: Coordenador)..."
                          className="flex-1 border border-gray-300 rounded-lg p-2 text-sm"
                        />
-                       <button onClick={addRole} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">Adicionar Função</button>
+                       <div className="md:w-64">
+                           <select
+                             value={newRoleMirrorSource}
+                             onChange={e => setNewRoleMirrorSource(e.target.value)}
+                             className="w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-700 bg-white"
+                           >
+                               <option value="">Espelhar de (Opcional)...</option>
+                               {settings.roles.map(r => (
+                                   <option key={r.name} value={r.name}>{r.name}</option>
+                               ))}
+                           </select>
+                       </div>
+                       <button onClick={addRole} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 whitespace-nowrap">Adicionar Função</button>
                    </div>
 
                    <div className="overflow-x-auto">
@@ -287,7 +356,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            </thead>
                            <tbody className="divide-y divide-gray-100">
                                {settings.roles.map(r => (
-                                   <tr key={r.name} className="hover:bg-gray-50">
+                                   <tr key={r.name} className="hover:bg-gray-50 group">
                                        <td className="p-3 font-medium text-gray-800">{r.name}</td>
                                        <td className="p-3 text-center">
                                            <button 
@@ -298,7 +367,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                            </button>
                                        </td>
                                        <td className="p-3 text-right">
-                                           <button onClick={() => removeRole(r.name)} className="text-red-500 hover:text-red-700 font-bold text-xs px-2">Excluir</button>
+                                           <div className="flex items-center justify-end gap-2">
+                                               <button 
+                                                 onClick={() => openMirrorModal(r.name)}
+                                                 className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-1.5 rounded transition-colors"
+                                                 title="Espelhar Acessos de outra função"
+                                               >
+                                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                               </button>
+                                               <button 
+                                                 onClick={() => removeRole(r.name)} 
+                                                 className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-colors"
+                                                 title="Excluir Função"
+                                               >
+                                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                               </button>
+                                           </div>
                                        </td>
                                    </tr>
                                ))}
@@ -521,6 +605,50 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                       </div>
                   </div>
               )}
+       </Modal>
+
+       {/* MODAL DE ESPELHAMENTO */}
+       <Modal
+           isOpen={isMirrorModalOpen}
+           onClose={() => setIsMirrorModalOpen(false)}
+           title="Espelhar Acessos e Permissões"
+       >
+           <div className="space-y-4">
+               <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 text-amber-800 text-sm">
+                   <p className="font-bold mb-1">⚠️ Atenção</p>
+                   <p>Esta ação irá <b>substituir todas</b> as permissões atuais da função <b>{mirrorTargetRole}</b> pelas permissões da função de origem selecionada abaixo.</p>
+               </div>
+
+               <div>
+                   <label className="text-sm font-bold text-gray-700 block mb-2">Copiar acessos de qual função?</label>
+                   <select 
+                       value={mirrorSourceRole}
+                       onChange={e => setMirrorSourceRole(e.target.value)}
+                       className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                   >
+                       <option value="">Selecione a origem...</option>
+                       {settings.roles.filter(r => r.name !== mirrorTargetRole).map(r => (
+                           <option key={r.name} value={r.name}>{r.name}</option>
+                       ))}
+                   </select>
+               </div>
+
+               <div className="flex justify-end gap-3 pt-4">
+                   <button 
+                       onClick={() => setIsMirrorModalOpen(false)}
+                       className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition-colors"
+                   >
+                       Cancelar
+                   </button>
+                   <button 
+                       onClick={executeMirroring}
+                       disabled={!mirrorSourceRole}
+                       className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md"
+                   >
+                       Confirmar Espelhamento
+                   </button>
+               </div>
+           </div>
        </Modal>
     </div>
   );
