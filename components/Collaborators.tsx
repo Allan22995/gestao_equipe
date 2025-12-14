@@ -367,7 +367,20 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       return branchSectors;
   }, [formData.branch, settings.branchSectors, settings.sectors]);
 
-  const scheduleTemplates = settings.scheduleTemplates || [];
+  // --- SCHEDULE TEMPLATES LOGIC (FILTERED BY BRANCH & SORTED A-Z) ---
+  const filteredScheduleTemplates = useMemo(() => {
+      const templates = settings.scheduleTemplates || [];
+      return templates
+        .filter(t => {
+            // Se o modelo não tem nenhuma filial definida, é GLOBAL -> exibe
+            if (!t.branches || t.branches.length === 0) return true;
+            
+            // Se tem filiais definidas, exibe apenas se a filial selecionada estiver inclusa
+            return t.branches.includes(formData.branch);
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+  }, [settings.scheduleTemplates, formData.branch]);
+
   const rotationOptions = settings.shiftRotations || [];
 
   const filteredCollaborators = collaborators.filter(c => {
@@ -663,7 +676,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                </div>
             </div>
 
-            {scheduleTemplates.length > 0 && (
+            {filteredScheduleTemplates.length > 0 && (
               <div className="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-3">
                  <span className="text-xs font-bold text-blue-800">Carregar Modelo:</span>
                  <select 
@@ -672,7 +685,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white"
                  >
                     <option value="">Selecione um modelo...</option>
-                    {scheduleTemplates.map(t => (
+                    {filteredScheduleTemplates.map(t => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                  </select>

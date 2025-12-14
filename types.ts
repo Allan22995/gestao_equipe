@@ -19,6 +19,7 @@ export interface Schedule {
 export interface ScheduleTemplate {
   id: string;
   name: string;
+  branches?: string[]; // NOVO: Lista de filiais onde este modelo se aplica
   schedule: Schedule;
 }
 
