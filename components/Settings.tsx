@@ -37,11 +37,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const canManageSeasonal = hasPermission('settings:manage_seasonal');
   const canManageHierarchy = hasPermission('settings:manage_hierarchy');
   const canManageEventTypes = hasPermission('settings:manage_event_types');
-  const canManageTemplates = hasPermission('settings:manage_templates');
+  const canCreateTemplate = hasPermission('settings:create_template');
+  const canViewTemplates = hasPermission('settings:view_templates');
   const canManageRotations = hasPermission('settings:manage_rotations');
 
   // The 'Geral' tab is visible if ANY of the sub-sections are permitted
-  const showGeral = canManageIntegrations || canManageSeasonal || canManageHierarchy || canManageEventTypes || canManageTemplates || canManageRotations;
+  const showGeral = canManageIntegrations || canManageSeasonal || canManageHierarchy || canManageEventTypes || canCreateTemplate || canViewTemplates || canManageRotations;
   
   const showAcesso = hasPermission('settings:manage_access');
   const showSistema = hasPermission('settings:manage_system_msg'); 
@@ -853,12 +854,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            )}
 
-            {(canManageTemplates || canManageRotations) && (
+            {(canCreateTemplate || canViewTemplates || canManageRotations) && (
               <>
                 <div className="border-t border-gray-200 my-8"></div>
                 <h2 className="text-xl font-bold text-gray-800 mb-6">Modelos de Jornada & Escalas</h2>
 
-                {canManageTemplates && (
+                {canCreateTemplate && (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                      <div className="flex justify-between items-center mb-4">
                         <h2 className="text-lg font-bold text-gray-800">{editingTemplateId ? 'Editar Modelo de Jornada' : 'Criar Modelo de Jornada'}</h2>
@@ -893,17 +894,19 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {canManageTemplates && (
+                  {canViewTemplates && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                       <h2 className="text-lg font-bold text-gray-800 mb-4">Modelos de Jornada Salvos</h2>
                       <div className="flex flex-col gap-2">
                           {(settings.scheduleTemplates || []).map(t => (
                             <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
                                 <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
-                                <div className="flex gap-2 shrink-0">
-                                  <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
-                                  <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
-                                </div>
+                                {canCreateTemplate && (
+                                  <div className="flex gap-2 shrink-0">
+                                    <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
+                                    <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
+                                  </div>
+                                )}
                             </div>
                           ))}
                           {(settings.scheduleTemplates || []).length === 0 && <p className="text-gray-400 text-sm">Nenhum modelo cadastrado.</p>}
@@ -950,6 +953,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
         </div>
       )}
 
+      {/* ... (rest of the file remains the same) ... */}
       {activeSubTab === 'acesso' && showAcesso && (
         <div className="animate-fadeIn space-y-8">
            {/* ... conteúdo da aba acesso mantido ... */}

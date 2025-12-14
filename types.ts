@@ -303,13 +303,14 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     icon: '⚙️',
     actions: [
       { id: 'settings:view', label: 'Acessar Tela', type: 'view' },
-      // Granular Permissions for General Tab
-      { id: 'settings:manage_integrations', label: 'Integrações (Links)', type: 'update' },
-      { id: 'settings:manage_seasonal', label: 'Eventos Sazonais', type: 'update' },
-      { id: 'settings:manage_hierarchy', label: 'Filiais e Setores', type: 'update' },
-      { id: 'settings:manage_event_types', label: 'Tipos de Evento', type: 'update' },
-      { id: 'settings:manage_templates', label: 'Modelos de Jornada', type: 'update' },
-      { id: 'settings:manage_rotations', label: 'Escalas', type: 'update' },
+      // Granular Permissions for General Tab - Using 'special' type to show custom labels in table header
+      { id: 'settings:manage_integrations', label: 'Integrações (Links Externos)', type: 'special' },
+      { id: 'settings:manage_seasonal', label: 'Eventos Sazonais (Calendário)', type: 'special' },
+      { id: 'settings:manage_hierarchy', label: 'Gerenciar Filiais e Setores', type: 'special' },
+      { id: 'settings:manage_event_types', label: 'Tipos de Evento', type: 'special' },
+      { id: 'settings:create_template', label: 'Criar Modelo de Jornada', type: 'special' },
+      { id: 'settings:view_templates', label: 'Modelos de Jornada Salvos', type: 'special' },
+      { id: 'settings:manage_rotations', label: 'Escalas de Revezamento', type: 'special' },
       // Access Tab
       { id: 'settings:manage_access', label: 'Controle de Acesso', type: 'special' },
       // System Tab
