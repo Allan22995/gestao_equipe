@@ -303,8 +303,16 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     icon: '⚙️',
     actions: [
       { id: 'settings:view', label: 'Acessar Tela', type: 'view' },
-      { id: 'settings:manage_general', label: 'Geral e Cadastros', type: 'update' },
+      // Granular Permissions for General Tab
+      { id: 'settings:manage_integrations', label: 'Integrações (Links)', type: 'update' },
+      { id: 'settings:manage_seasonal', label: 'Eventos Sazonais', type: 'update' },
+      { id: 'settings:manage_hierarchy', label: 'Filiais e Setores', type: 'update' },
+      { id: 'settings:manage_event_types', label: 'Tipos de Evento', type: 'update' },
+      { id: 'settings:manage_templates', label: 'Modelos de Jornada', type: 'update' },
+      { id: 'settings:manage_rotations', label: 'Escalas', type: 'update' },
+      // Access Tab
       { id: 'settings:manage_access', label: 'Controle de Acesso', type: 'special' },
+      // System Tab
       { id: 'settings:manage_system_msg', label: 'Avisos do Sistema', type: 'special' }
     ]
   }
