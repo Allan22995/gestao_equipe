@@ -303,14 +303,31 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     icon: '⚙️',
     actions: [
       { id: 'settings:view', label: 'Acessar Tela', type: 'view' },
-      // Granular Permissions for General Tab - Using 'special' type to show custom labels in table header
-      { id: 'settings:manage_integrations', label: 'Integrações (Links Externos)', type: 'special' },
-      { id: 'settings:manage_seasonal', label: 'Eventos Sazonais (Calendário)', type: 'special' },
-      { id: 'settings:manage_hierarchy', label: 'Gerenciar Filiais e Setores', type: 'special' },
-      { id: 'settings:manage_event_types', label: 'Tipos de Evento', type: 'special' },
-      { id: 'settings:create_template', label: 'Criar Modelo de Jornada', type: 'special' },
-      { id: 'settings:view_templates', label: 'Modelos de Jornada Salvos', type: 'special' },
-      { id: 'settings:manage_rotations', label: 'Escalas de Revezamento', type: 'special' },
+      
+      // Integrações
+      { id: 'settings:view_integrations', label: 'Ver Integrações (Links)', type: 'special' },
+      { id: 'settings:edit_integrations', label: 'Editar Integrações', type: 'special' },
+      
+      // Sazonais
+      { id: 'settings:view_seasonal', label: 'Ver Sazonais', type: 'special' },
+      { id: 'settings:edit_seasonal', label: 'Editar Sazonais', type: 'special' },
+      
+      // Hierarquia
+      { id: 'settings:view_hierarchy', label: 'Ver Filiais/Setores', type: 'special' },
+      { id: 'settings:edit_hierarchy', label: 'Gerenciar Filiais/Setores', type: 'special' },
+      
+      // Tipos de Evento
+      { id: 'settings:view_event_types', label: 'Ver Tipos Evento', type: 'special' },
+      { id: 'settings:edit_event_types', label: 'Editar Tipos Evento', type: 'special' },
+      
+      // Modelos de Jornada
+      { id: 'settings:view_templates', label: 'Ver Modelos Jornada', type: 'special' },
+      { id: 'settings:edit_templates', label: 'Criar/Editar Modelos', type: 'special' },
+      
+      // Escalas
+      { id: 'settings:view_rotations', label: 'Ver Escalas', type: 'special' },
+      { id: 'settings:edit_rotations', label: 'Editar Escalas', type: 'special' },
+
       // Access Tab
       { id: 'settings:manage_access', label: 'Controle de Acesso', type: 'special' },
       // System Tab

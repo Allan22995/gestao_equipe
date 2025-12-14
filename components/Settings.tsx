@@ -32,17 +32,27 @@ const SEASONAL_COLORS = [
 ];
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
-  // --- GRANULAR PERMISSIONS ---
-  const canManageIntegrations = hasPermission('settings:manage_integrations');
-  const canManageSeasonal = hasPermission('settings:manage_seasonal');
-  const canManageHierarchy = hasPermission('settings:manage_hierarchy');
-  const canManageEventTypes = hasPermission('settings:manage_event_types');
-  const canCreateTemplate = hasPermission('settings:create_template');
-  const canViewTemplates = hasPermission('settings:view_templates');
-  const canManageRotations = hasPermission('settings:manage_rotations');
+  // --- GRANULAR PERMISSIONS (View vs Edit) ---
+  const canViewIntegrations = hasPermission('settings:view_integrations');
+  const canEditIntegrations = hasPermission('settings:edit_integrations');
 
-  // The 'Geral' tab is visible if ANY of the sub-sections are permitted
-  const showGeral = canManageIntegrations || canManageSeasonal || canManageHierarchy || canManageEventTypes || canCreateTemplate || canViewTemplates || canManageRotations;
+  const canViewSeasonal = hasPermission('settings:view_seasonal');
+  const canEditSeasonal = hasPermission('settings:edit_seasonal');
+
+  const canViewHierarchy = hasPermission('settings:view_hierarchy');
+  const canEditHierarchy = hasPermission('settings:edit_hierarchy');
+
+  const canViewEventTypes = hasPermission('settings:view_event_types');
+  const canEditEventTypes = hasPermission('settings:edit_event_types');
+
+  const canViewTemplates = hasPermission('settings:view_templates');
+  const canEditTemplates = hasPermission('settings:edit_templates');
+
+  const canViewRotations = hasPermission('settings:view_rotations');
+  const canEditRotations = hasPermission('settings:edit_rotations');
+
+  // The 'Geral' tab is visible if ANY of the sub-sections are permitted (View)
+  const showGeral = canViewIntegrations || canViewSeasonal || canViewHierarchy || canViewEventTypes || canViewTemplates || canViewRotations;
   
   const showAcesso = hasPermission('settings:manage_access');
   const showSistema = hasPermission('settings:manage_system_msg'); 
@@ -430,14 +440,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   <span className="font-bold text-sm text-gray-700">{e.label}</span>
                   <span className="text-[10px] text-gray-400">{e.behavior === 'credit_2x' ? 'Crédito (2x)' : e.behavior === 'credit_1x' ? 'Crédito (1x)' : e.behavior === 'debit' ? 'Débito' : 'Neutro'}</span>
               </div>
-              <div className="flex gap-2">
-                  <button onClick={() => handleEditEvent(e)} className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50" title="Editar">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                  </button>
-                  <button onClick={() => removeEvent(e.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50" title="Excluir">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  </button>
-              </div>
+              {canEditEventTypes && (
+                <div className="flex gap-2">
+                    <button onClick={() => handleEditEvent(e)} className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50" title="Editar">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    </button>
+                    <button onClick={() => removeEvent(e.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50" title="Excluir">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                </div>
+              )}
           </div>
       ));
   };
@@ -467,31 +479,34 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       {activeSubTab === 'geral' && showGeral && (
         <div className="animate-fadeIn space-y-8">
            
-           {canManageIntegrations && (
+           {canViewIntegrations && (
              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                <h2 className="text-lg font-bold text-gray-800 mb-4">Integrações (Links Externos)</h2>
                <div className="flex flex-col gap-2">
                  <label className="text-xs font-bold text-gray-500 uppercase">Link Planilha de Plantões</label>
                  <div className="flex gap-2">
-                   <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none" value={spreadsheetUrl} onChange={e => setSpreadsheetUrl(e.target.value)} />
-                   <button onClick={() => saveSettings({ ...settings, spreadsheetUrl }, 'integration')} disabled={savingState['integration'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Salvar</button>
+                   <input type="text" disabled={!canEditIntegrations} className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-500" value={spreadsheetUrl} onChange={e => setSpreadsheetUrl(e.target.value)} />
+                   {canEditIntegrations && (
+                     <button onClick={() => saveSettings({ ...settings, spreadsheetUrl }, 'integration')} disabled={savingState['integration'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Salvar</button>
+                   )}
                  </div>
                </div>
              </div>
            )}
 
            {/* --- SEÇÃO EVENTOS SAZONAIS --- */}
-           {canManageSeasonal && (
+           {canViewSeasonal && (
              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                  <h2 className="text-lg font-bold text-gray-800 mb-2">Eventos Sazonais (Calendário)</h2>
                  <p className="text-sm text-gray-500 mb-4">Cadastre períodos especiais (Ex: Black Friday). O calendário exibirá uma borda colorida nestas datas.</p>
                  
-                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4 p-4 rounded-lg bg-gray-50 border border-gray-100">
+                 <div className={`grid grid-cols-1 md:grid-cols-5 gap-3 mb-4 p-4 rounded-lg border ${canEditSeasonal ? 'bg-gray-50 border-gray-100' : 'bg-gray-50 border-gray-100 opacity-80'}`}>
                      <div className="md:col-span-2">
                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Evento</label>
                          <input 
                              type="text" 
-                             className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
+                             disabled={!canEditSeasonal}
+                             className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" 
                              placeholder="Ex: Black Friday" 
                              value={seasonLabel}
                              onChange={e => setSeasonLabel(e.target.value)}
@@ -501,7 +516,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Início</label>
                          <input 
                              type="date" 
-                             className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
+                             disabled={!canEditSeasonal}
+                             className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" 
                              value={seasonStart}
                              onChange={e => setSeasonStart(e.target.value)}
                          />
@@ -510,7 +526,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Fim</label>
                          <input 
                              type="date" 
-                             className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
+                             disabled={!canEditSeasonal}
+                             className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" 
                              value={seasonEnd}
                              onChange={e => setSeasonEnd(e.target.value)}
                          />
@@ -518,24 +535,27 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                      <div>
                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Cor da Borda</label>
                          <select 
-                             className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white"
+                             className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100"
                              value={seasonColor}
                              onChange={e => setSeasonColor(e.target.value)}
+                             disabled={!canEditSeasonal}
                          >
                              {SEASONAL_COLORS.map(c => (
                                  <option key={c.value} value={c.value}>{c.label}</option>
                              ))}
                          </select>
                      </div>
-                     <div className="md:col-span-5 flex justify-end">
-                         <button 
-                             onClick={saveSeasonalEvent}
-                             disabled={savingState['seasonal'] === 'saving'}
-                             className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50"
-                         >
-                             Adicionar Período
-                         </button>
-                     </div>
+                     {canEditSeasonal && (
+                        <div className="md:col-span-5 flex justify-end">
+                            <button 
+                                onClick={saveSeasonalEvent}
+                                disabled={savingState['seasonal'] === 'saving'}
+                                className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50"
+                            >
+                                Adicionar Período
+                            </button>
+                        </div>
+                     )}
                  </div>
 
                  <div className="space-y-2">
@@ -551,17 +571,19 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                  </div>
                              </div>
                              <div className="flex items-center gap-3">
-                                 <label className="flex items-center cursor-pointer">
+                                 <label className={`flex items-center ${canEditSeasonal ? 'cursor-pointer' : 'cursor-default'}`}>
                                      <span className="text-xs font-bold text-gray-500 mr-2">{s.active ? 'Ativo' : 'Inativo'}</span>
                                      <div className="relative">
-                                         <input type="checkbox" className="sr-only" checked={s.active} onChange={() => toggleSeasonalEvent(s.id)} />
+                                         <input type="checkbox" className="sr-only" checked={s.active} onChange={() => toggleSeasonalEvent(s.id)} disabled={!canEditSeasonal} />
                                          <div className={`block w-8 h-5 rounded-full transition-colors ${s.active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                                          <div className={`absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition transform ${s.active ? 'translate-x-3' : 'translate-x-0'}`}></div>
                                      </div>
                                  </label>
-                                 <button onClick={() => removeSeasonalEvent(s.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full">
-                                     🗑️
-                                 </button>
+                                 {canEditSeasonal && (
+                                    <button onClick={() => removeSeasonalEvent(s.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full">
+                                        🗑️
+                                    </button>
+                                 )}
                              </div>
                          </div>
                      ))}
@@ -573,7 +595,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            )}
 
            {/* --- NOVO LAYOUT DE FILIAIS E SETORES (Empresa -> Filial -> Setor) --- */}
-           {canManageHierarchy && (
+           {canViewHierarchy && (
              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                  <div className="p-4 border-b border-gray-100 bg-gray-50">
                     <h2 className="text-lg font-bold text-gray-800">Gerenciar Filiais e Setores</h2>
@@ -589,12 +611,15 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                           <div className="flex gap-2">
                              <input 
                                 type="text" 
-                                className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" 
+                                disabled={!canEditHierarchy}
+                                className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" 
                                 placeholder="Nova Empresa..." 
                                 value={newCompanyName}
                                 onChange={e => setNewCompanyName(e.target.value)}
                              />
-                             <button onClick={addCompany} disabled={!newCompanyName.trim()} className="bg-gray-700 hover:bg-gray-800 text-white rounded-lg px-3 py-2 font-bold disabled:opacity-50">+</button>
+                             {canEditHierarchy && (
+                                <button onClick={addCompany} disabled={!newCompanyName.trim()} className="bg-gray-700 hover:bg-gray-800 text-white rounded-lg px-3 py-2 font-bold disabled:opacity-50">+</button>
+                             )}
                           </div>
                        </div>
                        <div className="overflow-y-auto flex-1 p-2 space-y-1">
@@ -621,12 +646,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                        {(settings.companyBranches?.[company] || []).length} filiais
                                    </span>
                                 </div>
-                                <button 
-                                   onClick={(e) => { e.stopPropagation(); removeCompany(company); }}
-                                   className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded transition-all"
-                                >
-                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
+                                {canEditHierarchy && (
+                                    <button 
+                                    onClick={(e) => { e.stopPropagation(); removeCompany(company); }}
+                                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded transition-all"
+                                    >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                )}
                              </div>
                           ))}
                        </div>
@@ -639,19 +666,21 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                           <div className="flex gap-2">
                              <input 
                                 type="text" 
+                                disabled={!canEditHierarchy || !selectedCompany || selectedCompany === 'Sem Empresa'}
                                 className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" 
                                 placeholder={selectedCompany ? "Nova Filial..." : "Selecione Empresa..."}
                                 value={newBranchName}
                                 onChange={e => setNewBranchName(e.target.value)}
-                                disabled={!selectedCompany || selectedCompany === 'Sem Empresa'}
                              />
-                             <button 
-                                onClick={addBranch}
-                                disabled={!newBranchName.trim() || !selectedCompany || selectedCompany === 'Sem Empresa'}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 font-bold disabled:opacity-50"
-                             >
-                                +
-                             </button>
+                             {canEditHierarchy && (
+                                <button 
+                                    onClick={addBranch}
+                                    disabled={!newBranchName.trim() || !selectedCompany || selectedCompany === 'Sem Empresa'}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 font-bold disabled:opacity-50"
+                                >
+                                    +
+                                </button>
+                             )}
                           </div>
                        </div>
                        <div className="overflow-y-auto flex-1 p-2 space-y-1">
@@ -677,7 +706,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                         </div>
                                         <div className="flex items-center">
                                             {/* Se estiver "Sem Empresa", botão para mover (se tiver empresas) */}
-                                            {selectedCompany === 'Sem Empresa' && settings.companies && settings.companies.length > 0 && (
+                                            {selectedCompany === 'Sem Empresa' && settings.companies && settings.companies.length > 0 && canEditHierarchy && (
                                                 <select 
                                                   className="text-[10px] border border-gray-300 rounded p-1 mr-2 bg-white"
                                                   onChange={(e) => {
@@ -696,12 +725,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                                 </select>
                                             )}
 
-                                            <button 
-                                               onClick={(e) => { e.stopPropagation(); removeBranch(branch); }}
-                                               className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded transition-all"
-                                            >
-                                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            </button>
+                                            {canEditHierarchy && (
+                                                <button 
+                                                onClick={(e) => { e.stopPropagation(); removeBranch(branch); }}
+                                                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded transition-all"
+                                                >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            )}
                                         </div>
                                      </div>
                                   ))}
@@ -721,19 +752,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                     <div className="flex gap-2 w-1/2">
                                        <input 
                                           type="text" 
-                                          className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none" 
+                                          disabled={!canEditHierarchy}
+                                          className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none disabled:bg-gray-100" 
                                           placeholder={`Novo Setor...`} 
                                           value={newSectorName}
                                           onChange={e => setNewSectorName(e.target.value)}
                                           onKeyDown={e => e.key === 'Enter' && addSectorToBranch()}
                                        />
-                                       <button 
-                                          onClick={addSectorToBranch}
-                                          disabled={!newSectorName.trim()}
-                                          className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 font-bold text-sm whitespace-nowrap disabled:opacity-50"
-                                       >
-                                          Add
-                                       </button>
+                                       {canEditHierarchy && (
+                                            <button 
+                                                onClick={addSectorToBranch}
+                                                disabled={!newSectorName.trim()}
+                                                className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 font-bold text-sm whitespace-nowrap disabled:opacity-50"
+                                            >
+                                                Add
+                                            </button>
+                                       )}
                                     </div>
                                  </div>
                                  
@@ -745,12 +779,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                        {(settings.branchSectors?.[selectedBranch] || []).map(sector => (
                                           <div key={sector} className="flex justify-between items-center p-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
                                              <span className="font-medium text-gray-700 text-xs truncate mr-2" title={sector}>{sector}</span>
-                                             <button 
-                                                onClick={() => removeSectorFromBranch(sector)}
-                                                className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                                             >
-                                                ×
-                                             </button>
+                                             {canEditHierarchy && (
+                                                <button 
+                                                    onClick={() => removeSectorFromBranch(sector)}
+                                                    className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                                >
+                                                    ×
+                                                </button>
+                                             )}
                                           </div>
                                        ))}
                                     </div>
@@ -770,9 +806,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                          {settings.branches.filter(b => b !== selectedBranch).map(b => {
                                              const isLinked = settings.branchLinks?.[selectedBranch]?.includes(b);
                                              return (
-                                                 <label key={b} className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all ${isLinked ? 'bg-white border-indigo-300 shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
+                                                 <label key={b} className={`flex items-center gap-3 p-2 rounded-lg border ${canEditHierarchy ? 'cursor-pointer' : 'cursor-default'} transition-all ${isLinked ? 'bg-white border-indigo-300 shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
                                                      <input 
                                                          type="checkbox" 
+                                                         disabled={!canEditHierarchy}
                                                          checked={!!isLinked}
                                                          onChange={() => toggleBranchLink(b)}
                                                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
@@ -800,24 +837,26 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            )}
 
 
-           {canManageEventTypes && (
+           {canViewEventTypes && (
              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                <div className="flex justify-between items-center mb-4">
                    <h2 className="text-lg font-bold text-gray-800">Tipos de Evento</h2>
                    {editingEventId && <button onClick={cancelEditEvent} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
                </div>
                
-               <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 rounded-lg transition-colors ${editingEventId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50 border border-gray-200'}`}>
-                  <input type="text" placeholder="Nome do Evento" className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventLabel} onChange={e => setNewEventLabel(e.target.value)} />
-                  <select className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as EventBehavior)}>
+               <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 rounded-lg transition-colors ${editingEventId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50 border border-gray-200'} ${!canEditEventTypes ? 'opacity-80' : ''}`}>
+                  <input type="text" disabled={!canEditEventTypes} placeholder="Nome do Evento" className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" value={newEventLabel} onChange={e => setNewEventLabel(e.target.value)} />
+                  <select disabled={!canEditEventTypes} className="border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as EventBehavior)}>
                      <option value="neutral">Neutro</option>
                      <option value="debit">Debita (Folga)</option>
                      <option value="credit_1x">Credita (1x)</option>
                      <option value="credit_2x">Credita (2x)</option>
                   </select>
-                  <button onClick={saveEvent} disabled={!newEventLabel.trim() || savingState['event'] === 'saving'} className={`${editingEventId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold rounded-lg transition-colors`}>
-                      {editingEventId ? 'Atualizar' : 'Adicionar'}
-                  </button>
+                  {canEditEventTypes && (
+                    <button onClick={saveEvent} disabled={!newEventLabel.trim() || savingState['event'] === 'saving'} className={`${editingEventId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold rounded-lg transition-colors`}>
+                        {editingEventId ? 'Atualizar' : 'Adicionar'}
+                    </button>
+                  )}
                </div>
 
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -854,37 +893,39 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              </div>
            )}
 
-            {(canCreateTemplate || canViewTemplates || canManageRotations) && (
+            {(canViewTemplates || canViewRotations) && (
               <>
                 <div className="border-t border-gray-200 my-8"></div>
                 <h2 className="text-xl font-bold text-gray-800 mb-6">Modelos de Jornada & Escalas</h2>
 
-                {canCreateTemplate && (
+                {canViewTemplates && (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                      <div className="flex justify-between items-center mb-4">
                         <h2 className="text-lg font-bold text-gray-800">{editingTemplateId ? 'Editar Modelo de Jornada' : 'Criar Modelo de Jornada'}</h2>
                         {editingTemplateId && <button onClick={cancelEditTemplate} className="text-sm text-gray-500 underline">Cancelar Edição</button>}
                      </div>
 
-                     <div className={`mb-4 flex gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''}`}>
-                        <input type="text" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white" placeholder="Nome (Ex: Escala 12x36)..." value={templateName} onChange={e => setTemplateName(e.target.value)} />
-                        <button onClick={saveTemplate} className={`${editingTemplateId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors`}>
-                           {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Modelo'}
-                        </button>
+                     <div className={`mb-4 flex gap-2 p-3 rounded-lg ${editingTemplateId ? 'bg-blue-50 border border-blue-100' : ''} ${!canEditTemplates ? 'opacity-80' : ''}`}>
+                        <input type="text" disabled={!canEditTemplates} className="flex-1 border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white disabled:bg-gray-100" placeholder="Nome (Ex: Escala 12x36)..." value={templateName} onChange={e => setTemplateName(e.target.value)} />
+                        {canEditTemplates && (
+                            <button onClick={saveTemplate} className={`${editingTemplateId ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white px-4 py-2 rounded-lg font-bold transition-colors`}>
+                            {editingTemplateId ? 'Atualizar Modelo' : 'Salvar Modelo'}
+                            </button>
+                        )}
                      </div>
                      
                      <div className="space-y-2 max-w-2xl">
                         {daysOrder.map(day => (
                            <div key={day} className="flex items-center gap-4 bg-gray-50 p-2 rounded border border-gray-100">
-                              <label className="w-24 flex items-center gap-2 cursor-pointer">
-                                 <input type="checkbox" checked={templateSchedule[day].enabled} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], enabled: e.target.checked}}))} className="rounded text-indigo-600" />
+                              <label className={`w-24 flex items-center gap-2 ${canEditTemplates ? 'cursor-pointer' : 'cursor-default'}`}>
+                                 <input type="checkbox" disabled={!canEditTemplates} checked={templateSchedule[day].enabled} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], enabled: e.target.checked}}))} className="rounded text-indigo-600" />
                                  <span className="capitalize text-sm font-medium">{day}</span>
                               </label>
-                              <input type="time" disabled={!templateSchedule[day].enabled} value={templateSchedule[day].start} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], start: e.target.value}}))} className="border rounded p-1 text-sm bg-white" />
+                              <input type="time" disabled={!canEditTemplates || !templateSchedule[day].enabled} value={templateSchedule[day].start} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], start: e.target.value}}))} className="border rounded p-1 text-sm bg-white disabled:bg-gray-100" />
                               <span className="text-gray-400">-</span>
-                              <input type="time" disabled={!templateSchedule[day].enabled} value={templateSchedule[day].end} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], end: e.target.value}}))} className="border rounded p-1 text-sm bg-white" />
-                              <label className="flex items-center gap-1 cursor-pointer ml-auto">
-                                 <input type="checkbox" disabled={!templateSchedule[day].enabled} checked={templateSchedule[day].startsPreviousDay} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], startsPreviousDay: e.target.checked}}))} />
+                              <input type="time" disabled={!canEditTemplates || !templateSchedule[day].enabled} value={templateSchedule[day].end} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], end: e.target.value}}))} className="border rounded p-1 text-sm bg-white disabled:bg-gray-100" />
+                              <label className={`flex items-center gap-1 ml-auto ${canEditTemplates ? 'cursor-pointer' : 'cursor-default'}`}>
+                                 <input type="checkbox" disabled={!canEditTemplates || !templateSchedule[day].enabled} checked={templateSchedule[day].startsPreviousDay} onChange={e => setTemplateSchedule(prev => ({...prev, [day]: {...prev[day], startsPreviousDay: e.target.checked}}))} />
                                  <span className="text-[10px] text-gray-500">Inicia -1d</span>
                               </label>
                            </div>
@@ -901,7 +942,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                           {(settings.scheduleTemplates || []).map(t => (
                             <div key={t.id} className={`flex justify-between items-center p-3 border border-gray-200 rounded-lg transition-colors ${editingTemplateId === t.id ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-gray-50'}`}>
                                 <span className="font-bold text-gray-700 truncate mr-2">{t.name}</span>
-                                {canCreateTemplate && (
+                                {canEditTemplates && (
                                   <div className="flex gap-2 shrink-0">
                                     <button onClick={() => loadTemplateForEdit(t)} className="text-blue-500 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100 border border-blue-100">Editar</button>
                                     <button onClick={() => removeTemplate(t.id)} className="text-red-500 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-100">Excluir</button>
@@ -914,21 +955,24 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                     </div>
                   )}
                   
-                  {canManageRotations && (
+                  {canViewRotations && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                       <h2 className="text-lg font-bold text-gray-800 mb-2">Escalas de Revezamento</h2>
                       <p className="text-sm text-gray-500 mb-4">Cadastre os nomes das escalas disponíveis para seleção (Ex: Escala A, Azul, Impar).</p>
                       
-                      <div className="bg-indigo-50 p-4 rounded-lg mb-4 border border-indigo-100">
+                      <div className={`bg-indigo-50 p-4 rounded-lg mb-4 border border-indigo-100 ${!canEditRotations ? 'opacity-80' : ''}`}>
                           <div className="flex gap-2">
                              <input 
                                type="text" 
-                               className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm outline-none" 
+                               disabled={!canEditRotations}
+                               className="flex-1 border border-indigo-200 rounded-lg p-2 text-sm outline-none disabled:bg-gray-100" 
                                placeholder="Nova Escala (ex: A, B)..." 
                                value={newRotationId} 
                                onChange={e => setNewRotationId(e.target.value)} 
                              />
-                             <button onClick={addRotation} disabled={savingState['rotation'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Adicionar</button>
+                             {canEditRotations && (
+                                <button onClick={addRotation} disabled={savingState['rotation'] === 'saving'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50">Adicionar</button>
+                             )}
                           </div>
                       </div>
 
@@ -939,9 +983,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                    <div className="font-bold text-gray-800">{r.label || `Escala ${r.id}`}</div>
                                    <div className="text-xs text-gray-500 mt-0.5">ID: {r.id}</div>
                                 </div>
-                                <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors">
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
+                                {canEditRotations && (
+                                    <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-colors">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                )}
                             </div>
                           ))}
                       </div>
