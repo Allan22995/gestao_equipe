@@ -351,7 +351,7 @@ function App() {
                   </div>
                   <div>
                       <h3 className="font-bold uppercase text-sm mb-1 tracking-wide">
-                        {settings.systemMessage.level === 'error' ? 'MANUTENÇÃO / ERRO CRÍTICO' : 
+                        {settings.systemMessage.level === 'error' ? 'MANUTENÇÃO / ALERTA' : 
                          settings.systemMessage.level === 'warning' ? 'ATENÇÃO NECESSÁRIA' : 'COMUNICADO'}
                       </h3>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed opacity-95 font-medium">{settings.systemMessage.message}</p>
