@@ -19,7 +19,8 @@ export interface Schedule {
 export interface ScheduleTemplate {
   id: string;
   name: string;
-  branch?: string; // NOVO: Vincula o modelo a uma filial específica
+  branch?: string; // Mantido para retrocompatibilidade (deprecated)
+  branches?: string[]; // NOVO: Vincula o modelo a múltiplas filiais
   schedule: Schedule;
 }
 

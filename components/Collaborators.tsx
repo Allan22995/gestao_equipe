@@ -371,7 +371,25 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const filteredScheduleTemplates = useMemo(() => {
       const templates = settings.scheduleTemplates || [];
       return templates
-        .filter(t => !t.branch || t.branch === formData.branch) // Mostra globais (sem filial) ou específicos da filial selecionada
+        .filter(t => {
+            const hasBranches = t.branches && t.branches.length > 0;
+            const legacyBranch = t.branch;
+
+            // Se não tem branch definido (nem array nem string), é global -> mostrar
+            if (!hasBranches && !legacyBranch) return true;
+
+            // Se tem array, verificar se a filial selecionada está nele
+            if (hasBranches) {
+                return t.branches!.includes(formData.branch);
+            }
+
+            // Fallback para legado
+            if (legacyBranch) {
+                return legacyBranch === formData.branch;
+            }
+            
+            return false;
+        }) 
         .sort((a, b) => a.name.localeCompare(b.name));
   }, [settings.scheduleTemplates, formData.branch]);
 
