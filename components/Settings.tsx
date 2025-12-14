@@ -1092,23 +1092,24 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
              isOpen={!!selectedModule} 
              onClose={() => setSelectedModule(null)} 
              title={currentModuleDef ? `Permissões: ${currentModuleDef.label}` : ''}
+             maxWidth="max-w-[95vw] md:max-w-[85vw] lg:max-w-7xl"
            >
               {currentModuleDef && (
-                  <div className="space-y-6">
-                      <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="space-y-6 h-full flex flex-col">
+                      <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-lg border border-gray-200 shrink-0">
                           <span className="text-3xl">{currentModuleDef.icon}</span>
                           <div>
                               <p className="text-sm text-gray-500">{currentModuleDef.description}</p>
                           </div>
                       </div>
 
-                      <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                              <thead>
-                                  <tr className="bg-gray-50 border-b border-gray-200">
-                                      <th className="text-left p-3 font-bold text-gray-600">Função</th>
+                      <div className="overflow-auto border border-gray-200 rounded-lg flex-1">
+                          <table className="w-full text-sm border-collapse">
+                              <thead className="sticky top-0 z-20 bg-gray-100 shadow-sm">
+                                  <tr>
+                                      <th className="text-left p-3 font-bold text-gray-700 bg-gray-100 sticky left-0 z-30 border-b border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Função</th>
                                       {currentModuleDef.actions.map(action => (
-                                          <th key={action.id} className="p-3 text-center font-bold text-gray-600 min-w-[80px]">
+                                          <th key={action.id} className="p-3 text-center font-bold text-gray-700 min-w-[160px] border-b border-gray-200 align-middle">
                                               {action.type === 'view' ? 'Visualizar' : 
                                                action.type === 'create' ? 'Criar' : 
                                                action.type === 'update' ? 'Editar' : 
@@ -1117,15 +1118,17 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                       ))}
                                   </tr>
                               </thead>
-                              <tbody>
+                              <tbody className="bg-white divide-y divide-gray-100">
                                   {settings.roles.map(role => (
-                                      <tr key={role.name} className="border-b border-gray-100 hover:bg-gray-50">
-                                          <td className="p-3 font-medium text-gray-800">{role.name}</td>
+                                      <tr key={role.name} className="hover:bg-gray-50 transition-colors">
+                                          <td className="p-3 font-medium text-gray-800 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] border-r border-gray-100">
+                                              {role.name}
+                                          </td>
                                           {currentModuleDef.actions.map(action => {
                                               const isActive = role.permissions.includes(action.id);
                                               return (
                                                   <td key={action.id} className="p-3 text-center">
-                                                      <label className="inline-flex items-center cursor-pointer">
+                                                      <label className="inline-flex items-center cursor-pointer justify-center w-full h-full">
                                                           <div className="relative">
                                                               <input 
                                                                 type="checkbox" 
@@ -1133,7 +1136,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                                                 checked={isActive} 
                                                                 onChange={() => togglePermission(role.name, action.id)} 
                                                               />
-                                                              <div className={`w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${isActive ? 'peer-checked:bg-indigo-600' : ''}`}></div>
+                                                              <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${isActive ? 'peer-checked:bg-indigo-600' : ''}`}></div>
                                                           </div>
                                                       </label>
                                                   </td>
