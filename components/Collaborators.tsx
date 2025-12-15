@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
 
@@ -60,7 +60,23 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const [copySourceId, setCopySourceId] = useState(''); // Estado para copiar escala
   const [isFixingNames, setIsFixingNames] = useState(false);
 
+  // Estados para o Dropdown de Cópia com Pesquisa
+  const [isCopyDropdownOpen, setIsCopyDropdownOpen] = useState(false);
+  const [copySearchTerm, setCopySearchTerm] = useState('');
+  const copyDropdownRef = useRef<HTMLDivElement>(null);
+
   const isFormActive = showForm || editingId;
+
+  // Fechar dropdown de cópia ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (copyDropdownRef.current && !copyDropdownRef.current.contains(event.target as Node)) {
+        setIsCopyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, value: any) => {
     setSchedule(prev => ({
@@ -82,7 +98,10 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const handleCopyFromCollaborator = (sourceId: string) => {
     setCopySourceId(sourceId);
+    setIsCopyDropdownOpen(false); // Fecha o dropdown após selecionar
     setSelectedTemplateId(''); // Limpa a seleção de template
+    setCopySearchTerm(''); // Limpa busca
+
     if (!sourceId) return;
 
     const sourceColab = collaborators.find(c => c.id === sourceId);
@@ -133,6 +152,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setCopySourceId('');
+    setCopySearchTerm('');
   };
 
   const handleEdit = (colab: Collaborator) => {
@@ -168,6 +188,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     setSchedule(safeSchedule);
     setSelectedTemplateId('');
     setCopySourceId('');
+    setCopySearchTerm('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -181,6 +202,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
     setCopySourceId('');
+    setCopySearchTerm('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -390,6 +412,29 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       
       return branchSectors;
   }, [formData.branch, settings.branchSectors, settings.sectors]);
+
+  // --- FILTER COPY OPTIONS (Searchable Dropdown Logic) ---
+  const filteredCopyOptions = useMemo(() => {
+      return collaborators.filter(c => {
+          // Aplica os mesmos filtros de visibilidade da lista principal
+          if (currentUserAllowedSectors.length > 0) {
+              if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
+          }
+          if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
+          
+          // Não permitir copiar do próprio colaborador sendo editado
+          if (editingId && c.id === editingId) return false;
+
+          // Busca por NOME ou ID
+          const term = copySearchTerm.toLowerCase();
+          return c.name.toLowerCase().includes(term) || c.colabId.toLowerCase().includes(term);
+      }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [collaborators, currentUserAllowedSectors, availableBranches, editingId, copySearchTerm]);
+
+  const selectedCopyCollaboratorName = useMemo(() => {
+      return collaborators.find(c => c.id === copySourceId)?.name;
+  }, [copySourceId, collaborators]);
+
 
   const scheduleTemplates = settings.scheduleTemplates || [];
   const rotationOptions = settings.shiftRotations || [];
@@ -705,32 +750,53 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                   </div>
                 )}
 
-                {/* Copiar de Colaborador */}
-                <div className="flex-1 bg-purple-50 p-3 rounded-lg border border-purple-100 flex items-center gap-2">
-                     <span className="text-xs font-bold text-purple-800 whitespace-nowrap">Copiar Escala de:</span>
-                     <select 
-                       value={copySourceId} 
-                       onChange={(e) => handleCopyFromCollaborator(e.target.value)}
-                       className="flex-1 text-sm border-purple-200 rounded p-1 text-purple-900 bg-white truncate outline-none"
+                {/* Copiar de Colaborador (SEARCHABLE DROPDOWN) */}
+                <div className="flex-1 bg-purple-50 p-3 rounded-lg border border-purple-100 relative" ref={copyDropdownRef}>
+                     <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-purple-800 whitespace-nowrap">Copiar Escala de:</span>
+                     </div>
+                     
+                     {/* Dropdown Trigger / Input Like */}
+                     <div 
+                        onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)}
+                        className="w-full bg-white border border-purple-200 rounded p-1.5 flex justify-between items-center cursor-pointer hover:border-purple-300"
                      >
-                        <option value="">Selecione um colaborador...</option>
-                        {collaborators
-                            .filter(c => {
-                                // Aplica os mesmos filtros de visibilidade da lista principal
-                                if (currentUserAllowedSectors.length > 0) {
-                                    if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
-                                }
-                                if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
-                                // Não permitir copiar do próprio colaborador sendo editado
-                                if (editingId && c.id === editingId) return false;
-                                return true;
-                            })
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map(c => (
-                              <option key={c.id} value={c.id}>{c.name} ({c.colabId})</option>
-                            ))
-                        }
-                     </select>
+                        <span className={`text-sm truncate ${copySourceId ? 'text-purple-900 font-medium' : 'text-gray-400'}`}>
+                            {selectedCopyCollaboratorName || "Selecione..."}
+                        </span>
+                        <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                     </div>
+
+                     {/* Dropdown Content */}
+                     {isCopyDropdownOpen && (
+                         <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl z-50 max-h-60 flex flex-col overflow-hidden animate-fadeIn">
+                             <div className="p-2 border-b border-gray-100 bg-gray-50">
+                                 <input 
+                                     type="text" 
+                                     autoFocus
+                                     className="w-full border border-gray-300 rounded px-2 py-1 text-xs outline-none focus:border-purple-500"
+                                     placeholder="Buscar Nome ou ID..."
+                                     value={copySearchTerm}
+                                     onChange={e => setCopySearchTerm(e.target.value)}
+                                 />
+                             </div>
+                             <div className="overflow-y-auto flex-1 p-1">
+                                 {filteredCopyOptions.map(c => (
+                                     <div 
+                                         key={c.id} 
+                                         onClick={() => handleCopyFromCollaborator(c.id)}
+                                         className={`flex justify-between items-center p-2 hover:bg-purple-50 cursor-pointer rounded text-sm ${copySourceId === c.id ? 'bg-purple-50 font-bold text-purple-700' : 'text-gray-700'}`}
+                                     >
+                                         <span className="truncate mr-2">{c.name}</span>
+                                         <span className="text-xs text-gray-400 font-mono bg-gray-100 px-1 rounded shrink-0">#{c.colabId}</span>
+                                     </div>
+                                 ))}
+                                 {filteredCopyOptions.length === 0 && (
+                                     <p className="text-center text-gray-400 text-xs py-2">Nenhum colaborador encontrado.</p>
+                                 )}
+                             </div>
+                         </div>
+                     )}
                 </div>
             </div>
 
