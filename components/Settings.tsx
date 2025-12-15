@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
 import { Modal } from './ui/Modal';
@@ -22,6 +22,13 @@ const initialSchedule: Schedule = {
 
 const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
+// Helper Icon Components
+const IconView = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>;
+const IconCreate = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
+const IconUpdate = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
+const IconDelete = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
+const IconSpecial = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
   const [activeTab, setActiveTab] = useState('general');
   
@@ -33,6 +40,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newRole, setNewRole] = useState('');
   const [newRoleMirrorSource, setNewRoleMirrorSource] = useState(''); 
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  
+  // Permission Modal UI States
+  const [activeRoleForPerms, setActiveRoleForPerms] = useState<string | null>(null);
+  const [permRoleSearch, setPermRoleSearch] = useState('');
+
   const [isMirrorModalOpen, setIsMirrorModalOpen] = useState(false);
   const [mirrorTargetRole, setMirrorTargetRole] = useState('');
   const [mirrorSourceRole, setMirrorSourceRole] = useState('');
@@ -141,6 +153,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       setIsMirrorModalOpen(false);
       showToast(`Permissões copiadas!`);
   };
+  
   const togglePermission = (roleName: string, permissionId: string) => {
     const updatedRoles = settings.roles.map(r => {
       if (r.name !== roleName) return r;
@@ -148,6 +161,23 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       return { ...r, permissions: hasPerm ? r.permissions.filter(p => p !== permissionId) : [...r.permissions, permissionId] };
     });
     updateSettings({ ...settings, roles: updatedRoles });
+  };
+
+  const toggleAllModulePermissionsForRole = (roleName: string, moduleActionIds: string[]) => {
+      const role = settings.roles.find(r => r.name === roleName);
+      if (!role) return;
+      
+      const rolePerms = new Set(role.permissions);
+      const allEnabled = moduleActionIds.every(id => rolePerms.has(id));
+      
+      if (allEnabled) {
+          moduleActionIds.forEach(id => rolePerms.delete(id)); // Desmarca tudo
+      } else {
+          moduleActionIds.forEach(id => rolePerms.add(id)); // Marca tudo
+      }
+      
+      const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, permissions: Array.from(rolePerms) } : r);
+      updateSettings({ ...settings, roles: updatedRoles });
   };
 
   // --- HANDLERS: EVENTS ---
@@ -235,6 +265,23 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const saveSysMsg = () => updateSettings({ ...settings, systemMessage: sysMsg as any });
 
   const currentModuleDef = PERMISSION_MODULES.find(m => m.id === selectedModule);
+
+  // --- MEMOS FOR PERMISSIONS ---
+  const filteredRolesForPerms = useMemo(() => {
+      return settings.roles.filter(r => r.name.toLowerCase().includes(permRoleSearch.toLowerCase()));
+  }, [settings.roles, permRoleSearch]);
+
+  const selectedRoleConfig = useMemo(() => {
+      if (!activeRoleForPerms) return null;
+      return settings.roles.find(r => r.name === activeRoleForPerms);
+  }, [settings.roles, activeRoleForPerms]);
+
+  // Set default active role when opening module if none selected
+  React.useEffect(() => {
+      if (selectedModule && !activeRoleForPerms && settings.roles.length > 0) {
+          setActiveRoleForPerms(settings.roles[0].name);
+      }
+  }, [selectedModule, activeRoleForPerms, settings.roles]);
 
   return (
     <div className="space-y-6">
@@ -337,9 +384,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                    <h3 className="text-lg font-bold text-gray-800 mb-4">Matriz de Permissões</h3>
                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                        {PERMISSION_MODULES.map(mod => (
-                           <button key={mod.id} onClick={() => setSelectedModule(mod.id)} className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-indigo-300 transition-all">
-                               <span className="text-2xl mb-2">{mod.icon}</span>
-                               <span className="font-bold text-gray-700 text-sm">{mod.label}</span>
+                           <button key={mod.id} onClick={() => setSelectedModule(mod.id)} className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-indigo-300 transition-all group">
+                               <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{mod.icon}</span>
+                               <span className="font-bold text-gray-700 text-sm group-hover:text-indigo-600">{mod.label}</span>
+                               <span className="text-[10px] text-gray-400 mt-1">Gerenciar Acessos</span>
                            </button>
                        ))}
                    </div>
@@ -540,35 +588,144 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
        {/* MODALS */}
        
-       {/* 1. PERMISSIONS MODAL */}
-       <Modal isOpen={!!selectedModule} onClose={() => setSelectedModule(null)} title={currentModuleDef ? `Permissões: ${currentModuleDef.label}` : ''} maxWidth="max-w-[95vw] md:max-w-[85vw] lg:max-w-7xl">
-          {currentModuleDef && (
-              <div className="space-y-6 h-full flex flex-col">
-                  <div className="overflow-auto border border-gray-200 rounded-lg flex-1 max-h-[65vh]">
-                      <table className="w-full text-sm border-collapse">
-                          <thead className="sticky top-0 z-20 bg-gray-100 shadow-sm">
-                              <tr>
-                                  <th className="text-left p-3 font-bold text-gray-700 bg-gray-100 sticky left-0 z-30 border-b border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Função</th>
-                                  {currentModuleDef.actions.map(action => <th key={action.id} className="p-3 text-center font-bold text-gray-700 min-w-[120px] border-b bg-gray-100">{action.label}</th>)}
-                              </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-100">
-                              {settings.roles.map(role => (
-                                  <tr key={role.name} className="hover:bg-gray-50">
-                                      <td className="p-3 font-medium text-gray-800 sticky left-0 bg-white z-10 shadow-sm border-r">{role.name}</td>
-                                      {currentModuleDef.actions.map(action => (
-                                          <td key={action.id} className="p-3 text-center">
-                                              <input type="checkbox" checked={role.permissions.includes(action.id)} onChange={() => togglePermission(role.name, action.id)} className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
-                                          </td>
-                                      ))}
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  </div>
-              </div>
-          )}
-       </Modal>
+       {/* 1. PERMISSIONS MODAL (MASTER-DETAIL LAYOUT) */}
+       <Modal 
+            isOpen={!!selectedModule} 
+            onClose={() => setSelectedModule(null)} 
+            title={currentModuleDef ? `Permissões: ${currentModuleDef.label}` : ''} 
+            maxWidth="max-w-[95vw] lg:max-w-6xl h-[85vh] flex flex-col"
+        >
+            {currentModuleDef && (
+                <div className="flex flex-col h-full bg-gray-50 rounded-lg overflow-hidden">
+                    <div className="flex flex-col md:flex-row h-full">
+                        
+                        {/* LEFT SIDEBAR: ROLES LIST */}
+                        <div className={`w-full md:w-1/3 lg:w-1/4 bg-white border-r border-gray-200 flex flex-col ${activeRoleForPerms && 'hidden md:flex'}`}>
+                            <div className="p-4 border-b border-gray-100">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Selecione uma Função</h4>
+                                <div className="relative">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Buscar função..." 
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        value={permRoleSearch}
+                                        onChange={e => setPermRoleSearch(e.target.value)}
+                                    />
+                                    <svg className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                </div>
+                            </div>
+                            <div className="overflow-y-auto flex-1 custom-scrollbar">
+                                {settings.roles.length === 0 && <p className="p-4 text-sm text-gray-400 text-center">Nenhuma função cadastrada.</p>}
+                                {settings.roles
+                                    .filter(r => r.name.toLowerCase().includes(permRoleSearch.toLowerCase()))
+                                    .map(role => {
+                                        const isActive = role.name === activeRoleForPerms;
+                                        // Count active permissions for this module
+                                        const activeCount = currentModuleDef.actions.filter(a => role.permissions.includes(a.id)).length;
+                                        const totalCount = currentModuleDef.actions.length;
+                                        
+                                        return (
+                                            <div 
+                                                key={role.name}
+                                                onClick={() => setActiveRoleForPerms(role.name)}
+                                                className={`p-4 border-b border-gray-50 cursor-pointer transition-all hover:bg-gray-50 flex justify-between items-center ${isActive ? 'bg-indigo-50 border-r-4 border-r-indigo-600' : ''}`}
+                                            >
+                                                <div>
+                                                    <p className={`font-bold text-sm ${isActive ? 'text-indigo-900' : 'text-gray-700'}`}>{role.name}</p>
+                                                    <p className="text-[10px] text-gray-400 mt-0.5">{activeCount} de {totalCount} permissões</p>
+                                                </div>
+                                                <svg className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-gray-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                            </div>
+                                        )
+                                    })
+                                }
+                            </div>
+                        </div>
+
+                        {/* RIGHT CONTENT: PERMISSIONS */}
+                        <div className={`flex-1 bg-gray-50 flex flex-col h-full ${!activeRoleForPerms && 'hidden md:flex'}`}>
+                            {selectedRoleConfig ? (
+                                <>
+                                    {/* Mobile Header Back Button */}
+                                    <div className="md:hidden p-4 bg-white border-b border-gray-200 flex items-center gap-3">
+                                        <button onClick={() => setActiveRoleForPerms(null)} className="p-1 rounded hover:bg-gray-100">
+                                            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                        </button>
+                                        <span className="font-bold text-gray-800">{selectedRoleConfig.name}</span>
+                                    </div>
+
+                                    <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                                            <div>
+                                                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                                    {currentModuleDef.icon} {currentModuleDef.label}
+                                                </h3>
+                                                <p className="text-sm text-gray-500 mt-1">{currentModuleDef.description}</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => {
+                                                    const moduleActionIds = currentModuleDef.actions.map(a => a.id);
+                                                    toggleAllModulePermissionsForRole(selectedRoleConfig.name, moduleActionIds);
+                                                }}
+                                                className="text-xs font-bold bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-lg hover:bg-indigo-50 shadow-sm transition-colors uppercase tracking-wide"
+                                            >
+                                                {currentModuleDef.actions.every(a => selectedRoleConfig.permissions.includes(a.id)) ? 'Desmarcar Todos' : 'Habilitar Todos'}
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                            {currentModuleDef.actions.map(action => {
+                                                const isChecked = selectedRoleConfig.permissions.includes(action.id);
+                                                
+                                                // Determine icon and color based on action type
+                                                let IconComp = IconSpecial;
+                                                let iconBg = 'bg-gray-100 text-gray-500';
+                                                
+                                                if (action.type === 'view') { IconComp = IconView; iconBg = 'bg-blue-100 text-blue-600'; }
+                                                if (action.type === 'create') { IconComp = IconCreate; iconBg = 'bg-green-100 text-green-600'; }
+                                                if (action.type === 'update') { IconComp = IconUpdate; iconBg = 'bg-amber-100 text-amber-600'; }
+                                                if (action.type === 'delete') { IconComp = IconDelete; iconBg = 'bg-red-100 text-red-600'; }
+
+                                                return (
+                                                    <div 
+                                                        key={action.id} 
+                                                        onClick={() => togglePermission(selectedRoleConfig.name, action.id)}
+                                                        className={`
+                                                            bg-white p-4 rounded-xl border transition-all cursor-pointer shadow-sm group hover:shadow-md flex items-center justify-between
+                                                            ${isChecked ? 'border-indigo-300 ring-1 ring-indigo-100' : 'border-gray-200 hover:border-gray-300'}
+                                                        `}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconBg} ${isChecked ? 'shadow-sm' : 'opacity-70 grayscale'}`}>
+                                                                <IconComp />
+                                                            </div>
+                                                            <div>
+                                                                <p className={`font-bold text-sm ${isChecked ? 'text-gray-900' : 'text-gray-500'}`}>{action.label}</p>
+                                                                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{action.type}</p>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {/* Custom Toggle Switch */}
+                                                        <div className={`w-12 h-6 rounded-full transition-colors relative duration-300 ${isChecked ? 'bg-indigo-600' : 'bg-gray-200'}`}>
+                                                            <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-0.5 transition-transform duration-300 ${isChecked ? 'left-[26px]' : 'left-0.5'}`}></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8">
+                                    <svg className="w-16 h-16 mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                    <p>Selecione uma função à esquerda para gerenciar as permissões.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </Modal>
 
        {/* 2. MIRRORING MODAL */}
        <Modal isOpen={isMirrorModalOpen} onClose={() => setIsMirrorModalOpen(false)} title="Espelhar Permissões">
