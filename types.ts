@@ -307,13 +307,17 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     actions: [
       { id: 'settings:view', label: 'Acesso Geral à Aba', type: 'view' },
       
-      // 1. Estrutura
-      { id: 'settings:view_structure', label: 'Ver Estrutura (Filiais/Setores)', type: 'view' },
-      { id: 'settings:edit_structure', label: 'Gerenciar Estrutura', type: 'special' },
+      // 1. Estrutura (Subníveis)
+      { id: 'settings:view_branches', label: 'Ver Filiais', type: 'view' },
+      { id: 'settings:edit_branches', label: 'Gerenciar Filiais', type: 'special' },
+      { id: 'settings:view_sectors', label: 'Ver Setores', type: 'view' },
+      { id: 'settings:edit_sectors', label: 'Gerenciar Setores', type: 'special' },
       
-      // 2. Funções
-      { id: 'settings:view_roles', label: 'Ver Funções', type: 'view' },
-      { id: 'settings:manage_access', label: 'Gerenciar Funções e Acessos', type: 'special' },
+      // 2. Funções (Subníveis)
+      { id: 'settings:view_roles_list', label: 'Ver Lista Funções', type: 'view' },
+      { id: 'settings:manage_roles_list', label: 'Criar/Excluir Funções', type: 'special' },
+      { id: 'settings:view_permissions_matrix', label: 'Ver Matriz Permissões', type: 'view' },
+      { id: 'settings:manage_permissions_matrix', label: 'Editar Permissões', type: 'special' },
       
       // 3. Tipos de Evento
       { id: 'settings:view_event_types', label: 'Ver Tipos de Evento', type: 'view' },

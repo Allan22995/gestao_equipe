@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -73,16 +72,16 @@ const Icons = {
   Special: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
 };
 
-// --- CONFIGURAÇÃO DAS ABAS (COM PERMISSÕES) ---
+// --- CONFIGURAÇÃO DAS ABAS (COM PERMISSÕES MÚLTIPLAS) ---
 const SETTINGS_TABS = [
-  { id: 'general', label: '🏢 Estrutura', reqPerm: 'settings:view_structure' },
-  { id: 'roles', label: '👥 Funções', reqPerm: 'settings:view_roles' },
-  { id: 'events', label: '📅 Eventos', reqPerm: 'settings:view_event_types' },
-  { id: 'rotations', label: '🔄 Escalas', reqPerm: 'settings:view_rotations' },
-  { id: 'templates', label: '⏰ Jornadas', reqPerm: 'settings:view_templates' },
-  { id: 'integrations', label: '🔗 Integrações', reqPerm: 'settings:view_integrations' },
-  { id: 'seasonal', label: '🎉 Sazonais', reqPerm: 'settings:view_seasonal' },
-  { id: 'system', label: '📢 Avisos', reqPerm: 'settings:view_system_msg' },
+  { id: 'general', label: '🏢 Estrutura', reqPerms: ['settings:view_branches', 'settings:view_sectors'] },
+  { id: 'roles', label: '👥 Funções', reqPerms: ['settings:view_roles_list', 'settings:view_permissions_matrix'] },
+  { id: 'events', label: '📅 Eventos', reqPerms: ['settings:view_event_types'] },
+  { id: 'rotations', label: '🔄 Escalas', reqPerms: ['settings:view_rotations'] },
+  { id: 'templates', label: '⏰ Jornadas', reqPerms: ['settings:view_templates'] },
+  { id: 'integrations', label: '🔗 Integrações', reqPerms: ['settings:view_integrations'] },
+  { id: 'seasonal', label: '🎉 Sazonais', reqPerms: ['settings:view_seasonal'] },
+  { id: 'system', label: '📢 Avisos', reqPerms: ['settings:view_system_msg'] },
 ];
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
@@ -131,9 +130,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       message: settings.systemMessage?.message || ''
   });
 
-  // Filter Tabs based on Permissions
+  // Filter Tabs based on Permissions (Show if has AT LEAST ONE of the required perms)
   const allowedTabs = useMemo(() => {
-      return SETTINGS_TABS.filter(tab => hasPermission(tab.reqPerm));
+      return SETTINGS_TABS.filter(tab => tab.reqPerms.some(perm => hasPermission(perm)));
   }, [hasPermission]);
 
   // Set initial active tab
@@ -372,6 +371,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {activeTab === 'general' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                {/* Branches Card */}
+               {hasPermission('settings:view_branches') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col">
                    <SectionHeader title="Filiais / Unidades" description="Gerencie as unidades físicas da empresa." />
                    
@@ -379,7 +379,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <div className="relative flex-1">
                            <input 
                             type="text" 
-                            disabled={!hasPermission('settings:edit_structure')}
+                            disabled={!hasPermission('settings:edit_branches')}
                             value={newBranch} 
                             onChange={e => { setNewBranch(e.target.value); validate('newBranch', e.target.value); }} 
                             onKeyDown={e => e.key === 'Enter' && addBranch()}
@@ -389,10 +389,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            {errors.newBranch && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newBranch}</span>}
                        </div>
                        <button 
-                        disabled={!hasPermission('settings:edit_structure')}
+                        disabled={!hasPermission('settings:edit_branches')}
                         onClick={addBranch} 
                         className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-                        title={!hasPermission('settings:edit_structure') ? "Sem permissão para adicionar" : ""}
+                        title={!hasPermission('settings:edit_branches') ? "Sem permissão para adicionar" : ""}
                        >
                            {Icons.Plus}
                        </button>
@@ -403,10 +403,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            <div key={b} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
                                <span className="font-medium">{b}</span> 
                                <button 
-                                disabled={!hasPermission('settings:edit_structure')}
+                                disabled={!hasPermission('settings:edit_branches')}
                                 onClick={() => removeBranch(b)} 
                                 className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                                title={!hasPermission('settings:edit_structure') ? "Sem permissão para remover" : "Remover"}
+                                title={!hasPermission('settings:edit_branches') ? "Sem permissão para remover" : "Remover"}
                                >
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                </button>
@@ -415,8 +415,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        {settings.branches.length === 0 && <p className="text-gray-400 italic text-sm w-full text-center py-4">Nenhuma filial cadastrada.</p>}
                    </div>
                </div>
+               )}
 
                {/* Sectors Card */}
+               {hasPermission('settings:view_sectors') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col">
                    <SectionHeader title="Setores Globais" description="Departamentos disponíveis em todas as filiais." />
                    
@@ -424,7 +426,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <div className="relative flex-1">
                            <input 
                             type="text" 
-                            disabled={!hasPermission('settings:edit_structure')}
+                            disabled={!hasPermission('settings:edit_sectors')}
                             value={newSector} 
                             onChange={e => { setNewSector(e.target.value); validate('newSector', e.target.value); }}
                             onKeyDown={e => e.key === 'Enter' && addSector()}
@@ -434,10 +436,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            {errors.newSector && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newSector}</span>}
                        </div>
                        <button 
-                        disabled={!hasPermission('settings:edit_structure')}
+                        disabled={!hasPermission('settings:edit_sectors')}
                         onClick={addSector} 
                         className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-                        title={!hasPermission('settings:edit_structure') ? "Sem permissão para adicionar" : ""}
+                        title={!hasPermission('settings:edit_sectors') ? "Sem permissão para adicionar" : ""}
                        >
                            {Icons.Plus}
                        </button>
@@ -448,10 +450,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            <div key={s} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
                                <span className="font-medium">{s}</span> 
                                <button 
-                                disabled={!hasPermission('settings:edit_structure')}
+                                disabled={!hasPermission('settings:edit_sectors')}
                                 onClick={() => removeSector(s)} 
                                 className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                                title={!hasPermission('settings:edit_structure') ? "Sem permissão para remover" : "Remover"}
+                                title={!hasPermission('settings:edit_sectors') ? "Sem permissão para remover" : "Remover"}
                                >
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                </button>
@@ -460,12 +462,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        {settings.sectors.length === 0 && <p className="text-gray-400 italic text-sm w-full text-center py-4">Nenhum setor cadastrado.</p>}
                    </div>
                </div>
+               )}
            </div>
        )}
 
        {/* --- CONTENT: ROLES --- */}
        {activeTab === 'roles' && (
            <div className="space-y-6 animate-fadeIn">
+               {hasPermission('settings:view_roles_list') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                    <SectionHeader title="Funções e Cargos" description="Defina os cargos e suas permissões de visibilidade." />
                    
@@ -474,7 +478,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome da Função</label>
                            <input 
                             type="text" 
-                            disabled={!hasPermission('settings:manage_access')}
+                            disabled={!hasPermission('settings:manage_roles_list')}
                             value={newRole} 
                             onChange={e => { setNewRole(e.target.value); validate('newRole', e.target.value); }} 
                             placeholder="Ex: Supervisor Logístico" 
@@ -484,7 +488,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <div className="w-full md:w-64">
                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Espelhar Permissões</label>
                            <select 
-                            disabled={!hasPermission('settings:manage_access')}
+                            disabled={!hasPermission('settings:manage_roles_list')}
                             value={newRoleMirrorSource} 
                             onChange={e => setNewRoleMirrorSource(e.target.value)} 
                             className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white disabled:bg-gray-100"
@@ -495,7 +499,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        </div>
                        <div className="mt-auto pt-5">
                             <button 
-                                disabled={!hasPermission('settings:manage_access')}
+                                disabled={!hasPermission('settings:manage_roles_list')}
                                 onClick={addRole} 
                                 className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm whitespace-nowrap h-[38px] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -520,10 +524,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                        <td className="p-4 text-center">
                                            <div className="flex justify-center">
                                                <button 
-                                                disabled={!hasPermission('settings:manage_access')}
+                                                disabled={!hasPermission('settings:manage_roles_list')}
                                                 onClick={() => toggleRoleViewAll(r.name)} 
                                                 className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-2 transition-all ${
-                                                    !hasPermission('settings:manage_access') ? 'opacity-50 cursor-not-allowed' : ''
+                                                    !hasPermission('settings:manage_roles_list') ? 'opacity-50 cursor-not-allowed' : ''
                                                 } ${
                                                     r.canViewAllSectors ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
                                                 }`}
@@ -535,8 +539,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                        </td>
                                        <td className="p-4 text-right">
                                            <div className="flex justify-end gap-2 opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
-                                               <IconButton disabled={!hasPermission('settings:manage_access')} onClick={() => openMirrorModal(r.name)} icon={Icons.Copy} colorClass="text-blue-500 hover:bg-blue-50" title="Copiar Permissões de outra função" />
-                                               <IconButton disabled={!hasPermission('settings:manage_access')} onClick={() => removeRole(r.name)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" title="Excluir Função" />
+                                               <IconButton disabled={!hasPermission('settings:manage_roles_list')} onClick={() => openMirrorModal(r.name)} icon={Icons.Copy} colorClass="text-blue-500 hover:bg-blue-50" title="Copiar Permissões de outra função" />
+                                               <IconButton disabled={!hasPermission('settings:manage_roles_list')} onClick={() => removeRole(r.name)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" title="Excluir Função" />
                                            </div>
                                        </td>
                                    </tr>
@@ -545,7 +549,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        </table>
                    </div>
                </div>
+               )}
 
+               {hasPermission('settings:view_permissions_matrix') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                    <SectionHeader title="Matriz de Acessos" description="Configure o que cada função pode fazer em cada módulo." />
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -563,6 +569,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        ))}
                    </div>
                </div>
+               )}
            </div>
        )}
 
