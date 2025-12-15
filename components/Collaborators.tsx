@@ -57,6 +57,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [copySourceId, setCopySourceId] = useState(''); // Estado para copiar escala
   const [isFixingNames, setIsFixingNames] = useState(false);
 
   const isFormActive = showForm || editingId;
@@ -70,11 +71,35 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
 
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplateId(templateId);
+    setCopySourceId(''); // Limpa a seleção de cópia de colaborador
     if (!templateId) return;
 
     const template = settings.scheduleTemplates?.find(t => t.id === templateId);
     if (template) {
       setSchedule(JSON.parse(JSON.stringify(template.schedule)));
+    }
+  };
+
+  const handleCopyFromCollaborator = (sourceId: string) => {
+    setCopySourceId(sourceId);
+    setSelectedTemplateId(''); // Limpa a seleção de template
+    if (!sourceId) return;
+
+    const sourceColab = collaborators.find(c => c.id === sourceId);
+    if (sourceColab) {
+        // Copia a escala (Schedule Object)
+        setSchedule(JSON.parse(JSON.stringify(sourceColab.schedule)));
+        
+        // Copia informações relacionadas à jornada
+        setFormData(prev => ({
+            ...prev,
+            shiftType: sourceColab.shiftType,
+            hasRotation: sourceColab.hasRotation || false,
+            rotationGroup: sourceColab.rotationGroup || '',
+            rotationStartDate: sourceColab.rotationStartDate || ''
+        }));
+        
+        showToast(`Escala e turno copiados de ${sourceColab.name}!`);
     }
   };
 
@@ -107,6 +132,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+    setCopySourceId('');
   };
 
   const handleEdit = (colab: Collaborator) => {
@@ -141,6 +167,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     });
     setSchedule(safeSchedule);
     setSelectedTemplateId('');
+    setCopySourceId('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -153,6 +180,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
+    setCopySourceId('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -359,10 +387,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       } else {
           branchSectors = settings.sectors || [];
       }
-
-      // CORREÇÃO: Não filtrar por currentUserAllowedSectors aqui.
-      // Se a filial estiver disponível (availableBranches), mostramos todos os setores dela.
-      // Isso corrige o problema onde líderes com visualização restrita não conseguiam atribuir outros setores da mesma filial a novos colaboradores/líderes.
       
       return branchSectors;
   }, [formData.branch, settings.branchSectors, settings.sectors]);
@@ -663,21 +687,52 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                </div>
             </div>
 
-            {scheduleTemplates.length > 0 && (
-              <div className="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-3">
-                 <span className="text-xs font-bold text-blue-800">Carregar Modelo:</span>
-                 <select 
-                   value={selectedTemplateId} 
-                   onChange={(e) => handleTemplateSelect(e.target.value)}
-                   className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white"
-                 >
-                    <option value="">Selecione um modelo...</option>
-                    {scheduleTemplates.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                 </select>
-              </div>
-            )}
+            <div className="flex flex-col md:flex-row gap-4 mb-4">
+                {/* Carregar Modelo */}
+                {scheduleTemplates.length > 0 && (
+                  <div className="flex-1 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
+                     <span className="text-xs font-bold text-blue-800 whitespace-nowrap">Carregar Modelo:</span>
+                     <select 
+                       value={selectedTemplateId} 
+                       onChange={(e) => handleTemplateSelect(e.target.value)}
+                       className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white truncate"
+                     >
+                        <option value="">Selecione...</option>
+                        {scheduleTemplates.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                     </select>
+                  </div>
+                )}
+
+                {/* Copiar de Colaborador */}
+                <div className="flex-1 bg-purple-50 p-3 rounded-lg border border-purple-100 flex items-center gap-2">
+                     <span className="text-xs font-bold text-purple-800 whitespace-nowrap">Copiar Escala de:</span>
+                     <select 
+                       value={copySourceId} 
+                       onChange={(e) => handleCopyFromCollaborator(e.target.value)}
+                       className="flex-1 text-sm border-purple-200 rounded p-1 text-purple-900 bg-white truncate outline-none"
+                     >
+                        <option value="">Selecione um colaborador...</option>
+                        {collaborators
+                            .filter(c => {
+                                // Aplica os mesmos filtros de visibilidade da lista principal
+                                if (currentUserAllowedSectors.length > 0) {
+                                    if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
+                                }
+                                if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
+                                // Não permitir copiar do próprio colaborador sendo editado
+                                if (editingId && c.id === editingId) return false;
+                                return true;
+                            })
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(c => (
+                              <option key={c.id} value={c.id}>{c.name} ({c.colabId})</option>
+                            ))
+                        }
+                     </select>
+                </div>
+            </div>
 
             <p className="text-xs text-gray-500 mb-4">Configure os dias trabalhados. Se o turno inicia no dia anterior (Ex: A escala de Segunda começa Domingo às 22:00), marque a caixa "Inicia dia anterior".</p>
             
