@@ -28,6 +28,17 @@ const COLLECTIONS = {
 // ID fixo para o documento de configurações (já que é único)
 const SETTINGS_DOC_ID = 'general_settings';
 
+// Helper para remover campos undefined (Firestore não aceita undefined)
+const sanitizePayload = (data: any) => {
+  const clean: any = {};
+  Object.keys(data).forEach(key => {
+    if (data[key] !== undefined) {
+      clean[key] = data[key];
+    }
+  });
+  return clean;
+};
+
 export const dbService = {
   // --- VALIDATION HELPERS ---
   checkEmailRegistered: async (email: string): Promise<boolean> => {
@@ -117,12 +128,13 @@ export const dbService = {
   // Colaboradores
   addCollaborator: async (colab: Omit<Collaborator, 'id'>) => {
     console.log('💾 [DB] Salvando Colaborador...');
-    // CORREÇÃO CRÍTICA: Remove ID local (UUID) para evitar duplicidade no documento. O Firestore gera o ID real.
     const { id, ...rest } = colab as any;
-    await addDoc(collection(db, COLLECTIONS.COLLABORATORS), rest);
+    const cleanData = sanitizePayload(rest);
+    await addDoc(collection(db, COLLECTIONS.COLLABORATORS), cleanData);
   },
   updateCollaborator: async (id: string, data: Partial<Collaborator>) => {
-    await updateDoc(doc(db, COLLECTIONS.COLLABORATORS, id), data);
+    const cleanData = sanitizePayload(data);
+    await updateDoc(doc(db, COLLECTIONS.COLLABORATORS, id), cleanData);
   },
   deleteCollaborator: async (id: string) => {
     await deleteDoc(doc(db, COLLECTIONS.COLLABORATORS, id));
@@ -132,10 +144,13 @@ export const dbService = {
   addEvent: async (evt: EventRecord) => {
     // Garante que o ID local seja removido para que o Firestore gere um novo
     const { id, ...rest } = evt; 
-    await addDoc(collection(db, COLLECTIONS.EVENTS), rest);
+    // Remove campos undefined (ex: schedule quando é folga)
+    const cleanData = sanitizePayload(rest);
+    await addDoc(collection(db, COLLECTIONS.EVENTS), cleanData);
   },
   updateEvent: async (id: string, data: Partial<EventRecord>) => {
-    await updateDoc(doc(db, COLLECTIONS.EVENTS, id), data);
+    const cleanData = sanitizePayload(data);
+    await updateDoc(doc(db, COLLECTIONS.EVENTS, id), cleanData);
   },
   deleteEvent: async (id: string) => {
     await deleteDoc(doc(db, COLLECTIONS.EVENTS, id));
@@ -144,10 +159,12 @@ export const dbService = {
   // Plantões
   addOnCall: async (oc: OnCallRecord) => {
     const { id, ...rest } = oc;
-    await addDoc(collection(db, COLLECTIONS.ON_CALLS), rest);
+    const cleanData = sanitizePayload(rest);
+    await addDoc(collection(db, COLLECTIONS.ON_CALLS), cleanData);
   },
   updateOnCall: async (id: string, data: Partial<OnCallRecord>) => {
-    await updateDoc(doc(db, COLLECTIONS.ON_CALLS, id), data);
+    const cleanData = sanitizePayload(data);
+    await updateDoc(doc(db, COLLECTIONS.ON_CALLS, id), cleanData);
   },
   deleteOnCall: async (id: string) => {
     await deleteDoc(doc(db, COLLECTIONS.ON_CALLS, id));
@@ -156,16 +173,19 @@ export const dbService = {
   // Ajustes
   addAdjustment: async (adj: BalanceAdjustment) => {
     const { id, ...rest } = adj;
-    await addDoc(collection(db, COLLECTIONS.ADJUSTMENTS), rest);
+    const cleanData = sanitizePayload(rest);
+    await addDoc(collection(db, COLLECTIONS.ADJUSTMENTS), cleanData);
   },
 
   // Férias
   addVacationRequest: async (req: VacationRequest) => {
     const { id, ...rest } = req;
-    await addDoc(collection(db, COLLECTIONS.VACATION_REQUESTS), rest);
+    const cleanData = sanitizePayload(rest);
+    await addDoc(collection(db, COLLECTIONS.VACATION_REQUESTS), cleanData);
   },
   updateVacationRequest: async (id: string, data: Partial<VacationRequest>) => {
-    await updateDoc(doc(db, COLLECTIONS.VACATION_REQUESTS, id), data);
+    const cleanData = sanitizePayload(data);
+    await updateDoc(doc(db, COLLECTIONS.VACATION_REQUESTS, id), cleanData);
   },
   deleteVacationRequest: async (id: string) => {
     await deleteDoc(doc(db, COLLECTIONS.VACATION_REQUESTS, id));
@@ -175,7 +195,8 @@ export const dbService = {
   saveSettings: async (settings: SystemSettings) => {
     console.log('💾 [DB] Tentando salvar Configurações...', settings);
     try {
-      await setDoc(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), settings);
+      const cleanData = sanitizePayload(settings);
+      await setDoc(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), cleanData);
       console.log('✅ [DB] Configurações gravadas com sucesso!');
     } catch (error: any) {
       console.error('❌ [DB] Erro ao salvar configurações:', error);
@@ -189,6 +210,7 @@ export const dbService = {
   // Logs (Apenas escrita)
   logAudit: async (log: AuditLog) => {
     const { id, ...rest } = log;
-    await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), rest);
+    const cleanData = sanitizePayload(rest);
+    await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), cleanData);
   }
 };
