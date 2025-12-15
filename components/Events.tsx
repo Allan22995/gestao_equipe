@@ -44,6 +44,7 @@ export const Events: React.FC<EventsProps> = ({
   currentUserAllowedSectors, currentUserProfile, userColabId
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Helper para identificar se é um perfil de liderança/admin
   const isManager = currentUserProfile !== 'colaborador';
@@ -68,14 +69,15 @@ export const Events: React.FC<EventsProps> = ({
   const [copySearchTerm, setCopySearchTerm] = useState('');
   const copyDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [formData, setFormData] = useState({
-    collaboratorId: '',
-    type: '',
+  // Inicialização Lazy do Form Data para garantir que userColabId seja usado se disponível
+  const [formData, setFormData] = useState(() => ({
+    collaboratorId: (!isManager && userColabId) ? userColabId : '',
+    type: (!isManager) ? 'folga' : '',
     startDate: '',
     endDate: '',
     observation: '',
     status: 'pendente' as EventStatus
-  });
+  }));
 
   // Fechar dropdown multi e copy ao clicar fora
   useEffect(() => {
@@ -91,19 +93,14 @@ export const Events: React.FC<EventsProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Efeito para garantir que, se for colaborador, o formulário já nasça preenchido corretamente
+  // Efeito para garantir atualização caso userColabId mude após montagem (ex: login lento)
   useEffect(() => {
     if (!isManager && userColabId && !editingId) {
-      setFormData(prev => {
-        if (prev.collaboratorId !== userColabId || prev.type !== 'folga') {
-          return {
-            ...prev,
-            collaboratorId: userColabId,
-            type: 'folga'
-          };
-        }
-        return prev;
-      });
+      setFormData(prev => ({
+        ...prev,
+        collaboratorId: userColabId,
+        type: prev.type || 'folga'
+      }));
     }
   }, [isManager, userColabId, editingId]);
 
@@ -354,148 +351,155 @@ export const Events: React.FC<EventsProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    // VALIDATION DATE
-    if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
-        showToast('Erro: A data final não pode ser anterior à data inicial.', true);
-        return;
-    }
-
-    const user = isManager ? 'Gestor/Admin' : (getColabName(userColabId || '') || 'Colaborador');
-    
-    // Determina a escala a ser salva
-    // Se o tipo for de trabalho e houver configuração, salva. Senão undefined.
-    const finalSchedule = isWorkingType ? tempSchedule : undefined;
-
-    // --- LÓGICA DE CRIAÇÃO (ADD) ---
-    if (!editingId) {
-        if (!canCreate) {
-            showToast('Você não tem permissão para criar eventos.', true);
+    try {
+        // VALIDATION DATE
+        if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
+            showToast('Erro: A data final não pode ser anterior à data inicial.', true);
             return;
         }
 
-        let finalType = formData.type;
-        if (!isManager) finalType = 'folga';
+        const user = isManager ? 'Gestor/Admin' : (getColabName(userColabId || '') || 'Colaborador');
+        
+        // Determina a escala a ser salva
+        const finalSchedule = isWorkingType ? tempSchedule : undefined;
 
-        if (!finalType) {
-            showToast("Selecione o tipo de evento.", true);
-            return;
-        }
-
-        // --- LOTE (MULTI) ---
-        if (isMultiMode && isManager) {
-            if (multiSelectedIds.length === 0) {
-                showToast("Selecione pelo menos um colaborador.", true);
+        // --- LÓGICA DE CRIAÇÃO (ADD) ---
+        if (!editingId) {
+            if (!canCreate) {
+                showToast('Você não tem permissão para criar eventos.', true);
                 return;
             }
 
+            let finalType = formData.type;
+            if (!isManager) finalType = 'folga'; // Force 'folga' for collaborators
+
+            if (!finalType) {
+                showToast("Selecione o tipo de evento.", true);
+                return;
+            }
+
+            // --- LOTE (MULTI) ---
+            if (isMultiMode && isManager) {
+                if (multiSelectedIds.length === 0) {
+                    showToast("Selecione pelo menos um colaborador.", true);
+                    return;
+                }
+
+                const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+                let count = 0;
+
+                const promises = multiSelectedIds.map(colId => {
+                    const newEvent: EventRecord = {
+                        id: generateUUID(),
+                        collaboratorId: colId,
+                        type: finalType,
+                        typeLabel: label,
+                        startDate: formData.startDate,
+                        endDate: formData.endDate,
+                        observation: formData.observation,
+                        daysGained: gained,
+                        daysUsed: used,
+                        status: formData.status, 
+                        schedule: finalSchedule, 
+                        createdAt: new Date().toISOString()
+                    };
+                    count++;
+                    return Promise.resolve(onAdd(newEvent));
+                });
+
+                await Promise.all(promises);
+
+                logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${label}`, user);
+                showToast(`${count} eventos registrados com sucesso!`);
+                resetForm();
+                return;
+            }
+
+            // --- INDIVIDUAL (SINGLE) ---
+            let finalColabId = formData.collaboratorId;
+            // Segurança: Se não for gestor, usa o ID do usuário logado obrigatoriamente
+            if (!isManager && userColabId) finalColabId = userColabId;
+
+            if (!finalColabId) {
+                showToast("Selecione o colaborador.", true);
+                return;
+            }
+
+            let finalStatus: EventStatus = formData.status;
+            if (!isManager) finalStatus = 'pendente';
+
             const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
-            let count = 0;
 
-            const promises = multiSelectedIds.map(colId => {
-                const newEvent: EventRecord = {
-                    id: generateUUID(),
-                    collaboratorId: colId,
-                    type: finalType,
-                    typeLabel: label,
-                    startDate: formData.startDate,
-                    endDate: formData.endDate,
-                    observation: formData.observation,
-                    daysGained: gained,
-                    daysUsed: used,
-                    status: formData.status, // Manager defines status
-                    schedule: finalSchedule, // Save temporary schedule
-                    createdAt: new Date().toISOString()
-                };
-                count++;
-                // Cast to promise to await if onAdd was async (it is in App.tsx)
-                return Promise.resolve(onAdd(newEvent));
-            });
-
-            await Promise.all(promises);
-
-            logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${label}`, user);
-            showToast(`${count} eventos registrados com sucesso!`);
+            const newEvent: EventRecord = {
+                id: generateUUID(),
+                collaboratorId: finalColabId,
+                type: finalType,
+                typeLabel: label,
+                startDate: formData.startDate,
+                endDate: formData.endDate,
+                observation: formData.observation,
+                daysGained: gained,
+                daysUsed: used,
+                status: finalStatus,
+                schedule: finalSchedule,
+                createdAt: new Date().toISOString()
+            };
+            
+            await Promise.resolve(onAdd(newEvent));
+            
+            showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
             resetForm();
-            return;
-        }
 
-        // --- INDIVIDUAL (SINGLE) ---
-        let finalColabId = formData.collaboratorId;
-        if (!isManager && userColabId) finalColabId = userColabId;
-
-        if (!finalColabId) {
-            showToast("Selecione o colaborador.", true);
-            return;
-        }
-
-        let finalStatus: EventStatus = formData.status;
-        if (!isManager) finalStatus = 'pendente';
-
-        const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
-
-        const newEvent: EventRecord = {
-            id: generateUUID(),
-            collaboratorId: finalColabId,
-            type: finalType,
-            typeLabel: label,
-            startDate: formData.startDate,
-            endDate: formData.endDate,
-            observation: formData.observation,
-            daysGained: gained,
-            daysUsed: used,
-            status: finalStatus,
-            schedule: finalSchedule,
-            createdAt: new Date().toISOString()
-        };
-        
-        await Promise.resolve(onAdd(newEvent));
-        
-        showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
-        resetForm();
-
-    } else {
-        // --- EDIÇÃO (UPDATE) ---
-        if (!canUpdate) {
-            showToast('Você não tem permissão para editar eventos.', true);
-            return;
-        }
-
-        let finalType = formData.type;
-        if (!isManager && !finalType) finalType = 'folga';
-
-        let finalStatus: EventStatus = formData.status;
-        let acceptedFlag = false;
-
-        if (!isManager) {
-            finalStatus = 'pendente'; 
-            acceptedFlag = false; 
         } else {
-            if (formData.status === 'nova_opcao') acceptedFlag = false;
+            // --- EDIÇÃO (UPDATE) ---
+            if (!canUpdate) {
+                showToast('Você não tem permissão para editar eventos.', true);
+                return;
+            }
+
+            let finalType = formData.type;
+            if (!isManager && !finalType) finalType = 'folga';
+
+            let finalStatus: EventStatus = formData.status;
+            let acceptedFlag = false;
+
+            if (!isManager) {
+                finalStatus = 'pendente'; 
+                acceptedFlag = false; 
+            } else {
+                if (formData.status === 'nova_opcao') acceptedFlag = false;
+            }
+
+            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+
+            onUpdate({
+                id: editingId,
+                collaboratorId: formData.collaboratorId,
+                type: finalType,
+                typeLabel: label,
+                startDate: formData.startDate,
+                endDate: formData.endDate,
+                observation: formData.observation,
+                daysGained: gained,
+                daysUsed: used,
+                status: finalStatus,
+                collaboratorAcceptedProposal: acceptedFlag,
+                schedule: finalSchedule,
+                updatedBy: user,
+                lastUpdatedAt: new Date().toISOString()
+            } as EventRecord);
+
+            logAction('update', 'evento', `Evento ID ${editingId} editado. Status: ${finalStatus}`, user);
+            showToast('Evento atualizado!');
+            resetForm();
         }
-
-        const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
-
-        onUpdate({
-            id: editingId,
-            collaboratorId: formData.collaboratorId,
-            type: finalType,
-            typeLabel: label,
-            startDate: formData.startDate,
-            endDate: formData.endDate,
-            observation: formData.observation,
-            daysGained: gained,
-            daysUsed: used,
-            status: finalStatus,
-            collaboratorAcceptedProposal: acceptedFlag,
-            schedule: finalSchedule,
-            updatedBy: user,
-            lastUpdatedAt: new Date().toISOString()
-        } as EventRecord);
-
-        logAction('update', 'evento', `Evento ID ${editingId} editado. Status: ${finalStatus}`, user);
-        showToast('Evento atualizado!');
-        resetForm();
+    } catch (error) {
+        console.error("Erro no submit:", error);
+        showToast("Erro ao processar solicitação.", true);
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -574,7 +578,7 @@ export const Events: React.FC<EventsProps> = ({
             {!isMultiMode && (
                 <select
                 required
-                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100"
+                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100 disabled:text-gray-500"
                 value={formData.collaboratorId}
                 onChange={e => setFormData({...formData, collaboratorId: e.target.value})}
                 disabled={!!editingId || !isManager}
@@ -651,7 +655,7 @@ export const Events: React.FC<EventsProps> = ({
             <label className="text-xs font-semibold text-gray-600 mb-1">Tipo de Evento *</label>
             <select
               required
-              className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100"
+              className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100 disabled:text-gray-500"
               value={formData.type}
               onChange={e => setFormData({...formData, type: e.target.value})}
               disabled={!isManager} // Colaborador travado em 'folga' (via lógica do state)
@@ -856,8 +860,12 @@ export const Events: React.FC<EventsProps> = ({
             />
           </div>
 
-          <button type="submit" className="md:col-span-2 bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-transform active:scale-95">
-            {editingId ? (isManager ? 'Salvar Alterações' : 'Atualizar Solicitação') : (isManager ? (isMultiMode ? `Registrar para ${multiSelectedIds.length} Colaboradores` : 'Registrar') : 'Solicitar')}
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="md:col-span-2 bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Processando...' : (editingId ? (isManager ? 'Salvar Alterações' : 'Atualizar Solicitação') : (isManager ? (isMultiMode ? `Registrar para ${multiSelectedIds.length} Colaboradores` : 'Registrar') : 'Solicitar'))}
           </button>
         </form>
       </div>

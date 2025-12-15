@@ -42,7 +42,7 @@ export const dbService = {
   },
 
   // --- GENERIC LISTENERS (TEMPO REAL) ---
-  // CORREÇÃO: Ordem do spread alterada ({ ...doc.data(), id: doc.id }) para garantir que o ID do Firestore tenha prioridade
+  // A ordem ({ ...doc.data(), id: doc.id }) garante que o ID do Firestore seja usado
   
   subscribeToCollaborators: (callback: (data: Collaborator[]) => void) => {
     const q = query(collection(db, COLLECTIONS.COLLABORATORS));
@@ -117,7 +117,9 @@ export const dbService = {
   // Colaboradores
   addCollaborator: async (colab: Omit<Collaborator, 'id'>) => {
     console.log('💾 [DB] Salvando Colaborador...');
-    await addDoc(collection(db, COLLECTIONS.COLLABORATORS), colab);
+    // CORREÇÃO CRÍTICA: Remove ID local (UUID) para evitar duplicidade no documento. O Firestore gera o ID real.
+    const { id, ...rest } = colab as any;
+    await addDoc(collection(db, COLLECTIONS.COLLABORATORS), rest);
   },
   updateCollaborator: async (id: string, data: Partial<Collaborator>) => {
     await updateDoc(doc(db, COLLECTIONS.COLLABORATORS, id), data);
