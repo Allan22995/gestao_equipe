@@ -358,13 +358,49 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                    </select>
                    <button onClick={addEventType} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">Adicionar</button>
                </div>
-               <div className="space-y-2">
-                   {settings.eventTypes.map(t => (
-                       <div key={t.id} className="flex justify-between p-3 border border-gray-200 rounded-lg bg-white">
-                           <div className="flex gap-3 items-center"><span className="font-bold">{t.label}</span><span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{t.behavior}</span></div>
-                           {!['ferias','folga','trabalhado'].includes(t.id) && <button onClick={() => removeEventType(t.id)} className="text-red-500 text-sm font-bold">Excluir</button>}
-                       </div>
-                   ))}
+               
+               <div className="grid grid-cols-1 gap-6">
+                    {/* Eventos Neutros */}
+                    <div>
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider border-b pb-1">Eventos Neutros</h4>
+                        <div className="space-y-2">
+                            {settings.eventTypes.filter(t => t.behavior === 'neutral').map(t => (
+                                <div key={t.id} className="flex justify-between p-3 border border-gray-200 rounded-lg bg-white">
+                                    <div className="flex gap-3 items-center"><span className="font-bold">{t.label}</span><span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{t.behavior}</span></div>
+                                    {!['ferias','folga','trabalhado'].includes(t.id) && <button onClick={() => removeEventType(t.id)} className="text-red-500 text-sm font-bold">Excluir</button>}
+                                </div>
+                            ))}
+                            {settings.eventTypes.filter(t => t.behavior === 'neutral').length === 0 && <p className="text-xs text-gray-400 italic">Nenhum evento neutro.</p>}
+                        </div>
+                    </div>
+
+                    {/* Eventos Débitos */}
+                    <div>
+                        <h4 className="text-xs font-bold text-red-500 uppercase mb-2 tracking-wider border-b border-red-100 pb-1">Eventos Débitos</h4>
+                        <div className="space-y-2">
+                            {settings.eventTypes.filter(t => t.behavior === 'debit').map(t => (
+                                <div key={t.id} className="flex justify-between p-3 border border-gray-200 rounded-lg bg-white">
+                                    <div className="flex gap-3 items-center"><span className="font-bold">{t.label}</span><span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-100">{t.behavior}</span></div>
+                                    {!['ferias','folga','trabalhado'].includes(t.id) && <button onClick={() => removeEventType(t.id)} className="text-red-500 text-sm font-bold">Excluir</button>}
+                                </div>
+                            ))}
+                            {settings.eventTypes.filter(t => t.behavior === 'debit').length === 0 && <p className="text-xs text-gray-400 italic">Nenhum evento de débito.</p>}
+                        </div>
+                    </div>
+
+                    {/* Eventos Créditos */}
+                    <div>
+                        <h4 className="text-xs font-bold text-emerald-500 uppercase mb-2 tracking-wider border-b border-emerald-100 pb-1">Eventos Créditos</h4>
+                        <div className="space-y-2">
+                            {settings.eventTypes.filter(t => t.behavior.startsWith('credit')).map(t => (
+                                <div key={t.id} className="flex justify-between p-3 border border-gray-200 rounded-lg bg-white">
+                                    <div className="flex gap-3 items-center"><span className="font-bold">{t.label}</span><span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100">{t.behavior}</span></div>
+                                    {!['ferias','folga','trabalhado'].includes(t.id) && <button onClick={() => removeEventType(t.id)} className="text-red-500 text-sm font-bold">Excluir</button>}
+                                </div>
+                            ))}
+                            {settings.eventTypes.filter(t => t.behavior.startsWith('credit')).length === 0 && <p className="text-xs text-gray-400 italic">Nenhum evento de crédito.</p>}
+                        </div>
+                    </div>
                </div>
            </div>
        )}
