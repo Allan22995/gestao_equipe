@@ -61,6 +61,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
   // Coverage Rules State (Local until saved)
   const [localRules, setLocalRules] = useState<CoverageRule[]>(settings.coverageRules || []);
+  
+  // Rule Editor State
+  const [selectedRuleSector, setSelectedRuleSector] = useState('');
 
   useEffect(() => {
       setLocalRules(settings.coverageRules || []);
@@ -75,6 +78,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   useEffect(() => {
     if (currentUserAllowedSectors.length === 1) {
       setFilterSectors([currentUserAllowedSectors[0]]);
+      setSelectedRuleSector(currentUserAllowedSectors[0]);
     }
   }, [currentUserAllowedSectors]);
 
@@ -213,25 +217,74 @@ export const Simulator: React.FC<SimulatorProps> = ({
   }, [availableScalesOptions, filterScales]);
 
 
-  // --- HELPERS ---
+  // --- HELPERS FOR RULES ---
 
-  const getRuleForRole = (role: string) => {
-    return localRules.find(r => r.roleName === role)?.minPeople || 0;
+  const getAggregatedTarget = (role: string) => {
+      // Logic: Sum minPeople for all rules that match the active filters
+      let matchingRules = localRules.filter(r => r.roleName === role);
+
+      // Filter by Sector (if active in Simulator)
+      if (filterSectors.length > 0) {
+          matchingRules = matchingRules.filter(r => r.sector && filterSectors.includes(r.sector));
+      }
+
+      // Filter by Shift/Scale (if active in Simulator)
+      if (filterScales.length > 0) {
+          matchingRules = matchingRules.filter(r => r.shift && filterScales.includes(r.shift));
+      }
+
+      // If generic rules exists (no sector/shift), consider how to handle?
+      // For now, if we have granular rules, we sum them.
+      // If we have ONLY generic rules and no filter is applied, we use generic.
+      
+      const totalMin = matchingRules.reduce((acc, curr) => acc + (curr.minPeople || 0), 0);
+      return totalMin;
   };
 
-  const handleUpdateRule = (role: string, val: number) => {
+  const handleUpdateScopedRule = (role: string, sector: string, shift: string, val: number) => {
     const newRules = [...localRules];
-    const idx = newRules.findIndex(r => r.roleName === role);
+    // Find existing rule for this exact combination
+    const idx = newRules.findIndex(r => r.roleName === role && r.sector === sector && r.shift === shift);
+    
     if (idx >= 0) {
-        newRules[idx].minPeople = val;
+        if (val <= 0) {
+            // Remove rule if 0 to clean up
+            newRules.splice(idx, 1);
+        } else {
+            newRules[idx].minPeople = val;
+        }
     } else {
-        newRules.push({ roleName: role, minPeople: val });
+        if (val > 0) {
+            newRules.push({ roleName: role, minPeople: val, sector, shift });
+        }
     }
     setLocalRules(newRules);
   };
 
+  const getRuleValue = (role: string, sector: string, shift: string) => {
+      return localRules.find(r => r.roleName === role && r.sector === sector && r.shift === shift)?.minPeople || 0;
+  };
+
   const saveRules = () => {
       onSaveSettings({ ...settings, coverageRules: localRules });
+  };
+
+  // --- DATA PREP FOR RULES TAB ---
+  const shiftsInSelectedSector = useMemo(() => {
+      if (!selectedRuleSector) return [];
+      const colabsInSector = activeCollaborators.filter(c => c.sector === selectedRuleSector);
+      const shifts = new Set<string>();
+      colabsInSector.forEach(c => {
+          if (c.shiftType) shifts.add(c.shiftType);
+      });
+      return Array.from(shifts).sort();
+  }, [selectedRuleSector, activeCollaborators]);
+
+  const rolesInSectorAndShift = (shift: string) => {
+      if (!selectedRuleSector) return [];
+      const colabs = activeCollaborators.filter(c => c.sector === selectedRuleSector && c.shiftType === shift);
+      const roles = new Set(colabs.map(c => c.role));
+      return Array.from(roles).sort();
   };
 
   // --- SIMULATION ENGINE ---
@@ -239,7 +292,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   const simulationData = useMemo(() => {
     const start = new Date(simStartDate + 'T00:00:00');
     const end = new Date(simEndDate + 'T00:00:00');
-    const days: { date: string, label: string, isHoliday: string | null }[] = [];
+    const days: { date: string, label: string, weekDayName: string, isHoliday: string | null }[] = [];
     const weekDayShort = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
     // 1. Generate Date Range
@@ -251,6 +304,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
         days.push({
             date: dateStr,
             label: `${weekDayShort[dayOfWeek]} ${d.getDate()}`,
+            weekDayName: weekDayShort[dayOfWeek],
             isHoliday: holidays[dateStr] || null
         });
     }
@@ -295,12 +349,10 @@ export const Simulator: React.FC<SimulatorProps> = ({
         ? settings.roles.map(r => r.name) 
         : filterRoles;
 
-    // Filter Optimization
-    if (filterRoles.length === 0 && (filterSectors.length > 0 || filterBranches.length > 0 || filterScales.length > 0)) {
+    // Filter Optimization: Only show roles present in filtered collaborators to reduce noise
+    if (filterRoles.length === 0) {
         const rolesInFiltered = new Set(activeCollaboratorsFiltered.map(c => c.role));
         rolesToSimulate = rolesToSimulate.filter(r => rolesInFiltered.has(r));
-    } else if (filterRoles.length === 0) {
-        rolesToSimulate = rolesToSimulate.filter(r => availableRolesOptions.includes(r));
     }
 
     const results: Record<string, Record<string, { available: number, min: number, status: 'ok' | 'alert' | 'violation', missing: number }>> = {};
@@ -313,7 +365,10 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
     rolesToSimulate.forEach(role => {
         results[role] = {};
-        const roleMin = getRuleForRole(role);
+        
+        // Calculate Dynamic Target based on active filters (Sector/Shift)
+        const roleMin = getAggregatedTarget(role);
+        
         const roleColabs = activeCollaboratorsFiltered.filter(c => c.role === role);
 
         days.forEach(day => {
@@ -380,7 +435,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     });
 
     return { days, results, grandTotals };
-  }, [simStartDate, simEndDate, filterRoles, filterSectors, filterBranches, filterScales, activeCollaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions, availableBranches]);
+  }, [simStartDate, simEndDate, filterRoles, filterSectors, filterBranches, filterScales, activeCollaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableBranches]);
 
   // --- Group days into weeks for rendering ---
   const weeks = useMemo(() => {
@@ -447,50 +502,94 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
       {activeTab === 'rules' && (
           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-fadeIn">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                  <div>
-                    <h2 className="text-xl font-bold text-gray-800">Mínimo de Pessoas por Função</h2>
-                    <p className="text-sm text-gray-500 mt-1">Defina quantos colaboradores de cada função devem estar trabalhando para considerar o dia "coberto".</p>
+                    <h2 className="text-xl font-bold text-gray-800">Metas de Pessoas por Jornada</h2>
+                    <p className="text-sm text-gray-500 mt-1">Defina quantos colaboradores devem estar presentes em cada setor e turno.</p>
                  </div>
                  {canEditRules && (
                     <button 
                         onClick={saveRules}
                         className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-colors"
                     >
-                        Salvar Regras
+                        Salvar Todas Regras
                     </button>
                  )}
               </div>
 
               {!canEditRules && <div className="mb-4 p-3 bg-amber-50 text-amber-800 rounded border border-amber-200 text-sm">Modo Leitura: Você não tem permissão para editar regras.</div>}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {settings.roles.map(role => {
-                      const currentVal = getRuleForRole(role.name);
-                      return (
-                          <div key={role.name} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                              <span className="font-bold text-gray-700">{role.name}</span>
-                              <div className="flex items-center gap-3">
-                                  <button 
-                                    disabled={!canEditRules || currentVal <= 0}
-                                    onClick={() => handleUpdateRule(role.name, currentVal - 1)}
-                                    className="w-8 h-8 rounded-full bg-white border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-50 font-bold"
-                                  >
-                                      -
-                                  </button>
-                                  <span className="text-xl font-bold text-indigo-600 w-8 text-center">{currentVal}</span>
-                                  <button 
-                                    disabled={!canEditRules}
-                                    onClick={() => handleUpdateRule(role.name, currentVal + 1)}
-                                    className="w-8 h-8 rounded-full bg-white border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-50 font-bold"
-                                  >
-                                      +
-                                  </button>
-                              </div>
-                          </div>
-                      );
-                  })}
+              {/* Seletor de Setor */}
+              <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">1. Selecione o Setor para Configurar:</label>
+                  <select 
+                    value={selectedRuleSector}
+                    onChange={e => setSelectedRuleSector(e.target.value)}
+                    className="w-full md:w-1/2 p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500"
+                  >
+                      <option value="">Selecione...</option>
+                      {availableSectors.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                      ))}
+                  </select>
+                  {availableSectors.length === 0 && <p className="text-xs text-red-500 mt-1">Nenhum setor disponível para seu perfil.</p>}
               </div>
+
+              {selectedRuleSector ? (
+                  <div className="space-y-8">
+                      {shiftsInSelectedSector.length === 0 && (
+                          <p className="text-gray-500 italic">Nenhuma jornada identificada neste setor (cadastre colaboradores com turnos primeiro).</p>
+                      )}
+
+                      {shiftsInSelectedSector.map(shift => {
+                          const roles = rolesInSectorAndShift(shift);
+                          return (
+                              <div key={shift} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                                  <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center justify-between">
+                                      <h3 className="font-bold text-indigo-800 flex items-center gap-2">
+                                          <span className="text-xl">🕒</span> {shift}
+                                      </h3>
+                                      <span className="text-xs text-indigo-500 font-medium bg-white px-2 py-1 rounded-full border border-indigo-100">
+                                          {selectedRuleSector}
+                                      </span>
+                                  </div>
+                                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                      {roles.map(role => {
+                                          const currentVal = getRuleValue(role, selectedRuleSector, shift);
+                                          return (
+                                              <div key={role} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                                  <span className="font-medium text-gray-700 text-sm">{role}</span>
+                                                  <div className="flex items-center gap-2">
+                                                      <button 
+                                                        disabled={!canEditRules || currentVal <= 0}
+                                                        onClick={() => handleUpdateScopedRule(role, selectedRuleSector, shift, currentVal - 1)}
+                                                        className="w-7 h-7 rounded bg-white border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-50 font-bold"
+                                                      >
+                                                          -
+                                                      </button>
+                                                      <span className="text-lg font-bold text-indigo-600 w-6 text-center">{currentVal}</span>
+                                                      <button 
+                                                        disabled={!canEditRules}
+                                                        onClick={() => handleUpdateScopedRule(role, selectedRuleSector, shift, currentVal + 1)}
+                                                        className="w-7 h-7 rounded bg-white border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-50 font-bold"
+                                                      >
+                                                          +
+                                                      </button>
+                                                  </div>
+                                              </div>
+                                          );
+                                      })}
+                                      {roles.length === 0 && <p className="text-gray-400 text-sm italic">Nenhuma função neste turno.</p>}
+                                  </div>
+                              </div>
+                          );
+                      })}
+                  </div>
+              ) : (
+                  <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl">
+                      <p className="text-gray-400">Selecione um setor acima para visualizar e editar as regras.</p>
+                  </div>
+              )}
           </div>
       )}
 
@@ -663,7 +762,8 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
                                             return (
                                                 <div key={day.date} className={`w-12 h-16 flex flex-col items-center justify-center border rounded ${colorClass}`}>
-                                                    <span className="text-[10px] font-bold opacity-80 leading-tight text-center">{day.label.split(' ').map((l, i) => <div key={i}>{l}</div>)}</span>
+                                                    <span className="text-[9px] uppercase font-bold tracking-tight text-indigo-900/60 mb-0.5">{day.weekDayName}</span>
+                                                    <span className="text-[10px] font-bold opacity-80 leading-tight">{day.label.split(' ')[1]}</span>
                                                     {!day.isHoliday ? (
                                                         <span className="text-sm font-bold mt-1">{data.available}</span>
                                                     ) : <span className="text-xs mt-1">F</span>}
@@ -678,11 +778,15 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
                       {/* Matrix Rows by Role (Grouped by Week) */}
                       <div className="space-y-6">
-                        {Object.keys(simulationData.results).map(role => (
+                        {Object.keys(simulationData.results).map(role => {
+                            // Calculate specific goal for this role based on filters
+                            const aggregatedGoal = getAggregatedTarget(role);
+                            
+                            return (
                             <div key={role} className="border-b border-gray-100 pb-4 last:border-0">
                                 <div className="flex items-center gap-2 mb-2">
                                     <h3 className="font-bold text-gray-700">{role}</h3>
-                                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 rounded border border-gray-200">Meta: {getRuleForRole(role)} pessoas</span>
+                                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 rounded border border-gray-200">Meta Agrupada: {aggregatedGoal}</span>
                                 </div>
                                 <div className="flex gap-4 flex-wrap">
                                     {weeks.map((week, wIdx) => (
@@ -692,8 +796,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                                 const colorClass = getCellStyles(data.status, data.available, day.isHoliday);
 
                                                 return (
-                                                    <div key={`${role}-${day.date}`} className={`w-12 h-14 flex flex-col items-center justify-center border rounded text-xs ${colorClass}`} title={`${day.date}: ${data.available} disponíveis`}>
-                                                        <div className="text-[9px] opacity-60 leading-none mb-1">{day.label.split(' ')[0]}</div>
+                                                    <div key={`${role}-${day.date}`} className={`w-12 h-14 flex flex-col items-center justify-center border rounded text-xs ${colorClass}`} title={`${day.date}: ${data.available} disponíveis (Meta: ${data.min})`}>
+                                                        <div className="text-[8px] opacity-60 leading-none mb-1 font-bold uppercase">{day.weekDayName}</div>
+                                                        <div className="text-[9px] opacity-60 leading-none mb-1">{day.label.split(' ')[1]}</div>
                                                         <span className="font-bold text-sm">{day.isHoliday ? 'F' : data.available}</span>
                                                     </div>
                                                 );
@@ -702,7 +807,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                     ))}
                                 </div>
                             </div>
-                        ))}
+                        )})}
                       </div>
                   </div>
               </div>

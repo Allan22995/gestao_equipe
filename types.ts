@@ -92,6 +92,8 @@ export interface SystemMessage {
 export interface CoverageRule {
   roleName: string;
   minPeople: number;
+  sector?: string; // NOVO: Regra específica por setor
+  shift?: string;  // NOVO: Regra específica por turno
 }
 
 export interface SystemSettings {
