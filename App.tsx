@@ -239,7 +239,6 @@ function App() {
             currentUserAllowedSectors={allowedSectors}
             currentUserProfile={userProfile}
             userColabId={currentUserColab?.id || null}
-            availableBranches={availableBranches}
         />;
       case 'plantoes':
         return <OnCall 
