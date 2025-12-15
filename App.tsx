@@ -30,6 +30,20 @@ const defaultSettings: SystemSettings = {
   companies: []
 };
 
+// Mapeamento de Permissões por Aba
+const TAB_PERMISSIONS: Record<TabType, string> = {
+  'dashboard': 'dashboard:view',
+  'calendario': 'calendar:view',
+  'colaboradores': 'collaborators:view',
+  'eventos': 'events:view',
+  'plantoes': 'on_calls:view',
+  'previsao_ferias': 'vacation:view',
+  'saldo': 'balance:view',
+  'simulador': 'simulator:view',
+  'comunicados': 'comms:view',
+  'configuracoes': 'settings:view'
+};
+
 function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +110,28 @@ function App() {
       return roleConfig.permissions.includes(permId);
   };
 
+  // Efeito para validar e redirecionar se a aba atual não for permitida
+  useEffect(() => {
+    // Só executa se já tivermos carregado o usuário e configurações básicas
+    if (loading || !user) return;
+    
+    // Se ainda não carregou colaboradores ou roles, aguarda para evitar falsos negativos
+    if (collaborators.length > 0 && settings.roles.length > 0) {
+      const currentPerm = TAB_PERMISSIONS[activeTab];
+      
+      // Se não tem permissão para a aba atual
+      if (!hasPermission(currentPerm)) {
+         // Procura a primeira aba permitida
+         const availableTabs = Object.keys(TAB_PERMISSIONS) as TabType[];
+         const firstAllowed = availableTabs.find(t => hasPermission(TAB_PERMISSIONS[t]));
+         
+         if (firstAllowed) {
+            setActiveTab(firstAllowed);
+         }
+      }
+    }
+  }, [activeTab, user, collaborators, settings, loading]);
+
   const allowedSectors = useMemo(() => {
       if (userProfile === 'admin') return []; 
       if (roleConfig?.canViewAllSectors) return [];
@@ -139,6 +175,22 @@ function App() {
   }
 
   const renderContent = () => {
+    // Bloqueio de segurança na renderização
+    const requiredPerm = TAB_PERMISSIONS[activeTab];
+    if (!hasPermission(requiredPerm)) {
+       // Se os dados ainda estão carregando, mostra loading, senão mostra acesso negado
+       if (collaborators.length === 0) return <div className="p-8 text-center text-gray-500">Carregando perfil...</div>;
+       return (
+         <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <h3 className="text-lg font-bold text-gray-700">Acesso Restrito</h3>
+            <p className="text-sm">Você não tem permissão para acessar esta seção.</p>
+         </div>
+       );
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard 

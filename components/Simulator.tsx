@@ -665,22 +665,32 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               <select 
                                 required 
                                 value={draftForm.collaboratorId} 
-                                onChange={e => setDraftForm({...draftForm, collaboratorId: e.target.value})}
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDraftForm({...draftForm, collaboratorId: e.target.value})}
                                 className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white"
                               >
                                   <option value="">Selecione...</option>
                                   {activeCollaborators
                                     .filter(c => {
-                                      if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return false;
+                                      if (currentUserAllowedSectors.length > 0) {
+                                          if (!c.sector) return false;
+                                          if (!currentUserAllowedSectors.includes(c.sector)) return false;
+                                      }
+
                                       if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
-                                      if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
                                       
+                                      if (filterSectors.length > 0) {
+                                          if (!c.sector) return false;
+                                          if (!filterSectors.includes(c.sector)) return false;
+                                      }
+
                                       // Scale Filter check for Draft Form options
                                       if (filterScales.length > 0) {
                                           const colabScale = c.hasRotation && c.rotationGroup ? `Escala ${c.rotationGroup}` : null;
                                           const colabShift = c.shiftType;
-                                          const matchesScale = colabScale && filterScales.includes(colabScale);
-                                          const matchesShift = colabShift && filterScales.includes(colabShift);
+                                          
+                                          const matchesScale = colabScale ? filterScales.includes(colabScale) : false;
+                                          const matchesShift = colabShift ? filterScales.includes(colabShift) : false;
+
                                           if (!matchesScale && !matchesShift) return false;
                                       }
 
@@ -693,7 +703,11 @@ export const Simulator: React.FC<SimulatorProps> = ({
                           </div>
                           <div className="w-full md:w-32">
                               <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Tipo</label>
-                              <select value={draftForm.type} onChange={e => setDraftForm({...draftForm, type: e.target.value})} className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white">
+                              <select 
+                                value={draftForm.type} 
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDraftForm({...draftForm, type: e.target.value})} 
+                                className="w-full border border-gray-300 rounded-md p-1.5 text-sm bg-white"
+                              >
                                   <option value="ferias">Férias</option>
                                   <option value="folga">Folga</option>
                                   <option value="atestado">Atestado</option>
@@ -702,11 +716,23 @@ export const Simulator: React.FC<SimulatorProps> = ({
                           </div>
                           <div className="w-full md:w-36">
                               <label className="text-xs font-bold text-gray-500 uppercase block mb-1">De</label>
-                              <input required type="date" value={draftForm.startDate} onChange={e => setDraftForm({...draftForm, startDate: e.target.value})} className="w-full border border-gray-300 rounded-md p-1.5 text-sm" />
+                              <input 
+                                required 
+                                type="date" 
+                                value={draftForm.startDate} 
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraftForm({...draftForm, startDate: e.target.value})} 
+                                className="w-full border border-gray-300 rounded-md p-1.5 text-sm" 
+                              />
                           </div>
                           <div className="w-full md:w-36">
                               <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Até</label>
-                              <input required type="date" value={draftForm.endDate} onChange={e => setDraftForm({...draftForm, endDate: e.target.value})} className="w-full border border-gray-300 rounded-md p-1.5 text-sm" />
+                              <input 
+                                required 
+                                type="date" 
+                                value={draftForm.endDate} 
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraftForm({...draftForm, endDate: e.target.value})} 
+                                className="w-full border border-gray-300 rounded-md p-1.5 text-sm" 
+                              />
                           </div>
                           <button type="submit" className="bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2 px-4 rounded text-sm w-full md:w-auto">
                               Adicionar
