@@ -225,18 +225,14 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
       // Filter by Sector (if active in Simulator)
       if (filterSectors.length > 0) {
-          matchingRules = matchingRules.filter(r => r.sector && filterSectors.includes(r.sector));
+          matchingRules = matchingRules.filter(r => r.sector && filterSectors.includes(r.sector!));
       }
 
       // Filter by Shift/Scale (if active in Simulator)
       if (filterScales.length > 0) {
-          matchingRules = matchingRules.filter(r => r.shift && filterScales.includes(r.shift));
+          matchingRules = matchingRules.filter(r => r.shift && filterScales.includes(r.shift!));
       }
 
-      // If generic rules exists (no sector/shift), consider how to handle?
-      // For now, if we have granular rules, we sum them.
-      // If we have ONLY generic rules and no filter is applied, we use generic.
-      
       const totalMin = matchingRules.reduce((acc, curr) => acc + (curr.minPeople || 0), 0);
       return totalMin;
   };
@@ -335,8 +331,8 @@ export const Simulator: React.FC<SimulatorProps> = ({
             const colabScale = c.hasRotation && c.rotationGroup ? `Escala ${c.rotationGroup}` : null;
             const colabShift = c.shiftType;
             
-            const matchesScale = colabScale && filterScales.includes(colabScale);
-            const matchesShift = colabShift && filterScales.includes(colabShift);
+            const matchesScale = colabScale ? filterScales.includes(colabScale) : false;
+            const matchesShift = colabShift ? filterScales.includes(colabShift) : false;
 
             if (!matchesScale && !matchesShift) return false;
         }
@@ -440,7 +436,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   // --- Group days into weeks for rendering ---
   const weeks = useMemo(() => {
       if (!simulationData?.days) return [];
-      const chunks = [];
+      const chunks: (typeof simulationData.days)[] = [];
       for (let i = 0; i < simulationData.days.length; i += 7) {
           chunks.push(simulationData.days.slice(i, i + 7));
       }
