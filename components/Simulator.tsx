@@ -440,7 +440,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   // --- Group days into weeks for rendering ---
   const weeks = useMemo(() => {
       if (!simulationData?.days) return [];
-      const chunks: { date: string, label: string, weekDayName: string, isHoliday: string | null }[][] = [];
+      const chunks = [];
       for (let i = 0; i < simulationData.days.length; i += 7) {
           chunks.push(simulationData.days.slice(i, i + 7));
       }
