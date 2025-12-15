@@ -127,6 +127,7 @@ export interface EventRecord {
   daysUsed: number;
   status?: EventStatus;
   collaboratorAcceptedProposal?: boolean;
+  schedule?: Schedule; // NOVO: Escala temporária para este evento
   createdAt: string;
   updatedBy?: string;
   lastUpdatedAt?: string;

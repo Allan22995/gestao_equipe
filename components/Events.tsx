@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus } from '../types';
+import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus, Schedule, DaySchedule } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
 
 interface EventsProps {
@@ -25,6 +25,18 @@ const CalendarIcon = () => (
   </svg>
 );
 
+const initialSchedule: Schedule = {
+  segunda: { enabled: true, start: '08:00', end: '17:00', startsPreviousDay: false },
+  terca: { enabled: true, start: '08:00', end: '17:00', startsPreviousDay: false },
+  quarta: { enabled: true, start: '08:00', end: '17:00', startsPreviousDay: false },
+  quinta: { enabled: true, start: '08:00', end: '17:00', startsPreviousDay: false },
+  sexta: { enabled: true, start: '08:00', end: '17:00', startsPreviousDay: false },
+  sabado: { enabled: false, start: '', end: '', startsPreviousDay: false },
+  domingo: { enabled: false, start: '', end: '', startsPreviousDay: false },
+};
+
+const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+
 export const Events: React.FC<EventsProps> = ({ 
   collaborators, events, onAdd, onUpdate, onDelete, showToast, logAction, settings, 
   canCreate, canUpdate, canDelete, 
@@ -45,6 +57,16 @@ export const Events: React.FC<EventsProps> = ({
   // State para Busca no Histórico
   const [historySearchTerm, setHistorySearchTerm] = useState('');
 
+  // STATES PARA ESCALA TEMPORÁRIA
+  const [tempSchedule, setTempSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [copySourceId, setCopySourceId] = useState('');
+  
+  // States para o Dropdown Pesquisável de Cópia de Escala
+  const [isCopyDropdownOpen, setIsCopyDropdownOpen] = useState(false);
+  const [copySearchTerm, setCopySearchTerm] = useState('');
+  const copyDropdownRef = useRef<HTMLDivElement>(null);
+
   const [formData, setFormData] = useState({
     collaboratorId: '',
     type: '',
@@ -54,11 +76,14 @@ export const Events: React.FC<EventsProps> = ({
     status: 'pendente' as EventStatus
   });
 
-  // Fechar dropdown ao clicar fora
+  // Fechar dropdown multi e copy ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (multiDropdownRef.current && !multiDropdownRef.current.contains(event.target as Node)) {
         setIsMultiDropdownOpen(false);
+      }
+      if (copyDropdownRef.current && !copyDropdownRef.current.contains(event.target as Node)) {
+        setIsCopyDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -109,6 +134,21 @@ export const Events: React.FC<EventsProps> = ({
           c.role.toLowerCase().includes(multiSearch.toLowerCase())
       );
   }, [allowedCollaborators, multiSearch]);
+
+  // Filter for Copy Schedule Dropdown (Searchable)
+  const filteredCopyOptions = useMemo(() => {
+      return allowedCollaborators.filter(c => {
+          // Não permitir copiar do próprio usuário selecionado (opcional, mas boa prática)
+          if (formData.collaboratorId && c.id === formData.collaboratorId) return false;
+          
+          const term = copySearchTerm.toLowerCase();
+          return c.name.toLowerCase().includes(term) || c.colabId.toLowerCase().includes(term);
+      }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allowedCollaborators, copySearchTerm, formData.collaboratorId]);
+
+  const selectedCopyCollaboratorName = useMemo(() => {
+      return activeCollaborators.find(c => c.id === copySourceId)?.name;
+  }, [copySourceId, activeCollaborators]);
 
   // Filter Events History and Sort by Date Descending
   const allowedEvents = useMemo(() => {
@@ -165,6 +205,10 @@ export const Events: React.FC<EventsProps> = ({
     setEditingId(null);
     setIsMultiMode(false);
     setMultiSelectedIds([]);
+    setTempSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+    setSelectedTemplateId('');
+    setCopySourceId('');
+    setCopySearchTerm('');
     setFormData({
       collaboratorId: (!isManager && userColabId) ? userColabId : '',
       type: (!isManager) ? 'folga' : '', // Default to Folga for collaborator
@@ -173,6 +217,48 @@ export const Events: React.FC<EventsProps> = ({
       observation: '',
       status: 'pendente'
     });
+  };
+
+  // Check if current event type allows scheduling (is a working event)
+  const isWorkingType = useMemo(() => {
+      const type = settings.eventTypes.find(t => t.id === formData.type);
+      // 'trabalhado' is built-in ID for working extra.
+      // behavior 'credit_2x' or 'credit_1x' usually implies working.
+      return formData.type === 'trabalhado' || (type && (type.behavior === 'credit_1x' || type.behavior === 'credit_2x'));
+  }, [formData.type, settings.eventTypes]);
+
+  // Schedule Handlers
+  const handleScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, value: any) => {
+    setTempSchedule(prev => ({
+      ...prev,
+      [day]: { ...prev[day], [field]: value }
+    }));
+  };
+
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setCopySourceId('');
+    if (!templateId) return;
+
+    const template = settings.scheduleTemplates?.find(t => t.id === templateId);
+    if (template) {
+      setTempSchedule(JSON.parse(JSON.stringify(template.schedule)));
+    }
+  };
+
+  const handleCopyFromCollaborator = (sourceId: string) => {
+    setCopySourceId(sourceId);
+    setIsCopyDropdownOpen(false);
+    setSelectedTemplateId('');
+    setCopySearchTerm('');
+    
+    if (!sourceId) return;
+
+    const sourceColab = collaborators.find(c => c.id === sourceId);
+    if (sourceColab) {
+        setTempSchedule(JSON.parse(JSON.stringify(sourceColab.schedule)));
+        showToast(`Escala copiada de ${sourceColab.name}!`);
+    }
   };
 
   const handleEdit = (evt: EventRecord) => {
@@ -195,6 +281,13 @@ export const Events: React.FC<EventsProps> = ({
       observation: evt.observation,
       status: evt.status || 'aprovado'
     });
+
+    if (evt.schedule) {
+        setTempSchedule(JSON.parse(JSON.stringify(evt.schedule)));
+    } else {
+        setTempSchedule(JSON.parse(JSON.stringify(initialSchedule)));
+    }
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -258,6 +351,10 @@ export const Events: React.FC<EventsProps> = ({
 
     const user = isManager ? 'Gestor/Admin' : (getColabName(userColabId || '') || 'Colaborador');
     
+    // Determina a escala a ser salva
+    // Se o tipo for de trabalho e houver configuração, salva. Senão undefined.
+    const finalSchedule = isWorkingType ? tempSchedule : undefined;
+
     // --- LÓGICA DE CRIAÇÃO (ADD) ---
     if (!editingId) {
         if (!canCreate) {
@@ -295,6 +392,7 @@ export const Events: React.FC<EventsProps> = ({
                     daysGained: gained,
                     daysUsed: used,
                     status: formData.status, // Manager defines status
+                    schedule: finalSchedule, // Save temporary schedule
                     createdAt: new Date().toISOString()
                 };
                 onAdd(newEvent);
@@ -332,6 +430,7 @@ export const Events: React.FC<EventsProps> = ({
             daysGained: gained,
             daysUsed: used,
             status: finalStatus,
+            schedule: finalSchedule,
             createdAt: new Date().toISOString()
         };
         onAdd(newEvent);
@@ -372,6 +471,7 @@ export const Events: React.FC<EventsProps> = ({
             daysUsed: used,
             status: finalStatus,
             collaboratorAcceptedProposal: acceptedFlag,
+            schedule: finalSchedule,
             updatedBy: user,
             lastUpdatedAt: new Date().toISOString()
         } as EventRecord);
@@ -596,6 +696,132 @@ export const Events: React.FC<EventsProps> = ({
             </div>
           </div>
 
+          {/* --- JORNADA TEMPORÁRIA (MOSTRAR APENAS SE FOR TIPO TRABALHADO) --- */}
+          {isWorkingType && isManager && (
+              <div className="md:col-span-2 border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-bold text-gray-800 mb-4 bg-purple-50 p-2 rounded text-purple-800 border border-purple-100">
+                      Jornada Temporária (Substitui Escala Original nestas datas)
+                  </h3>
+                  
+                  <div className="flex flex-col md:flex-row gap-4 mb-4">
+                      {/* Carregar Modelo */}
+                      {settings.scheduleTemplates.length > 0 && (
+                        <div className="flex-1 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
+                           <span className="text-xs font-bold text-blue-800 whitespace-nowrap">Carregar Modelo:</span>
+                           <select 
+                             value={selectedTemplateId} 
+                             onChange={(e) => handleTemplateSelect(e.target.value)}
+                             className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white truncate"
+                           >
+                              <option value="">Selecione...</option>
+                              {settings.scheduleTemplates.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                           </select>
+                        </div>
+                      )}
+
+                      {/* Copiar de Colaborador (Searchable Dropdown) */}
+                      <div className="flex-1 bg-purple-50 p-3 rounded-lg border border-purple-100 relative" ref={copyDropdownRef}>
+                           <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-bold text-purple-800 whitespace-nowrap">Copiar Escala de:</span>
+                           </div>
+                           
+                           <div 
+                              onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)}
+                              className="w-full bg-white border border-purple-200 rounded p-1.5 flex justify-between items-center cursor-pointer hover:border-purple-300"
+                           >
+                              <span className={`text-sm truncate ${copySourceId ? 'text-purple-900 font-medium' : 'text-gray-400'}`}>
+                                  {selectedCopyCollaboratorName || "Selecione..."}
+                              </span>
+                              <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                           </div>
+
+                           {isCopyDropdownOpen && (
+                               <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl z-50 max-h-60 flex flex-col overflow-hidden animate-fadeIn">
+                                   <div className="p-2 border-b border-gray-100 bg-gray-50">
+                                       <input 
+                                           type="text" 
+                                           autoFocus
+                                           className="w-full border border-gray-300 rounded px-2 py-1 text-xs outline-none focus:border-purple-500"
+                                           placeholder="Buscar Nome ou ID..."
+                                           value={copySearchTerm}
+                                           onChange={e => setCopySearchTerm(e.target.value)}
+                                       />
+                                   </div>
+                                   <div className="overflow-y-auto flex-1 p-1">
+                                       {filteredCopyOptions.map(c => (
+                                           <div 
+                                               key={c.id} 
+                                               onClick={() => handleCopyFromCollaborator(c.id)}
+                                               className={`flex justify-between items-center p-2 hover:bg-purple-50 cursor-pointer rounded text-sm ${copySourceId === c.id ? 'bg-purple-50 font-bold text-purple-700' : 'text-gray-700'}`}
+                                           >
+                                               <span className="truncate mr-2">{c.name}</span>
+                                               <span className="text-xs text-gray-400 font-mono bg-gray-100 px-1 rounded shrink-0">#{c.colabId}</span>
+                                           </div>
+                                       ))}
+                                       {filteredCopyOptions.length === 0 && (
+                                           <p className="text-center text-gray-400 text-xs py-2">Nenhum colaborador encontrado.</p>
+                                       )}
+                                   </div>
+                               </div>
+                           )}
+                      </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {daysOrder.map(day => (
+                      <div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="w-24">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={tempSchedule[day].enabled} 
+                              onChange={e => handleScheduleChange(day, 'enabled', e.target.checked)}
+                              className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                            />
+                            <span className="capitalize font-medium text-gray-700 text-sm">{day}</span>
+                          </label>
+                        </div>
+                        
+                        <div className={`flex items-center gap-2 flex-1 transition-opacity ${!tempSchedule[day].enabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                          <div className="flex flex-col">
+                             <span className="text-[10px] text-gray-500 font-bold mb-0.5 uppercase">Início</span>
+                             <input 
+                              type="time" 
+                              value={tempSchedule[day].start} 
+                              onChange={e => handleScheduleChange(day, 'start', e.target.value)}
+                              className="border border-gray-300 rounded px-2 py-1 text-sm"
+                             />
+                          </div>
+                          <span className="text-gray-400 font-bold text-xs pt-4">até</span>
+                          <div className="flex flex-col">
+                             <span className="text-[10px] text-gray-500 font-bold mb-0.5 uppercase">Fim</span>
+                             <input 
+                              type="time" 
+                              value={tempSchedule[day].end} 
+                              onChange={e => handleScheduleChange(day, 'end', e.target.value)}
+                              className="border border-gray-300 rounded px-2 py-1 text-sm"
+                             />
+                          </div>
+                          <div className="flex flex-col ml-4 pt-3">
+                             <label className="flex items-center gap-1 cursor-pointer bg-white px-2 py-1.5 rounded border border-gray-200 hover:bg-gray-50">
+                                <input 
+                                  type="checkbox" 
+                                  checked={tempSchedule[day].startsPreviousDay || false} 
+                                  onChange={e => handleScheduleChange(day, 'startsPreviousDay', e.target.checked)}
+                                  className="rounded text-indigo-600 w-3 h-3"
+                                />
+                                <span className="text-xs text-gray-600">Inicia dia anterior (-1d)</span>
+                             </label>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+              </div>
+          )}
+
           <div className="flex flex-col md:col-span-2">
             <label className="text-xs font-semibold text-gray-600 mb-1">Observação {formData.status === 'nova_opcao' && <span className="text-red-500 font-bold">(Descreva a nova opção aqui)</span>}</label>
             <input
@@ -669,6 +895,13 @@ export const Events: React.FC<EventsProps> = ({
                            <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold flex items-center gap-1">
                               ✓ Aceite do Colaborador
                            </span>
+                        )}
+                        
+                        {/* Indicador de Escala Temporária */}
+                        {e.schedule && (
+                            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-bold flex items-center gap-1">
+                               ⏱️ Escala Alterada
+                            </span>
                         )}
                     </div>
                     <div className="text-sm text-gray-600">

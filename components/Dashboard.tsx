@@ -268,7 +268,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
              if (isOff) return false;
          }
 
-         if (!scheduleDay.enabled) return false;
+         if (!scheduleDay || !scheduleDay.enabled) return false;
          return isTimeInRange(scheduleDay.start, scheduleDay.end, !!scheduleDay.startsPreviousDay, context);
     };
 
@@ -319,18 +319,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       let isWorkingShift = false;
 
-      // Check standard schedule
-      if (isShiftActive(c.schedule[prevDayKey], 'yesterday', c)) isWorkingShift = true;
-      if (!isWorkingShift && isShiftActive(c.schedule[currentDayKey], 'today', c)) isWorkingShift = true;
-      if (!isWorkingShift && isShiftActive(c.schedule[nextDayKey], 'tomorrow', c)) isWorkingShift = true;
+      // 1. Determine which schedule to use (Default or Temporary Event Schedule)
+      let scheduleToUse = c.schedule;
+      let usingTempSchedule = false;
+
+      if (todayEvent && todayEvent.schedule) {
+          scheduleToUse = todayEvent.schedule;
+          usingTempSchedule = true;
+      }
+
+      // 2. Check schedule status based on the selected schedule source
+      if (isShiftActive(scheduleToUse[prevDayKey], 'yesterday', c)) isWorkingShift = true;
+      if (!isWorkingShift && isShiftActive(scheduleToUse[currentDayKey], 'today', c)) isWorkingShift = true;
+      if (!isWorkingShift && isShiftActive(scheduleToUse[nextDayKey], 'tomorrow', c)) isWorkingShift = true;
 
       let status = 'Fora do Horário';
       let statusColor = 'bg-blue-100 text-blue-800';
       let isActive = false;
 
-      // Check Rotation Off Day (Domingo de Folga pela Escala)
+      // Check Rotation Off Day (Domingo de Folga pela Escala) - Only if NOT using temp schedule override
       let isRotationOff = false;
-      if (isSunday && c.hasRotation && c.rotationGroup) {
+      if (!usingTempSchedule && isSunday && c.hasRotation && c.rotationGroup) {
           isRotationOff = checkRotationDay(now, c.rotationStartDate);
       }
 
@@ -366,22 +375,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
              status = `Dia Extra (${evtLabel})`;
              statusColor = 'bg-purple-100 text-purple-800 border border-purple-200';
              
-             // --- LÓGICA DE HORÁRIO EM DIA EXTRA ---
-             let refSchedule = c.schedule[currentDayKey];
-             let useSchedule = refSchedule;
-             
-             if (!refSchedule.enabled) {
-                 const weekdays: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
-                 const fallbackDay = weekdays.find(d => c.schedule[d].enabled);
-                 if (fallbackDay) {
-                     useSchedule = c.schedule[fallbackDay];
-                 }
-             }
-
-             if (useSchedule && useSchedule.start && useSchedule.end) {
-                 isActive = isTimeInRange(useSchedule.start, useSchedule.end, !!useSchedule.startsPreviousDay, 'today');
+             // Se tiver escala temporária definida no evento, usa isWorkingShift calculado acima
+             if (todayEvent.schedule) {
+                 isActive = isWorkingShift;
              } else {
-                 isActive = false; 
+                 // Fallback antigo: tenta usar a escala normal se não tiver temp schedule
+                 let refSchedule = c.schedule[currentDayKey];
+                 if (!refSchedule.enabled) {
+                     const weekdays: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
+                     const fallbackDay = weekdays.find(d => c.schedule[d].enabled);
+                     if (fallbackDay) {
+                         refSchedule = c.schedule[fallbackDay];
+                     }
+                 }
+                 if (refSchedule && refSchedule.start && refSchedule.end) {
+                     isActive = isTimeInRange(refSchedule.start, refSchedule.end, !!refSchedule.startsPreviousDay, 'today');
+                 } else {
+                     isActive = false; 
+                 }
              }
 
              if (!isActive) {
@@ -443,6 +454,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  const evtLabel = settings.eventTypes.find(t => t.id === e.type)?.label || e.type;
                  let displayLabel = evtLabel;
                  if (e.type === 'trabalhado') displayLabel = `Folga Trabalhada - Extra`;
+                 if (e.schedule) displayLabel += ` (Escala Alterada)`;
                  
                  let colabNameDisplay = colab.name;
                  if (colab.hasRotation && colab.rotationGroup) colabNameDisplay += ` [${colab.rotationGroup}]`;
