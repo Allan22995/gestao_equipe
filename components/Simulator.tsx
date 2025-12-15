@@ -70,7 +70,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   }, [settings.coverageRules]);
 
   // Filtrar colaboradores ativos primeiro (Legacy undefined = true)
-  const activeCollaborators = useMemo(() => {
+  const activeCollaborators = useMemo<Collaborator[]>(() => {
      return collaborators.filter(c => c.active !== false);
   }, [collaborators]);
 
@@ -310,7 +310,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     }
 
     // 2. Filter Collaborators (Security + Role Filter + Sector Filter + Scale Filter)
-    const activeCollaboratorsFiltered = activeCollaborators.filter(c => {
+    const activeCollaboratorsFiltered = activeCollaborators.filter((c: Collaborator) => {
         // Sector Permission (Security)
         if (currentUserAllowedSectors.length > 0) {
             if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
