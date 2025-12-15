@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
 import { Modal } from './ui/Modal';
@@ -73,8 +73,20 @@ const Icons = {
   Special: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
 };
 
+// --- CONFIGURAÇÃO DAS ABAS (COM PERMISSÕES) ---
+const SETTINGS_TABS = [
+  { id: 'general', label: '🏢 Estrutura', reqPerm: 'settings:view_structure' },
+  { id: 'roles', label: '👥 Funções', reqPerm: 'settings:view_roles' },
+  { id: 'events', label: '📅 Eventos', reqPerm: 'settings:view_event_types' },
+  { id: 'rotations', label: '🔄 Escalas', reqPerm: 'settings:view_rotations' },
+  { id: 'templates', label: '⏰ Jornadas', reqPerm: 'settings:view_templates' },
+  { id: 'integrations', label: '🔗 Integrações', reqPerm: 'settings:view_integrations' },
+  { id: 'seasonal', label: '🎉 Sazonais', reqPerm: 'settings:view_seasonal' },
+  { id: 'system', label: '📢 Avisos', reqPerm: 'settings:view_system_msg' },
+];
+
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   // --- GENERAL STATES ---
@@ -118,6 +130,18 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       level: settings.systemMessage?.level || 'info',
       message: settings.systemMessage?.message || ''
   });
+
+  // Filter Tabs based on Permissions
+  const allowedTabs = useMemo(() => {
+      return SETTINGS_TABS.filter(tab => hasPermission(tab.reqPerm));
+  }, [hasPermission]);
+
+  // Set initial active tab
+  useEffect(() => {
+      if (allowedTabs.length > 0 && !allowedTabs.find(t => t.id === activeTab)) {
+          setActiveTab(allowedTabs[0].id);
+      }
+  }, [allowedTabs, activeTab]);
 
   // Helper to update settings
   const updateSettings = async (newSettings: SystemSettings) => {
@@ -332,16 +356,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     <div className="space-y-6">
        {/* TABS HEADER */}
        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 flex overflow-x-auto custom-scrollbar">
-          {[
-            { id: 'general', label: '🏢 Estrutura', icon: '' },
-            { id: 'roles', label: '👥 Funções', icon: '' },
-            { id: 'events', label: '📅 Eventos', icon: '' },
-            { id: 'rotations', label: '🔄 Escalas', icon: '' },
-            { id: 'templates', label: '⏰ Jornadas', icon: '' },
-            { id: 'integrations', label: '🔗 Integrações', icon: '' },
-            { id: 'seasonal', label: '🎉 Sazonais', icon: '' },
-            { id: 'system', label: '📢 Avisos', icon: '' },
-          ].map(tab => (
+          {allowedTabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -350,9 +365,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                   {tab.label}
               </button>
           ))}
+          {allowedTabs.length === 0 && <span className="p-3 text-sm text-gray-400 italic">Sem permissões de visualização.</span>}
        </div>
 
-       {/* --- CONTENT: GENERAL --- */}
+       {/* --- CONTENT: GENERAL (STRUCTURE) --- */}
        {activeTab === 'general' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                {/* Branches Card */}
@@ -363,7 +379,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <div className="relative flex-1">
                            <input 
                             type="text" 
-                            disabled={!hasPermission('settings:edit_hierarchy')}
+                            disabled={!hasPermission('settings:edit_structure')}
                             value={newBranch} 
                             onChange={e => { setNewBranch(e.target.value); validate('newBranch', e.target.value); }} 
                             onKeyDown={e => e.key === 'Enter' && addBranch()}
@@ -373,10 +389,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            {errors.newBranch && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newBranch}</span>}
                        </div>
                        <button 
-                        disabled={!hasPermission('settings:edit_hierarchy')}
+                        disabled={!hasPermission('settings:edit_structure')}
                         onClick={addBranch} 
                         className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-                        title={!hasPermission('settings:edit_hierarchy') ? "Sem permissão para adicionar" : ""}
+                        title={!hasPermission('settings:edit_structure') ? "Sem permissão para adicionar" : ""}
                        >
                            {Icons.Plus}
                        </button>
@@ -387,10 +403,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            <div key={b} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
                                <span className="font-medium">{b}</span> 
                                <button 
-                                disabled={!hasPermission('settings:edit_hierarchy')}
+                                disabled={!hasPermission('settings:edit_structure')}
                                 onClick={() => removeBranch(b)} 
                                 className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                                title={!hasPermission('settings:edit_hierarchy') ? "Sem permissão para remover" : "Remover"}
+                                title={!hasPermission('settings:edit_structure') ? "Sem permissão para remover" : "Remover"}
                                >
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                </button>
@@ -408,7 +424,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <div className="relative flex-1">
                            <input 
                             type="text" 
-                            disabled={!hasPermission('settings:edit_hierarchy')}
+                            disabled={!hasPermission('settings:edit_structure')}
                             value={newSector} 
                             onChange={e => { setNewSector(e.target.value); validate('newSector', e.target.value); }}
                             onKeyDown={e => e.key === 'Enter' && addSector()}
@@ -418,10 +434,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            {errors.newSector && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newSector}</span>}
                        </div>
                        <button 
-                        disabled={!hasPermission('settings:edit_hierarchy')}
+                        disabled={!hasPermission('settings:edit_structure')}
                         onClick={addSector} 
                         className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-                        title={!hasPermission('settings:edit_hierarchy') ? "Sem permissão para adicionar" : ""}
+                        title={!hasPermission('settings:edit_structure') ? "Sem permissão para adicionar" : ""}
                        >
                            {Icons.Plus}
                        </button>
@@ -432,10 +448,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            <div key={s} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
                                <span className="font-medium">{s}</span> 
                                <button 
-                                disabled={!hasPermission('settings:edit_hierarchy')}
+                                disabled={!hasPermission('settings:edit_structure')}
                                 onClick={() => removeSector(s)} 
                                 className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                                title={!hasPermission('settings:edit_hierarchy') ? "Sem permissão para remover" : "Remover"}
+                                title={!hasPermission('settings:edit_structure') ? "Sem permissão para remover" : "Remover"}
                                >
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                </button>

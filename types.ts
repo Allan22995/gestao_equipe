@@ -302,39 +302,42 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   {
     id: 'settings',
     label: 'Configurações',
-    description: 'Administração do sistema.',
+    description: 'Administração granular do sistema.',
     icon: '⚙️',
     actions: [
-      { id: 'settings:view', label: 'Acessar Tela', type: 'view' },
+      { id: 'settings:view', label: 'Acesso Geral à Aba', type: 'view' },
       
-      // Integrações
-      { id: 'settings:view_integrations', label: 'Ver Integrações (Links)', type: 'special' },
+      // 1. Estrutura
+      { id: 'settings:view_structure', label: 'Ver Estrutura (Filiais/Setores)', type: 'view' },
+      { id: 'settings:edit_structure', label: 'Gerenciar Estrutura', type: 'special' },
+      
+      // 2. Funções
+      { id: 'settings:view_roles', label: 'Ver Funções', type: 'view' },
+      { id: 'settings:manage_access', label: 'Gerenciar Funções e Acessos', type: 'special' },
+      
+      // 3. Tipos de Evento
+      { id: 'settings:view_event_types', label: 'Ver Tipos de Evento', type: 'view' },
+      { id: 'settings:edit_event_types', label: 'Editar Tipos de Evento', type: 'special' },
+      
+      // 4. Escalas
+      { id: 'settings:view_rotations', label: 'Ver Escalas', type: 'view' },
+      { id: 'settings:edit_rotations', label: 'Editar Escalas', type: 'special' },
+      
+      // 5. Modelos Jornada
+      { id: 'settings:view_templates', label: 'Ver Modelos de Jornada', type: 'view' },
+      { id: 'settings:edit_templates', label: 'Editar Modelos de Jornada', type: 'special' },
+      
+      // 6. Integrações
+      { id: 'settings:view_integrations', label: 'Ver Integrações', type: 'view' },
       { id: 'settings:edit_integrations', label: 'Editar Integrações', type: 'special' },
       
-      // Sazonais
-      { id: 'settings:view_seasonal', label: 'Ver Sazonais', type: 'special' },
+      // 7. Sazonais
+      { id: 'settings:view_seasonal', label: 'Ver Sazonais', type: 'view' },
       { id: 'settings:edit_seasonal', label: 'Editar Sazonais', type: 'special' },
-      
-      // Hierarquia
-      { id: 'settings:view_hierarchy', label: 'Ver Filiais/Setores', type: 'special' },
-      { id: 'settings:edit_hierarchy', label: 'Gerenciar Filiais/Setores', type: 'special' },
-      
-      // Tipos de Evento
-      { id: 'settings:view_event_types', label: 'Ver Tipos Evento', type: 'special' },
-      { id: 'settings:edit_event_types', label: 'Editar Tipos Evento', type: 'special' },
-      
-      // Modelos de Jornada
-      { id: 'settings:view_templates', label: 'Ver Modelos Jornada', type: 'special' },
-      { id: 'settings:edit_templates', label: 'Criar/Editar Modelos', type: 'special' },
-      
-      // Escalas
-      { id: 'settings:view_rotations', label: 'Ver Escalas', type: 'special' },
-      { id: 'settings:edit_rotations', label: 'Editar Escalas', type: 'special' },
 
-      // Access Tab
-      { id: 'settings:manage_access', label: 'Controle de Acesso', type: 'special' },
-      // System Tab
-      { id: 'settings:manage_system_msg', label: 'Avisos do Sistema', type: 'special' }
+      // 8. Avisos
+      { id: 'settings:view_system_msg', label: 'Ver Config de Avisos', type: 'view' },
+      { id: 'settings:manage_system_msg', label: 'Editar Avisos', type: 'special' }
     ]
   }
 ];
