@@ -225,14 +225,18 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
       // Filter by Sector (if active in Simulator)
       if (filterSectors.length > 0) {
-          matchingRules = matchingRules.filter(r => r.sector && filterSectors.includes(r.sector!));
+          matchingRules = matchingRules.filter(r => r.sector && filterSectors.includes(r.sector));
       }
 
       // Filter by Shift/Scale (if active in Simulator)
       if (filterScales.length > 0) {
-          matchingRules = matchingRules.filter(r => r.shift && filterScales.includes(r.shift!));
+          matchingRules = matchingRules.filter(r => r.shift && filterScales.includes(r.shift));
       }
 
+      // If generic rules exists (no sector/shift), consider how to handle?
+      // For now, if we have granular rules, we sum them.
+      // If we have ONLY generic rules and no filter is applied, we use generic.
+      
       const totalMin = matchingRules.reduce((acc, curr) => acc + (curr.minPeople || 0), 0);
       return totalMin;
   };
@@ -318,21 +322,21 @@ export const Simulator: React.FC<SimulatorProps> = ({
         // Visual Filters
         
         // Apply Branch Filter (Multi)
-        if (filterBranches.length > 0 && !filterBranches.includes(c.branch as string)) return false;
+        if (filterBranches.length > 0 && !filterBranches.includes(c.branch)) return false;
 
         // If filterRoles has items, the collaborator's role MUST be in it.
         if (filterRoles.length > 0 && !filterRoles.includes(c.role)) return false;
         
         // Apply Sector Filter (Multi)
-        if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector as string))) return false;
+        if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
 
         // Apply Scale/Shift Filter (Multi)
         if (filterScales.length > 0) {
             const colabScale = c.hasRotation && c.rotationGroup ? `Escala ${c.rotationGroup}` : null;
             const colabShift = c.shiftType;
             
-            const matchesScale = colabScale ? filterScales.includes(colabScale as string) : false;
-            const matchesShift = colabShift ? filterScales.includes(colabShift as string) : false;
+            const matchesScale = colabScale && filterScales.includes(colabScale);
+            const matchesShift = colabShift && filterScales.includes(colabShift);
 
             if (!matchesScale && !matchesShift) return false;
         }
@@ -436,7 +440,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   // --- Group days into weeks for rendering ---
   const weeks = useMemo(() => {
       if (!simulationData?.days) return [];
-      const chunks: (typeof simulationData.days)[] = [];
+      const chunks = [];
       for (let i = 0; i < simulationData.days.length; i += 7) {
           chunks.push(simulationData.days.slice(i, i + 7));
       }

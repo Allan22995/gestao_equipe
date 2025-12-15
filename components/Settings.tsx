@@ -141,7 +141,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       setIsMirrorModalOpen(false);
       showToast(`Permissões copiadas!`);
   };
-  
   const togglePermission = (roleName: string, permissionId: string) => {
     const updatedRoles = settings.roles.map(r => {
       if (r.name !== roleName) return r;
@@ -150,43 +149,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     });
     updateSettings({ ...settings, roles: updatedRoles });
   };
-
-  // --- NEW HANDLERS FOR BULK ACTIONS ---
-  
-  // Toggle all permissions in the current module for a specific role (Row Action)
-  const toggleRowPermissions = (roleName: string, moduleActionIds: string[]) => {
-      const role = settings.roles.find(r => r.name === roleName);
-      if (!role) return;
-      
-      const rolePerms = new Set(role.permissions);
-      const allEnabled = moduleActionIds.every(id => rolePerms.has(id));
-      
-      if (allEnabled) {
-          moduleActionIds.forEach(id => rolePerms.delete(id));
-      } else {
-          moduleActionIds.forEach(id => rolePerms.add(id));
-      }
-      
-      const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, permissions: Array.from(rolePerms) } : r);
-      updateSettings({ ...settings, roles: updatedRoles });
-  };
-
-  // Toggle specific permission for ALL roles (Column Action)
-  const toggleColumnPermissions = (permissionId: string) => {
-      const allRolesHaveIt = settings.roles.every(r => r.permissions.includes(permissionId));
-      
-      const updatedRoles = settings.roles.map(r => {
-          const rolePerms = new Set(r.permissions);
-          if (allRolesHaveIt) {
-              rolePerms.delete(permissionId);
-          } else {
-              rolePerms.add(permissionId);
-          }
-          return { ...r, permissions: Array.from(rolePerms) };
-      });
-      updateSettings({ ...settings, roles: updatedRoles });
-  };
-
 
   // --- HANDLERS: EVENTS ---
   const addEventType = () => {
@@ -579,126 +541,34 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* MODALS */}
        
        {/* 1. PERMISSIONS MODAL */}
-       <Modal 
-            isOpen={!!selectedModule} 
-            onClose={() => setSelectedModule(null)} 
-            title={currentModuleDef ? `Permissões: ${currentModuleDef.label}` : ''} 
-            maxWidth="max-w-[95vw]"
-        >
-            {currentModuleDef && (
-                <div className="flex flex-col h-full bg-white max-h-[85vh]">
-                    <div className="mb-4 bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg flex justify-between items-center shrink-0">
-                        <div>
-                            <p className="font-bold text-indigo-900 text-sm">Gerenciamento de Acesso</p>
-                            <p className="text-xs text-indigo-700 mt-1">{currentModuleDef.description}</p>
-                        </div>
-                        <div className="text-xs text-indigo-600 bg-white px-3 py-1 rounded-full border border-indigo-100 shadow-sm">
-                            {settings.roles.length} Funções Configuradas
-                        </div>
-                    </div>
-
-                    <div className="overflow-auto border border-gray-200 rounded-xl shadow-inner flex-1 custom-scrollbar relative bg-gray-50/50">
-                        <table className="w-full text-sm border-collapse relative">
-                            <thead className="sticky top-0 z-30 shadow-sm bg-gray-100">
-                                <tr>
-                                    <th className="text-left p-3 font-bold text-gray-700 bg-gray-100 sticky left-0 z-40 border-b border-r border-gray-300 min-w-[180px]">
-                                        <span className="uppercase text-[10px] tracking-wider text-gray-500 ml-1">Função</span>
-                                    </th>
-                                    {currentModuleDef.actions.map(action => (
-                                        <th key={action.id} className="w-10 px-1 border-b border-gray-200 bg-gray-100 align-bottom pb-3 group hover:bg-gray-200 transition-colors relative">
-                                            <div className="flex flex-col items-center justify-end h-32 gap-2 w-full">
-                                                <div className="relative h-full w-full flex items-end justify-center pb-2">
-                                                    <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap text-[10px] font-bold text-gray-600 uppercase tracking-wider block text-center">
-                                                        {action.label.replace(/\s+/g, '\u00A0')}
-                                                    </span>
-                                                </div>
-                                                
-                                                <div className={`h-1 w-full rounded-full mb-1 opacity-70 ${
-                                                    action.type === 'view' ? 'bg-blue-500' :
-                                                    action.type === 'create' ? 'bg-green-500' :
-                                                    action.type === 'update' ? 'bg-amber-500' :
-                                                    action.type === 'delete' ? 'bg-red-500' : 'bg-gray-400'
-                                                }`} title={action.type === 'view' ? 'Visualizar' : action.type === 'create' ? 'Criar' : action.type === 'update' ? 'Editar' : 'Outro'} />
-
-                                                <button 
-                                                    onClick={() => toggleColumnPermissions(action.id)}
-                                                    className="text-gray-400 hover:text-indigo-600 transition-colors p-0.5"
-                                                    title="Selecionar todos nesta coluna"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                                </button>
-                                            </div>
-                                        </th>
-                                    ))}
-                                    <th className="p-2 text-center font-bold text-gray-700 border-b border-gray-200 bg-gray-100 w-16 align-bottom pb-3">
-                                        <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] uppercase text-gray-400 block mx-auto">Linha</span>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-100">
-                                {settings.roles.map((role, idx) => {
-                                    const moduleActionIds = currentModuleDef.actions.map(a => a.id);
-                                    const allSelected = moduleActionIds.every(id => role.permissions.includes(id));
-
-                                    return (
-                                        <tr key={role.name} className={`hover:bg-indigo-50/40 transition-colors group ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                                            <td className="p-3 font-medium text-gray-800 sticky left-0 z-20 shadow-[1px_0_3px_rgba(0,0,0,0.05)] border-r border-gray-200 bg-inherit whitespace-nowrap">
-                                                <div className="flex items-center gap-2 pl-2">
-                                                    <div className="w-1 h-6 absolute left-0 bg-indigo-500 rounded-r opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                                    <span className="text-xs">{role.name}</span>
-                                                </div>
-                                            </td>
-                                            {currentModuleDef.actions.map(action => {
-                                                const isChecked = role.permissions.includes(action.id);
-                                                return (
-                                                    <td key={action.id} className="p-1 text-center border-r border-gray-50 last:border-0 relative">
-                                                        <label className="flex items-center justify-center w-full h-full cursor-pointer py-1.5 hover:bg-gray-100/50 transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={isChecked} 
-                                                                onChange={() => togglePermission(role.name, action.id)} 
-                                                                className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                                                            />
-                                                        </label>
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="p-1 text-center">
-                                                <button 
-                                                    onClick={() => toggleRowPermissions(role.name, moduleActionIds)}
-                                                    className={`
-                                                        p-1 rounded-full border transition-all shadow-sm mx-auto flex items-center justify-center
-                                                        ${allSelected 
-                                                            ? 'bg-white text-gray-300 border-gray-200 hover:text-red-500 hover:border-red-200' 
-                                                            : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100'}
-                                                    `}
-                                                    title={allSelected ? "Remover Todos" : "Selecionar Todos"}
-                                                >
-                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        {allSelected 
-                                                            ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                            : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                        }
-                                                    </svg>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="mt-4 flex justify-end">
-                        <button 
-                            onClick={() => setSelectedModule(null)}
-                            className="bg-gray-800 text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-700 shadow-lg transition-transform active:scale-95"
-                        >
-                            Concluir
-                        </button>
-                    </div>
-                </div>
-            )}
-        </Modal>
+       <Modal isOpen={!!selectedModule} onClose={() => setSelectedModule(null)} title={currentModuleDef ? `Permissões: ${currentModuleDef.label}` : ''} maxWidth="max-w-[95vw] md:max-w-[85vw] lg:max-w-7xl">
+          {currentModuleDef && (
+              <div className="space-y-6 h-full flex flex-col">
+                  <div className="overflow-auto border border-gray-200 rounded-lg flex-1 max-h-[65vh]">
+                      <table className="w-full text-sm border-collapse">
+                          <thead className="sticky top-0 z-20 bg-gray-100 shadow-sm">
+                              <tr>
+                                  <th className="text-left p-3 font-bold text-gray-700 bg-gray-100 sticky left-0 z-30 border-b border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Função</th>
+                                  {currentModuleDef.actions.map(action => <th key={action.id} className="p-3 text-center font-bold text-gray-700 min-w-[120px] border-b bg-gray-100">{action.label}</th>)}
+                              </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-100">
+                              {settings.roles.map(role => (
+                                  <tr key={role.name} className="hover:bg-gray-50">
+                                      <td className="p-3 font-medium text-gray-800 sticky left-0 bg-white z-10 shadow-sm border-r">{role.name}</td>
+                                      {currentModuleDef.actions.map(action => (
+                                          <td key={action.id} className="p-3 text-center">
+                                              <input type="checkbox" checked={role.permissions.includes(action.id)} onChange={() => togglePermission(role.name, action.id)} className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                                          </td>
+                                      ))}
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          )}
+       </Modal>
 
        {/* 2. MIRRORING MODAL */}
        <Modal isOpen={isMirrorModalOpen} onClose={() => setIsMirrorModalOpen(false)} title="Espelhar Permissões">
