@@ -5,9 +5,9 @@ import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '.
 interface EventsProps {
   collaborators: Collaborator[];
   events: EventRecord[];
-  onAdd: (e: EventRecord) => void;
-  onUpdate: (e: EventRecord) => void;
-  onDelete: (id: string) => void;
+  onAdd: (e: EventRecord) => Promise<void> | void;
+  onUpdate: (e: EventRecord) => Promise<void> | void;
+  onDelete: (id: string) => Promise<void> | void;
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
   settings: SystemSettings;
@@ -43,6 +43,7 @@ export const Events: React.FC<EventsProps> = ({
   currentUserAllowedSectors, currentUserProfile, userColabId
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Helper para identificar se é um perfil de liderança/admin
   const isManager = currentUserProfile !== 'colaborador';
@@ -162,17 +163,20 @@ export const Events: React.FC<EventsProps> = ({
 
      // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
-         filtered = filtered.filter(e => e.collaboratorId === userColabId);
+         // Se for colaborador, mostra APENAS seus eventos. 
+         // Não aplica o filtro de setor aqui, pois o colaborador pode ter setor não mapeado em allowedSectors
+         return filtered.filter(e => e.collaboratorId === userColabId);
      }
 
-     if (currentUserAllowedSectors.length > 0) {
+     // 2. Sector Filtering (Only for Managers/Admins with sector restrictions)
+     if (currentUserProfile !== 'colaborador' && currentUserAllowedSectors.length > 0) {
         filtered = filtered.filter(e => {
             const colab = collaborators.find(c => c.id === e.collaboratorId);
             return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
         });
      }
 
-     // 2. Search Filtering (Histórico)
+     // 3. Search Filtering (Histórico)
      if (historySearchTerm.trim()) {
         const term = historySearchTerm.toLowerCase();
         filtered = filtered.filter(e => {
@@ -312,18 +316,26 @@ export const Events: React.FC<EventsProps> = ({
       return { gained: daysGained, used: daysUsed, label: typeConfig?.label };
   };
 
-  const handleAcceptProposal = (evt: EventRecord) => {
+  const handleAcceptProposal = async (evt: EventRecord) => {
+     setIsSubmitting(true);
      const user = getColabName(userColabId || '') || 'Usuário';
-     onUpdate({
-        ...evt,
-        status: 'pendente',
-        collaboratorAcceptedProposal: true,
-        updatedBy: user,
-        lastUpdatedAt: new Date().toISOString()
-     });
-     
-     logAction('update', 'evento', `Colaborador aceitou contraproposta do Evento ID ${evt.id}`, user);
-     showToast('Proposta aceita! Aguardando confirmação final.');
+     try {
+         await onUpdate({
+            ...evt,
+            status: 'pendente',
+            collaboratorAcceptedProposal: true,
+            updatedBy: user,
+            lastUpdatedAt: new Date().toISOString()
+         });
+         
+         logAction('update', 'evento', `Colaborador aceitou contraproposta do Evento ID ${evt.id}`, user);
+         showToast('Proposta aceita! Aguardando confirmação final.');
+     } catch (error) {
+         console.error(error);
+         showToast('Erro ao aceitar proposta.', true);
+     } finally {
+         setIsSubmitting(false);
+     }
   };
 
   const toggleMultiSelect = (id: string) => {
@@ -340,8 +352,9 @@ export const Events: React.FC<EventsProps> = ({
       }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     
     // VALIDATION DATE
     if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
@@ -350,40 +363,80 @@ export const Events: React.FC<EventsProps> = ({
     }
 
     const user = isManager ? 'Gestor/Admin' : (getColabName(userColabId || '') || 'Colaborador');
-    
-    // Determina a escala a ser salva
-    // Se o tipo for de trabalho e houver configuração, salva. Senão undefined.
     const finalSchedule = isWorkingType ? tempSchedule : undefined;
 
-    // --- LÓGICA DE CRIAÇÃO (ADD) ---
-    if (!editingId) {
-        if (!canCreate) {
-            showToast('Você não tem permissão para criar eventos.', true);
-            return;
-        }
+    setIsSubmitting(true);
 
-        let finalType = formData.type;
-        if (!isManager) finalType = 'folga';
-
-        if (!finalType) {
-            showToast("Selecione o tipo de evento.", true);
-            return;
-        }
-
-        // --- LOTE (MULTI) ---
-        if (isMultiMode && isManager) {
-            if (multiSelectedIds.length === 0) {
-                showToast("Selecione pelo menos um colaborador.", true);
+    try {
+        // --- LÓGICA DE CRIAÇÃO (ADD) ---
+        if (!editingId) {
+            if (!canCreate) {
+                showToast('Você não tem permissão para criar eventos.', true);
+                setIsSubmitting(false);
                 return;
             }
 
-            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
-            let count = 0;
+            let finalType = formData.type;
+            if (!isManager) finalType = 'folga';
 
-            multiSelectedIds.forEach(colId => {
+            if (!finalType) {
+                showToast("Selecione o tipo de evento.", true);
+                setIsSubmitting(false);
+                return;
+            }
+
+            // --- LOTE (MULTI) ---
+            if (isMultiMode && isManager) {
+                if (multiSelectedIds.length === 0) {
+                    showToast("Selecione pelo menos um colaborador.", true);
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+                let count = 0;
+
+                for (const colId of multiSelectedIds) {
+                    const newEvent: EventRecord = {
+                        id: generateUUID(),
+                        collaboratorId: colId,
+                        type: finalType,
+                        typeLabel: label,
+                        startDate: formData.startDate,
+                        endDate: formData.endDate,
+                        observation: formData.observation,
+                        daysGained: gained,
+                        daysUsed: used,
+                        status: formData.status, // Manager defines status
+                        schedule: finalSchedule, // Save temporary schedule
+                        createdAt: new Date().toISOString()
+                    };
+                    await onAdd(newEvent);
+                    count++;
+                }
+
+                logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${label}`, user);
+                showToast(`${count} eventos registrados com sucesso!`);
+                resetForm();
+            } else {
+                // --- INDIVIDUAL (SINGLE) ---
+                let finalColabId = formData.collaboratorId;
+                if (!isManager && userColabId) finalColabId = userColabId;
+
+                if (!finalColabId) {
+                    showToast("Selecione o colaborador.", true);
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                let finalStatus: EventStatus = formData.status;
+                if (!isManager) finalStatus = 'pendente';
+
+                const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+
                 const newEvent: EventRecord = {
                     id: generateUUID(),
-                    collaboratorId: colId,
+                    collaboratorId: finalColabId,
                     type: finalType,
                     typeLabel: label,
                     startDate: formData.startDate,
@@ -391,99 +444,71 @@ export const Events: React.FC<EventsProps> = ({
                     observation: formData.observation,
                     daysGained: gained,
                     daysUsed: used,
-                    status: formData.status, // Manager defines status
-                    schedule: finalSchedule, // Save temporary schedule
+                    status: finalStatus,
+                    schedule: finalSchedule,
                     createdAt: new Date().toISOString()
                 };
-                onAdd(newEvent);
-                count++;
-            });
+                
+                await onAdd(newEvent);
+                showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
+                resetForm();
+            }
 
-            logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${label}`, user);
-            showToast(`${count} eventos registrados com sucesso!`);
-            resetForm();
-            return;
-        }
-
-        // --- INDIVIDUAL (SINGLE) ---
-        let finalColabId = formData.collaboratorId;
-        if (!isManager && userColabId) finalColabId = userColabId;
-
-        if (!finalColabId) {
-            showToast("Selecione o colaborador.", true);
-            return;
-        }
-
-        let finalStatus: EventStatus = formData.status;
-        if (!isManager) finalStatus = 'pendente';
-
-        const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
-
-        const newEvent: EventRecord = {
-            id: generateUUID(),
-            collaboratorId: finalColabId,
-            type: finalType,
-            typeLabel: label,
-            startDate: formData.startDate,
-            endDate: formData.endDate,
-            observation: formData.observation,
-            daysGained: gained,
-            daysUsed: used,
-            status: finalStatus,
-            schedule: finalSchedule,
-            createdAt: new Date().toISOString()
-        };
-        onAdd(newEvent);
-        showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
-        resetForm();
-
-    } else {
-        // --- EDIÇÃO (UPDATE) ---
-        if (!canUpdate) {
-            showToast('Você não tem permissão para editar eventos.', true);
-            return;
-        }
-
-        let finalType = formData.type;
-        if (!isManager && !finalType) finalType = 'folga';
-
-        let finalStatus: EventStatus = formData.status;
-        let acceptedFlag = false;
-
-        if (!isManager) {
-            finalStatus = 'pendente'; 
-            acceptedFlag = false; 
         } else {
-            if (formData.status === 'nova_opcao') acceptedFlag = false;
+            // --- EDIÇÃO (UPDATE) ---
+            if (!canUpdate) {
+                showToast('Você não tem permissão para editar eventos.', true);
+                setIsSubmitting(false);
+                return;
+            }
+
+            let finalType = formData.type;
+            if (!isManager && !finalType) finalType = 'folga';
+
+            let finalStatus: EventStatus = formData.status;
+            let acceptedFlag = false;
+
+            if (!isManager) {
+                finalStatus = 'pendente'; 
+                acceptedFlag = false; 
+            } else {
+                if (formData.status === 'nova_opcao') acceptedFlag = false;
+            }
+
+            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+
+            await onUpdate({
+                id: editingId,
+                collaboratorId: formData.collaboratorId,
+                type: finalType,
+                typeLabel: label,
+                startDate: formData.startDate,
+                endDate: formData.endDate,
+                observation: formData.observation,
+                daysGained: gained,
+                daysUsed: used,
+                status: finalStatus,
+                collaboratorAcceptedProposal: acceptedFlag,
+                schedule: finalSchedule,
+                updatedBy: user,
+                lastUpdatedAt: new Date().toISOString()
+            } as EventRecord);
+
+            logAction('update', 'evento', `Evento ID ${editingId} editado. Status: ${finalStatus}`, user);
+            showToast('Evento atualizado!');
+            resetForm();
         }
-
-        const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
-
-        onUpdate({
-            id: editingId,
-            collaboratorId: formData.collaboratorId,
-            type: finalType,
-            typeLabel: label,
-            startDate: formData.startDate,
-            endDate: formData.endDate,
-            observation: formData.observation,
-            daysGained: gained,
-            daysUsed: used,
-            status: finalStatus,
-            collaboratorAcceptedProposal: acceptedFlag,
-            schedule: finalSchedule,
-            updatedBy: user,
-            lastUpdatedAt: new Date().toISOString()
-        } as EventRecord);
-
-        logAction('update', 'evento', `Evento ID ${editingId} editado. Status: ${finalStatus}`, user);
-        showToast('Evento atualizado!');
-        resetForm();
+    } catch (error) {
+        console.error("Erro no processamento do evento:", error);
+        showToast("Erro ao processar solicitação. Verifique sua conexão ou permissões.", true);
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
-  const handleDelete = (id: string, status?: EventStatus) => {
+  const handleDelete = async (id: string, status?: EventStatus) => {
     if (!canDelete) return;
+    if (isSubmitting) return;
     
     if (!isManager && (status === 'aprovado' || !status)) { 
          showToast('Você não pode excluir um evento já aprovado.', true);
@@ -494,9 +519,17 @@ export const Events: React.FC<EventsProps> = ({
     if (!user) return;
 
     if (window.confirm('Confirmar exclusão?')) {
-      onDelete(id);
-      logAction('delete', 'evento', `Evento ID ${id} excluído`, user);
-      showToast('Evento excluído.');
+      setIsSubmitting(true);
+      try {
+          await onDelete(id);
+          logAction('delete', 'evento', `Evento ID ${id} excluído`, user);
+          showToast('Evento excluído.');
+      } catch (error) {
+          console.error(error);
+          showToast('Erro ao excluir evento.', true);
+      } finally {
+          setIsSubmitting(false);
+      }
     }
   };
 
@@ -833,8 +866,12 @@ export const Events: React.FC<EventsProps> = ({
             />
           </div>
 
-          <button type="submit" className="md:col-span-2 bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-transform active:scale-95">
-            {editingId ? (isManager ? 'Salvar Alterações' : 'Atualizar Solicitação') : (isManager ? (isMultiMode ? `Registrar para ${multiSelectedIds.length} Colaboradores` : 'Registrar') : 'Solicitar')}
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="md:col-span-2 bg-[#667eea] hover:bg-[#5a6fd6] text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Processando...' : (editingId ? (isManager ? 'Salvar Alterações' : 'Atualizar Solicitação') : (isManager ? (isMultiMode ? `Registrar para ${multiSelectedIds.length} Colaboradores` : 'Registrar') : 'Solicitar'))}
           </button>
         </form>
       </div>
