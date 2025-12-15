@@ -47,6 +47,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
   const [filterSectors, setFilterSectors] = useState<string[]>([]); // Sector Filter (Multi)
   const [filterBranches, setFilterBranches] = useState<string[]>([]); // Branch Filter (Multi)
   const [filterRoles, setFilterRoles] = useState<string[]>([]); // Role Filter (Multi)
+  const [filterScales, setFilterScales] = useState<string[]>([]); // Scale/Shift Filter (Multi)
   
   const [proposedEvents, setProposedEvents] = useState<ProposedEvent[]>([]);
 
@@ -156,6 +157,39 @@ export const Simulator: React.FC<SimulatorProps> = ({
     return settings.roles.map(r => r.name).sort();
   }, [filterSectors, activeCollaborators, settings.roles, currentUserAllowedSectors, availableBranches]);
 
+  // --- Calculate Available Scales/Shifts based on Sector/Branch/Role filters ---
+  const availableScalesOptions = useMemo(() => {
+    let filteredColabs = activeCollaborators;
+
+    // Apply Permissions
+    if (currentUserAllowedSectors.length > 0) {
+        filteredColabs = filteredColabs.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+    }
+    if (availableBranches.length > 0) {
+        filteredColabs = filteredColabs.filter(c => availableBranches.includes(c.branch));
+    }
+
+    // Apply UI Filters
+    if (filterBranches.length > 0) {
+        filteredColabs = filteredColabs.filter(c => filterBranches.includes(c.branch));
+    }
+    if (filterSectors.length > 0) {
+        filteredColabs = filteredColabs.filter(c => c.sector && filterSectors.includes(c.sector));
+    }
+    if (filterRoles.length > 0) {
+        filteredColabs = filteredColabs.filter(c => filterRoles.includes(c.role));
+    }
+
+    const options = new Set<string>();
+    filteredColabs.forEach(c => {
+        if (c.shiftType) options.add(c.shiftType);
+        if (c.hasRotation && c.rotationGroup) options.add(`Escala ${c.rotationGroup}`);
+    });
+
+    return Array.from(options).sort();
+  }, [activeCollaborators, currentUserAllowedSectors, availableBranches, filterBranches, filterSectors, filterRoles]);
+
+
   // --- Reset filterRoles if they are not valid for the new sector ---
   useEffect(() => {
      if (filterRoles.length > 0) {
@@ -167,6 +201,16 @@ export const Simulator: React.FC<SimulatorProps> = ({
         }
      }
   }, [filterSectors, availableRolesOptions, filterRoles]);
+
+  // --- Reset filterScales if options change ---
+  useEffect(() => {
+      if (filterScales.length > 0) {
+          const validScales = filterScales.filter(s => availableScalesOptions.includes(s));
+          if (validScales.length !== filterScales.length) {
+              setFilterScales(validScales);
+          }
+      }
+  }, [availableScalesOptions, filterScales]);
 
 
   // --- HELPERS ---
@@ -211,7 +255,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
         });
     }
 
-    // 2. Filter Collaborators (Security + Role Filter + Sector Filter)
+    // 2. Filter Collaborators (Security + Role Filter + Sector Filter + Scale Filter)
     const activeCollaboratorsFiltered = activeCollaborators.filter(c => {
         // Sector Permission (Security)
         if (currentUserAllowedSectors.length > 0) {
@@ -222,11 +266,26 @@ export const Simulator: React.FC<SimulatorProps> = ({
         if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
         
         // Visual Filters
+        
+        // Apply Branch Filter (Multi)
+        if (filterBranches.length > 0 && !filterBranches.includes(c.branch)) return false;
+
         // If filterRoles has items, the collaborator's role MUST be in it.
         if (filterRoles.length > 0 && !filterRoles.includes(c.role)) return false;
         
         // Apply Sector Filter (Multi)
         if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
+
+        // Apply Scale/Shift Filter (Multi)
+        if (filterScales.length > 0) {
+            const colabScale = c.hasRotation && c.rotationGroup ? `Escala ${c.rotationGroup}` : null;
+            const colabShift = c.shiftType;
+            
+            const matchesScale = colabScale && filterScales.includes(colabScale);
+            const matchesShift = colabShift && filterScales.includes(colabShift);
+
+            if (!matchesScale && !matchesShift) return false;
+        }
 
         return true;
     });
@@ -237,9 +296,9 @@ export const Simulator: React.FC<SimulatorProps> = ({
         : filterRoles;
 
     // Filter Optimization
-    if (filterRoles.length === 0 && filterSectors.length > 0) {
-        const rolesInSector = new Set(activeCollaboratorsFiltered.map(c => c.role));
-        rolesToSimulate = rolesToSimulate.filter(r => rolesInSector.has(r));
+    if (filterRoles.length === 0 && (filterSectors.length > 0 || filterBranches.length > 0 || filterScales.length > 0)) {
+        const rolesInFiltered = new Set(activeCollaboratorsFiltered.map(c => c.role));
+        rolesToSimulate = rolesToSimulate.filter(r => rolesInFiltered.has(r));
     } else if (filterRoles.length === 0) {
         rolesToSimulate = rolesToSimulate.filter(r => availableRolesOptions.includes(r));
     }
@@ -321,7 +380,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
     });
 
     return { days, results, grandTotals };
-  }, [simStartDate, simEndDate, filterRoles, filterSectors, activeCollaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions, availableBranches]);
+  }, [simStartDate, simEndDate, filterRoles, filterSectors, filterBranches, filterScales, activeCollaborators, events, proposedEvents, localRules, settings, currentUserAllowedSectors, availableRolesOptions, availableBranches]);
 
   // --- Group days into weeks for rendering ---
   const weeks = useMemo(() => {
@@ -483,6 +542,16 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                 placeholder="Todas as Funções"
                               />
                           </div>
+
+                          <div>
+                              <MultiSelect 
+                                label="FILTRAR POR JORNADA/ESCALA"
+                                options={availableScalesOptions}
+                                selected={filterScales}
+                                onChange={setFilterScales}
+                                placeholder="Todas as Jornadas"
+                              />
+                          </div>
                       </div>
                   </div>
 
@@ -506,6 +575,16 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                       if (currentUserAllowedSectors.length > 0 && (!c.sector || !currentUserAllowedSectors.includes(c.sector))) return false;
                                       if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
                                       if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
+                                      
+                                      // Scale Filter check for Draft Form options
+                                      if (filterScales.length > 0) {
+                                          const colabScale = c.hasRotation && c.rotationGroup ? `Escala ${c.rotationGroup}` : null;
+                                          const colabShift = c.shiftType;
+                                          const matchesScale = colabScale && filterScales.includes(colabScale);
+                                          const matchesShift = colabShift && filterScales.includes(colabShift);
+                                          if (!matchesScale && !matchesShift) return false;
+                                      }
+
                                       return true;
                                     })
                                     .sort((a,b) => a.name.localeCompare(b.name))
