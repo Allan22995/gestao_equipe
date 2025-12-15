@@ -7,7 +7,7 @@ interface EventsProps {
   collaborators: Collaborator[];
   events: EventRecord[];
   onAdd: (e: EventRecord) => void;
-  onUpdate: (e: EventRecord) => void;
+  onUpdate: (e: EventRecord) => Promise<void>; // Tipagem explicita de Promise
   onDelete: (id: string) => void;
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
@@ -156,7 +156,7 @@ export const Events: React.FC<EventsProps> = ({
      filtered = filtered.filter(e => {
         const colab = collaborators.find(c => c.id === e.collaboratorId);
         
-        // CORREÇÃO: Se o colaborador não for encontrado (ex: dados inconsistentes ou ID com erro),
+        // Se o colaborador não for encontrado (ex: dados inconsistentes ou ID com erro),
         // gestores ainda devem ver o evento para poder corrigi-lo ou excluí-lo. 
         // Colaboradores comuns não veem eventos órfãos.
         if (!colab) return isManager;
@@ -174,7 +174,6 @@ export const Events: React.FC<EventsProps> = ({
             const colab = collaborators.find(c => c.id === e.collaboratorId);
             // Se colab não encontrado, mas user é manager e passou no filtro anterior, 
             // permitimos ver se for admin, ou ocultamos se tiver restrição de setor?
-            // Para segurança, se tem restrição de setor e não achou colab, oculta.
             if (!colab) return currentUserAllowedSectors.length === 0;
             
             return colab.sector && currentUserAllowedSectors.includes(colab.sector);
@@ -287,7 +286,7 @@ export const Events: React.FC<EventsProps> = ({
       type: evt.type,
       startDate: evt.startDate,
       endDate: evt.endDate,
-      observation: evt.observation,
+      observation: evt.observation || '',
       status: evt.status || 'aprovado'
     });
 
@@ -321,15 +320,16 @@ export const Events: React.FC<EventsProps> = ({
       return { gained: daysGained, used: daysUsed, label: typeConfig?.label };
   };
 
-  const handleAcceptProposal = (evt: EventRecord) => {
+  const handleAcceptProposal = async (evt: EventRecord) => {
      const user = getColabName(userColabId || '') || 'Usuário';
-     onUpdate({
+     // Cast para Promise para garantir consistência
+     await Promise.resolve(onUpdate({
         ...evt,
         status: 'pendente',
         collaboratorAcceptedProposal: true,
         updatedBy: user,
         lastUpdatedAt: new Date().toISOString()
-     });
+     }));
      
      logAction('update', 'evento', `Colaborador aceitou contraproposta do Evento ID ${evt.id}`, user);
      showToast('Proposta aceita! Aguardando confirmação final.');
@@ -469,12 +469,16 @@ export const Events: React.FC<EventsProps> = ({
                 finalStatus = 'pendente'; 
                 acceptedFlag = false; 
             } else {
+                // Se o gestor muda para "Nova Opção", a flag de aceite deve ser resetada
                 if (formData.status === 'nova_opcao') acceptedFlag = false;
+                // Se já estava aprovado e muda para outra coisa, também reseta
+                // Mantém como false por segurança ao editar
             }
 
             const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
 
-            onUpdate({
+            // CORREÇÃO: Await no onUpdate para garantir que a Promise resolva antes de resetar o formulário
+            await onUpdate({
                 id: editingId,
                 collaboratorId: formData.collaboratorId,
                 type: finalType,
