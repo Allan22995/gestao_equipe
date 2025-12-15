@@ -221,10 +221,10 @@ export const Events: React.FC<EventsProps> = ({
 
   // Check if current event type allows scheduling (is a working event)
   const isWorkingType = useMemo(() => {
-      const type = settings.eventTypes.find(t => t.id === formData.type);
-      // 'trabalhado' is built-in ID for working extra.
-      // behavior 'credit_2x' or 'credit_1x' usually implies working.
-      return formData.type === 'trabalhado' || (type && (type.behavior === 'credit_1x' || type.behavior === 'credit_2x'));
+      const typeConfig = settings.eventTypes.find(t => t.id === formData.type);
+      const label = typeConfig?.label || '';
+      // Verifica se o nome do evento é exatamente o solicitado (case insensitive)
+      return label.toLowerCase() === 'trabalhando em outro turno';
   }, [formData.type, settings.eventTypes]);
 
   // Schedule Handlers
