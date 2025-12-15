@@ -318,21 +318,21 @@ export const Simulator: React.FC<SimulatorProps> = ({
         // Visual Filters
         
         // Apply Branch Filter (Multi)
-        if (filterBranches.length > 0 && !filterBranches.includes(c.branch)) return false;
+        if (filterBranches.length > 0 && !filterBranches.includes(c.branch as string)) return false;
 
         // If filterRoles has items, the collaborator's role MUST be in it.
         if (filterRoles.length > 0 && !filterRoles.includes(c.role)) return false;
         
         // Apply Sector Filter (Multi)
-        if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector))) return false;
+        if (filterSectors.length > 0 && (!c.sector || !filterSectors.includes(c.sector as string))) return false;
 
         // Apply Scale/Shift Filter (Multi)
         if (filterScales.length > 0) {
             const colabScale = c.hasRotation && c.rotationGroup ? `Escala ${c.rotationGroup}` : null;
             const colabShift = c.shiftType;
             
-            const matchesScale = colabScale ? filterScales.includes(colabScale) : false;
-            const matchesShift = colabShift ? filterScales.includes(colabShift) : false;
+            const matchesScale = colabScale ? filterScales.includes(colabScale as string) : false;
+            const matchesShift = colabShift ? filterScales.includes(colabShift as string) : false;
 
             if (!matchesScale && !matchesShift) return false;
         }

@@ -583,10 +583,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
             isOpen={!!selectedModule} 
             onClose={() => setSelectedModule(null)} 
             title={currentModuleDef ? `Permissões: ${currentModuleDef.label}` : ''} 
-            maxWidth="max-w-[98vw] xl:max-w-[90vw]"
+            maxWidth="max-w-[95vw]"
         >
             {currentModuleDef && (
-                <div className="flex flex-col h-full bg-white max-h-[80vh]">
+                <div className="flex flex-col h-full bg-white max-h-[85vh]">
                     <div className="mb-4 bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg flex justify-between items-center shrink-0">
                         <div>
                             <p className="font-bold text-indigo-900 text-sm">Gerenciamento de Acesso</p>
@@ -599,36 +599,39 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
                     <div className="overflow-auto border border-gray-200 rounded-xl shadow-inner flex-1 custom-scrollbar relative bg-gray-50/50">
                         <table className="w-full text-sm border-collapse relative">
-                            <thead className="sticky top-0 z-30 shadow-sm">
+                            <thead className="sticky top-0 z-30 shadow-sm bg-gray-100">
                                 <tr>
-                                    <th className="text-left p-3 font-bold text-gray-700 bg-gray-100 sticky left-0 z-40 border-b border-r border-gray-300 min-w-[200px]">
+                                    <th className="text-left p-3 font-bold text-gray-700 bg-gray-100 sticky left-0 z-40 border-b border-r border-gray-300 min-w-[180px]">
                                         <span className="uppercase text-[10px] tracking-wider text-gray-500 ml-1">Função</span>
                                     </th>
                                     {currentModuleDef.actions.map(action => (
-                                        <th key={action.id} className="p-3 text-center font-bold text-gray-700 min-w-[130px] border-b border-gray-200 bg-gray-50 group hover:bg-gray-100 transition-colors relative align-bottom pb-4">
-                                            <div className="flex flex-col items-center gap-1 group-hover:-translate-y-1 transition-transform duration-200">
-                                                <span className="text-xs text-gray-800">{action.label}</span>
-                                                <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-wider ${
-                                                    action.type === 'view' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                                    action.type === 'create' ? 'bg-green-50 text-green-600 border-green-100' :
-                                                    action.type === 'update' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                                    action.type === 'delete' ? 'bg-red-50 text-red-600 border-red-100' :
-                                                    'bg-gray-50 text-gray-500 border-gray-100'
-                                                }`}>
-                                                    {action.type === 'view' ? 'Ver' : action.type === 'create' ? 'Criar' : action.type === 'update' ? 'Editar' : action.type === 'delete' ? 'Excluir' : 'Especial'}
-                                                </span>
+                                        <th key={action.id} className="w-10 px-1 border-b border-gray-200 bg-gray-100 align-bottom pb-3 group hover:bg-gray-200 transition-colors relative">
+                                            <div className="flex flex-col items-center justify-end h-32 gap-2 w-full">
+                                                <div className="relative h-full w-full flex items-end justify-center pb-2">
+                                                    <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap text-[10px] font-bold text-gray-600 uppercase tracking-wider block text-center">
+                                                        {action.label.replace(/\s+/g, '\u00A0')}
+                                                    </span>
+                                                </div>
+                                                
+                                                <div className={`h-1 w-full rounded-full mb-1 opacity-70 ${
+                                                    action.type === 'view' ? 'bg-blue-500' :
+                                                    action.type === 'create' ? 'bg-green-500' :
+                                                    action.type === 'update' ? 'bg-amber-500' :
+                                                    action.type === 'delete' ? 'bg-red-500' : 'bg-gray-400'
+                                                }`} title={action.type === 'view' ? 'Visualizar' : action.type === 'create' ? 'Criar' : action.type === 'update' ? 'Editar' : 'Outro'} />
+
+                                                <button 
+                                                    onClick={() => toggleColumnPermissions(action.id)}
+                                                    className="text-gray-400 hover:text-indigo-600 transition-colors p-0.5"
+                                                    title="Selecionar todos nesta coluna"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                                </button>
                                             </div>
-                                            <button 
-                                                onClick={() => toggleColumnPermissions(action.id)}
-                                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[9px] font-bold text-indigo-600 bg-white px-1.5 py-0.5 rounded border border-indigo-100 hover:bg-indigo-50 shadow-sm transition-all"
-                                                title="Selecionar/Deselecionar todos nesta coluna"
-                                            >
-                                                Todos
-                                            </button>
                                         </th>
                                     ))}
-                                    <th className="p-3 text-center font-bold text-gray-700 border-b border-gray-200 bg-gray-50 min-w-[100px]">
-                                        <span className="text-[10px] uppercase text-gray-400">Ações</span>
+                                    <th className="p-2 text-center font-bold text-gray-700 border-b border-gray-200 bg-gray-100 w-16 align-bottom pb-3">
+                                        <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] uppercase text-gray-400 block mx-auto">Linha</span>
                                     </th>
                                 </tr>
                             </thead>
@@ -641,50 +644,42 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                         <tr key={role.name} className={`hover:bg-indigo-50/40 transition-colors group ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                                             <td className="p-3 font-medium text-gray-800 sticky left-0 z-20 shadow-[1px_0_3px_rgba(0,0,0,0.05)] border-r border-gray-200 bg-inherit whitespace-nowrap">
                                                 <div className="flex items-center gap-2 pl-2">
-                                                    {/* Visual indicator on hover */}
-                                                    <div className="w-1 h-8 absolute left-0 bg-indigo-500 rounded-r opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                                    <span className="text-sm">{role.name}</span>
+                                                    <div className="w-1 h-6 absolute left-0 bg-indigo-500 rounded-r opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                    <span className="text-xs">{role.name}</span>
                                                 </div>
                                             </td>
                                             {currentModuleDef.actions.map(action => {
                                                 const isChecked = role.permissions.includes(action.id);
                                                 return (
-                                                    <td key={action.id} className="p-3 text-center border-r border-gray-50 last:border-0 relative">
-                                                        <label className="flex items-center justify-center w-full h-full cursor-pointer p-1">
-                                                            <div className={`
-                                                                w-8 h-8 rounded-md flex items-center justify-center transition-all duration-200 border
-                                                                ${isChecked 
-                                                                    ? 'bg-indigo-600 border-indigo-600 shadow-md scale-100' 
-                                                                    : 'bg-white border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
-                                                                }
-                                                            `}>
-                                                                <input 
-                                                                    type="checkbox" 
-                                                                    checked={isChecked} 
-                                                                    onChange={() => togglePermission(role.name, action.id)} 
-                                                                    className="hidden"
-                                                                />
-                                                                {isChecked && (
-                                                                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                                    </svg>
-                                                                )}
-                                                            </div>
+                                                    <td key={action.id} className="p-1 text-center border-r border-gray-50 last:border-0 relative">
+                                                        <label className="flex items-center justify-center w-full h-full cursor-pointer py-1.5 hover:bg-gray-100/50 transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={isChecked} 
+                                                                onChange={() => togglePermission(role.name, action.id)} 
+                                                                className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                                                            />
                                                         </label>
                                                     </td>
                                                 );
                                             })}
-                                            <td className="p-3 text-center">
+                                            <td className="p-1 text-center">
                                                 <button 
                                                     onClick={() => toggleRowPermissions(role.name, moduleActionIds)}
                                                     className={`
-                                                        text-[10px] font-bold px-3 py-1.5 rounded-md border transition-all uppercase tracking-wide
+                                                        p-1 rounded-full border transition-all shadow-sm mx-auto flex items-center justify-center
                                                         ${allSelected 
-                                                            ? 'bg-white text-gray-400 border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200' 
-                                                            : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100 shadow-sm'}
+                                                            ? 'bg-white text-gray-300 border-gray-200 hover:text-red-500 hover:border-red-200' 
+                                                            : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100'}
                                                     `}
+                                                    title={allSelected ? "Remover Todos" : "Selecionar Todos"}
                                                 >
-                                                    {allSelected ? 'Limpar' : 'Todos'}
+                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        {allSelected 
+                                                            ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        }
+                                                    </svg>
                                                 </button>
                                             </td>
                                         </tr>
