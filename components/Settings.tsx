@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -22,15 +23,48 @@ const initialSchedule: Schedule = {
 
 const daysOrder: (keyof Schedule)[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
-// Helper Icon Components
-const IconView = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>;
-const IconCreate = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
-const IconUpdate = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
-const IconDelete = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
-const IconSpecial = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+// --- UI COMPONENTS ---
+
+const SectionHeader = ({ title, description }: { title: string, description?: string }) => (
+  <div className="mb-6 border-b border-gray-100 pb-2">
+    <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+    {description && <p className="text-sm text-gray-500 mt-1">{description}</p>}
+  </div>
+);
+
+const Switch = ({ checked, onChange, label }: { checked: boolean, onChange: (checked: boolean) => void, label?: string }) => (
+  <label className="flex items-center cursor-pointer group">
+    <div className="relative">
+      <input type="checkbox" className="sr-only" checked={checked} onChange={e => onChange(e.target.checked)} />
+      <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ${checked ? 'bg-indigo-600' : 'bg-gray-300'}`}></div>
+      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ${checked ? 'transform translate-x-4' : ''}`}></div>
+    </div>
+    {label && <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-indigo-600 transition-colors">{label}</span>}
+  </label>
+);
+
+const IconButton = ({ onClick, icon, colorClass = "text-gray-500 hover:text-indigo-600", title }: any) => (
+  <button onClick={onClick} className={`p-1.5 rounded-full hover:bg-gray-100 transition-all ${colorClass}`} title={title}>
+    {icon}
+  </button>
+);
+
+// Icons
+const Icons = {
+  Trash: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+  Edit: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
+  Copy: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  Plus: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
+  View: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
+  Create: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
+  Update: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
+  Delete: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+  Special: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+};
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
   const [activeTab, setActiveTab] = useState('general');
+  const [errors, setErrors] = useState<Record<string, string>>({});
   
   // --- GENERAL STATES ---
   const [newBranch, setNewBranch] = useState('');
@@ -40,11 +74,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newRole, setNewRole] = useState('');
   const [newRoleMirrorSource, setNewRoleMirrorSource] = useState(''); 
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
-  
-  // Permission Modal UI States
   const [activeRoleForPerms, setActiveRoleForPerms] = useState<string | null>(null);
   const [permRoleSearch, setPermRoleSearch] = useState('');
-
   const [isMirrorModalOpen, setIsMirrorModalOpen] = useState(false);
   const [mirrorTargetRole, setMirrorTargetRole] = useState('');
   const [mirrorSourceRole, setMirrorSourceRole] = useState('');
@@ -88,9 +119,18 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     }
   };
 
+  const validate = (field: string, value: string) => {
+      if (!value.trim()) {
+          setErrors(prev => ({ ...prev, [field]: 'Campo obrigatório' }));
+          return false;
+      }
+      setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
+      return true;
+  };
+
   // --- HANDLERS: GENERAL ---
   const addBranch = () => {
-    if (!newBranch.trim()) return;
+    if (!validate('newBranch', newBranch)) return;
     if (settings.branches.includes(newBranch.trim())) { showToast('Filial já existe.', true); return; }
     updateSettings({ ...settings, branches: [...settings.branches, newBranch.trim()] });
     setNewBranch('');
@@ -101,7 +141,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
     }
   };
   const addSector = () => {
-    if (!newSector.trim()) return;
+    if (!validate('newSector', newSector)) return;
     if (settings.sectors.includes(newSector.trim())) { showToast('Setor já existe.', true); return; }
     updateSettings({ ...settings, sectors: [...settings.sectors, newSector.trim()] });
     setNewSector('');
@@ -114,7 +154,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   // --- HANDLERS: ROLES & MIRRORING ---
   const addRole = () => {
-    if (!newRole.trim()) return;
+    if (!validate('newRole', newRole)) return;
     if (settings.roles.some(r => r.name === newRole.trim())) { showToast('Função já existe.', true); return; }
     
     let initialPermissions: string[] = [];
@@ -171,9 +211,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       const allEnabled = moduleActionIds.every(id => rolePerms.has(id));
       
       if (allEnabled) {
-          moduleActionIds.forEach(id => rolePerms.delete(id)); // Desmarca tudo
+          moduleActionIds.forEach(id => rolePerms.delete(id));
       } else {
-          moduleActionIds.forEach(id => rolePerms.add(id)); // Marca tudo
+          moduleActionIds.forEach(id => rolePerms.add(id));
       }
       
       const updatedRoles = settings.roles.map(r => r.name === roleName ? { ...r, permissions: Array.from(rolePerms) } : r);
@@ -182,7 +222,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   // --- HANDLERS: EVENTS ---
   const addEventType = () => {
-     if (!newEventLabel.trim()) return;
+     if (!validate('newEventLabel', newEventLabel)) return;
      const id = newEventLabel.toLowerCase().replace(/\s+/g, '_');
      if (settings.eventTypes.some(t => t.id === id)) { showToast('Já existe.', true); return; }
      updateSettings({ ...settings, eventTypes: [...settings.eventTypes, { id, label: newEventLabel.trim(), behavior: newEventBehavior }] });
@@ -195,7 +235,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   // --- HANDLERS: ROTATIONS (ESCALAS) ---
   const addRotation = () => {
-      if (!newRotationLabel.trim()) return;
+      if (!validate('newRotationLabel', newRotationLabel)) return;
       const id = newRotationLabel.trim().toUpperCase().replace(/\s+/g, '_');
       if (settings.shiftRotations?.some(r => r.id === id)) { showToast('Escala já existe.', true); return; }
       const newRot: RotationRule = { id, label: newRotationLabel.trim() };
@@ -254,7 +294,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   // --- HANDLERS: SEASONAL ---
   const addSeasonal = () => {
-      if (!newSeasonal.label || !newSeasonal.startDate || !newSeasonal.endDate) { showToast('Preencha tudo.', true); return; }
+      if (!validate('seasonalLabel', newSeasonal.label || '') || !newSeasonal.startDate || !newSeasonal.endDate) { showToast('Preencha todos os campos.', true); return; }
       const newItem: SeasonalEvent = { id: generateUUID(), label: newSeasonal.label!, startDate: newSeasonal.startDate!, endDate: newSeasonal.endDate!, color: newSeasonal.color || '#3B82F6', active: true };
       updateSettings({ ...settings, seasonalEvents: [...(settings.seasonalEvents || []), newItem] });
       setNewSeasonal({ label: '', startDate: '', endDate: '', color: '#3B82F6', active: true });
@@ -266,17 +306,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
   const currentModuleDef = PERMISSION_MODULES.find(m => m.id === selectedModule);
 
-  // --- MEMOS FOR PERMISSIONS ---
-  const filteredRolesForPerms = useMemo(() => {
-      return settings.roles.filter(r => r.name.toLowerCase().includes(permRoleSearch.toLowerCase()));
-  }, [settings.roles, permRoleSearch]);
-
   const selectedRoleConfig = useMemo(() => {
       if (!activeRoleForPerms) return null;
       return settings.roles.find(r => r.name === activeRoleForPerms);
   }, [settings.roles, activeRoleForPerms]);
 
-  // Set default active role when opening module if none selected
   React.useEffect(() => {
       if (selectedModule && !activeRoleForPerms && settings.roles.length > 0) {
           setActiveRoleForPerms(settings.roles[0].name);
@@ -288,7 +322,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* TABS HEADER */}
        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 flex overflow-x-auto custom-scrollbar">
           {[
-            { id: 'general', label: '🏢 Geral', icon: '' },
+            { id: 'general', label: '🏢 Estrutura', icon: '' },
             { id: 'roles', label: '👥 Funções', icon: '' },
             { id: 'events', label: '📅 Eventos', icon: '' },
             { id: 'rotations', label: '🔄 Escalas', icon: '' },
@@ -300,7 +334,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-[#667eea] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap outline-none focus:ring-2 focus:ring-indigo-200 ${activeTab === tab.id ? 'bg-[#667eea] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
               >
                   {tab.label}
               </button>
@@ -309,33 +343,72 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
        {/* --- CONTENT: GENERAL --- */}
        {activeTab === 'general' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-                   <h3 className="text-lg font-bold text-gray-800 mb-4">Filiais</h3>
-                   <div className="flex gap-2 mb-4">
-                       <input type="text" value={newBranch} onChange={e => setNewBranch(e.target.value)} placeholder="Nova Filial..." className="flex-1 border border-gray-300 rounded-lg p-2 text-sm" />
-                       <button onClick={addBranch} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">+</button>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
+               {/* Branches Card */}
+               <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col">
+                   <SectionHeader title="Filiais / Unidades" description="Gerencie as unidades físicas da empresa." />
+                   
+                   <div className="flex gap-2 mb-6">
+                       <div className="relative flex-1">
+                           <input 
+                            type="text" 
+                            value={newBranch} 
+                            onChange={e => { setNewBranch(e.target.value); validate('newBranch', e.target.value); }} 
+                            onKeyDown={e => e.key === 'Enter' && addBranch()}
+                            placeholder="Nova Filial..." 
+                            className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${errors.newBranch ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-300'}`} 
+                           />
+                           {errors.newBranch && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newBranch}</span>}
+                       </div>
+                       <button onClick={addBranch} className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px]">
+                           {Icons.Plus}
+                       </button>
                    </div>
-                   <div className="flex flex-wrap gap-2">
+                   
+                   <div className="flex flex-wrap gap-2 overflow-y-auto max-h-[300px] p-1">
                        {settings.branches.map(b => (
-                           <div key={b} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 text-sm border border-gray-200">
-                               {b} <button onClick={() => removeBranch(b)} className="text-red-500 font-bold">×</button>
+                           <div key={b} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
+                               <span className="font-medium">{b}</span> 
+                               <button onClick={() => removeBranch(b)} className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                               </button>
                            </div>
                        ))}
+                       {settings.branches.length === 0 && <p className="text-gray-400 italic text-sm w-full text-center py-4">Nenhuma filial cadastrada.</p>}
                    </div>
                </div>
-               <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-                   <h3 className="text-lg font-bold text-gray-800 mb-4">Setores (Globais)</h3>
-                   <div className="flex gap-2 mb-4">
-                       <input type="text" value={newSector} onChange={e => setNewSector(e.target.value)} placeholder="Novo Setor..." className="flex-1 border border-gray-300 rounded-lg p-2 text-sm" />
-                       <button onClick={addSector} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">+</button>
+
+               {/* Sectors Card */}
+               <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col">
+                   <SectionHeader title="Setores Globais" description="Departamentos disponíveis em todas as filiais." />
+                   
+                   <div className="flex gap-2 mb-6">
+                       <div className="relative flex-1">
+                           <input 
+                            type="text" 
+                            value={newSector} 
+                            onChange={e => { setNewSector(e.target.value); validate('newSector', e.target.value); }}
+                            onKeyDown={e => e.key === 'Enter' && addSector()}
+                            placeholder="Novo Setor..." 
+                            className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${errors.newSector ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-300'}`} 
+                           />
+                           {errors.newSector && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newSector}</span>}
+                       </div>
+                       <button onClick={addSector} className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px]">
+                           {Icons.Plus}
+                       </button>
                    </div>
-                   <div className="flex flex-wrap gap-2">
+                   
+                   <div className="flex flex-wrap gap-2 overflow-y-auto max-h-[300px] p-1">
                        {settings.sectors.map(s => (
-                           <div key={s} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full flex items-center gap-2 text-sm border border-gray-200">
-                               {s} <button onClick={() => removeSector(s)} className="text-red-500 font-bold">×</button>
+                           <div key={s} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
+                               <span className="font-medium">{s}</span> 
+                               <button onClick={() => removeSector(s)} className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                               </button>
                            </div>
                        ))}
+                       {settings.sectors.length === 0 && <p className="text-gray-400 italic text-sm w-full text-center py-4">Nenhum setor cadastrado.</p>}
                    </div>
                </div>
            </div>
@@ -343,35 +416,63 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
        {/* --- CONTENT: ROLES --- */}
        {activeTab === 'roles' && (
-           <div className="space-y-6">
+           <div className="space-y-6 animate-fadeIn">
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-                   <h3 className="text-lg font-bold text-gray-800 mb-4">Funções e Cargos</h3>
-                   <div className="flex flex-col md:flex-row gap-2 mb-6">
-                       <input type="text" value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="Nova Função..." className="flex-1 border border-gray-300 rounded-lg p-2 text-sm" />
-                       <div className="md:w-64">
+                   <SectionHeader title="Funções e Cargos" description="Defina os cargos e suas permissões de visibilidade." />
+                   
+                   <div className="flex flex-col md:flex-row gap-4 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200 items-start">
+                       <div className="flex-1 w-full">
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome da Função</label>
+                           <input 
+                            type="text" 
+                            value={newRole} 
+                            onChange={e => { setNewRole(e.target.value); validate('newRole', e.target.value); }} 
+                            placeholder="Ex: Supervisor Logístico" 
+                            className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newRole ? 'border-red-300' : 'border-gray-300'}`} 
+                           />
+                       </div>
+                       <div className="w-full md:w-64">
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Espelhar Permissões</label>
                            <select value={newRoleMirrorSource} onChange={e => setNewRoleMirrorSource(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white">
-                               <option value="">Espelhar de (Opcional)...</option>
+                               <option value="">(Opcional)</option>
                                {settings.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
                            </select>
                        </div>
-                       <button onClick={addRole} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 whitespace-nowrap">Adicionar</button>
+                       <div className="mt-auto pt-5">
+                            <button onClick={addRole} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm whitespace-nowrap h-[38px]">
+                                Adicionar
+                            </button>
+                       </div>
                    </div>
-                   <div className="overflow-x-auto">
+
+                   <div className="overflow-hidden border border-gray-200 rounded-lg shadow-sm">
                        <table className="w-full text-sm text-left">
                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
-                               <tr><th className="p-3">Função</th><th className="p-3 text-center">Visualização Global</th><th className="p-3 text-right">Ações</th></tr>
+                               <tr>
+                                   <th className="p-4">Função</th>
+                                   <th className="p-4 text-center">Modo de Visualização</th>
+                                   <th className="p-4 text-right">Ações</th>
+                               </tr>
                            </thead>
-                           <tbody className="divide-y divide-gray-100">
+                           <tbody className="divide-y divide-gray-100 bg-white">
                                {settings.roles.map(r => (
-                                   <tr key={r.name} className="hover:bg-gray-50 group">
-                                       <td className="p-3 font-medium text-gray-800">{r.name}</td>
-                                       <td className="p-3 text-center">
-                                           <button onClick={() => toggleRoleViewAll(r.name)} className={`px-3 py-1 rounded-full text-xs font-bold border ${r.canViewAllSectors ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>{r.canViewAllSectors ? 'Irrestrito' : 'Restrito ao Setor'}</button>
+                                   <tr key={r.name} className="hover:bg-gray-50 group transition-colors">
+                                       <td className="p-4 font-bold text-gray-800">{r.name}</td>
+                                       <td className="p-4 text-center">
+                                           <div className="flex justify-center">
+                                               <button 
+                                                onClick={() => toggleRoleViewAll(r.name)} 
+                                                className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-2 transition-all ${r.canViewAllSectors ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'}`}
+                                               >
+                                                   <span className={`w-2 h-2 rounded-full ${r.canViewAllSectors ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                                                   {r.canViewAllSectors ? 'Irrestrito (Vê Tudo)' : 'Restrito ao Setor'}
+                                               </button>
+                                           </div>
                                        </td>
-                                       <td className="p-3 text-right">
-                                           <div className="flex justify-end gap-2">
-                                               <button onClick={() => openMirrorModal(r.name)} className="text-blue-500 hover:bg-blue-50 p-1 rounded" title="Espelhar">📄</button>
-                                               <button onClick={() => removeRole(r.name)} className="text-red-500 hover:bg-red-50 p-1 rounded" title="Excluir">🗑️</button>
+                                       <td className="p-4 text-right">
+                                           <div className="flex justify-end gap-2 opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
+                                               <IconButton onClick={() => openMirrorModal(r.name)} icon={Icons.Copy} colorClass="text-blue-500 hover:bg-blue-50" title="Copiar Permissões de outra função" />
+                                               <IconButton onClick={() => removeRole(r.name)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" title="Excluir Função" />
                                            </div>
                                        </td>
                                    </tr>
@@ -380,14 +481,20 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        </table>
                    </div>
                </div>
+
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-                   <h3 className="text-lg font-bold text-gray-800 mb-4">Matriz de Permissões</h3>
-                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                   <SectionHeader title="Matriz de Acessos" description="Configure o que cada função pode fazer em cada módulo." />
+                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                        {PERMISSION_MODULES.map(mod => (
-                           <button key={mod.id} onClick={() => setSelectedModule(mod.id)} className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-indigo-300 transition-all group">
-                               <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{mod.icon}</span>
+                           <button 
+                            key={mod.id} 
+                            onClick={() => setSelectedModule(mod.id)} 
+                            className="flex flex-col items-center justify-center p-6 bg-white rounded-xl border border-gray-200 hover:border-indigo-400 hover:shadow-md transition-all group relative overflow-hidden"
+                           >
+                               <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500 transform -translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                               <span className="text-3xl mb-3 group-hover:scale-110 transition-transform duration-300">{mod.icon}</span>
                                <span className="font-bold text-gray-700 text-sm group-hover:text-indigo-600">{mod.label}</span>
-                               <span className="text-[10px] text-gray-400 mt-1">Gerenciar Acessos</span>
+                               <span className="text-[10px] text-gray-400 mt-1 bg-gray-50 px-2 py-0.5 rounded-full group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors">Configurar</span>
                            </button>
                        ))}
                    </div>
@@ -397,56 +504,84 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
        {/* --- CONTENT: EVENTS --- */}
        {activeTab === 'events' && (
-           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-               <h3 className="text-lg font-bold text-gray-800 mb-4">Tipos de Eventos</h3>
-               <div className="flex flex-col md:flex-row gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                   <input type="text" value={newEventLabel} onChange={e => setNewEventLabel(e.target.value)} placeholder="Ex: Licença Maternidade" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm" />
-                   <select value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as any)} className="w-full md:w-48 border border-gray-300 rounded-lg p-2 text-sm">
-                       <option value="neutral">Neutro</option><option value="debit">Débito</option><option value="credit_1x">Crédito (1x)</option><option value="credit_2x">Crédito (2x)</option>
-                   </select>
-                   <button onClick={addEventType} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">Adicionar</button>
+           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-fadeIn">
+               <SectionHeader title="Tipos de Eventos" description="Configure os motivos de ausência ou trabalho extra." />
+               
+               <div className="flex flex-col md:flex-row gap-4 mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200 items-end">
+                   <div className="flex-1 w-full">
+                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Evento</label>
+                       <input 
+                        type="text" 
+                        value={newEventLabel} 
+                        onChange={e => { setNewEventLabel(e.target.value); validate('newEventLabel', e.target.value); }} 
+                        placeholder="Ex: Licença Paternidade" 
+                        className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newEventLabel ? 'border-red-300' : 'border-gray-300'}`} 
+                       />
+                   </div>
+                   <div className="w-full md:w-48">
+                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Comportamento</label>
+                       <select value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as any)} className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white">
+                           <option value="neutral">Neutro (Apenas Registro)</option>
+                           <option value="debit">Débito (Desconta Dias)</option>
+                           <option value="credit_1x">Crédito (Soma 1x)</option>
+                           <option value="credit_2x">Crédito (Soma 2x)</option>
+                       </select>
+                   </div>
+                   <button onClick={addEventType} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm h-[38px]">
+                       Adicionar
+                   </button>
                </div>
                
-               <div className="grid grid-cols-1 gap-6">
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Eventos Neutros */}
-                    <div>
-                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider border-b pb-1">Eventos Neutros</h4>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
+                            <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                            <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider">Neutros</h4>
+                        </div>
                         <div className="space-y-2">
                             {settings.eventTypes.filter(t => t.behavior === 'neutral').map(t => (
-                                <div key={t.id} className="flex justify-between p-3 border border-gray-200 rounded-lg bg-white">
-                                    <div className="flex gap-3 items-center"><span className="font-bold">{t.label}</span><span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{t.behavior}</span></div>
-                                    {!['ferias','folga','trabalhado'].includes(t.id) && <button onClick={() => removeEventType(t.id)} className="text-red-500 text-sm font-bold">Excluir</button>}
+                                <div key={t.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                    <span className="font-bold text-gray-700 text-sm">{t.label}</span>
+                                    {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
                                 </div>
                             ))}
-                            {settings.eventTypes.filter(t => t.behavior === 'neutral').length === 0 && <p className="text-xs text-gray-400 italic">Nenhum evento neutro.</p>}
+                            {settings.eventTypes.filter(t => t.behavior === 'neutral').length === 0 && <p className="text-xs text-gray-400 italic text-center py-2">Vazio</p>}
                         </div>
                     </div>
 
                     {/* Eventos Débitos */}
-                    <div>
-                        <h4 className="text-xs font-bold text-red-500 uppercase mb-2 tracking-wider border-b border-red-100 pb-1">Eventos Débitos</h4>
+                    <div className="bg-red-50 rounded-xl p-4 border border-red-100">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-red-200">
+                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                            <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider">Débitos (Ausências)</h4>
+                        </div>
                         <div className="space-y-2">
                             {settings.eventTypes.filter(t => t.behavior === 'debit').map(t => (
-                                <div key={t.id} className="flex justify-between p-3 border border-gray-200 rounded-lg bg-white">
-                                    <div className="flex gap-3 items-center"><span className="font-bold">{t.label}</span><span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-100">{t.behavior}</span></div>
-                                    {!['ferias','folga','trabalhado'].includes(t.id) && <button onClick={() => removeEventType(t.id)} className="text-red-500 text-sm font-bold">Excluir</button>}
+                                <div key={t.id} className="flex justify-between items-center p-3 border border-red-100 rounded-lg bg-white shadow-sm">
+                                    <span className="font-bold text-gray-800 text-sm">{t.label}</span>
+                                    {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
                                 </div>
                             ))}
-                            {settings.eventTypes.filter(t => t.behavior === 'debit').length === 0 && <p className="text-xs text-gray-400 italic">Nenhum evento de débito.</p>}
                         </div>
                     </div>
 
                     {/* Eventos Créditos */}
-                    <div>
-                        <h4 className="text-xs font-bold text-emerald-500 uppercase mb-2 tracking-wider border-b border-emerald-100 pb-1">Eventos Créditos</h4>
+                    <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-emerald-200">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Créditos (Extras)</h4>
+                        </div>
                         <div className="space-y-2">
                             {settings.eventTypes.filter(t => t.behavior.startsWith('credit')).map(t => (
-                                <div key={t.id} className="flex justify-between p-3 border border-gray-200 rounded-lg bg-white">
-                                    <div className="flex gap-3 items-center"><span className="font-bold">{t.label}</span><span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100">{t.behavior}</span></div>
-                                    {!['ferias','folga','trabalhado'].includes(t.id) && <button onClick={() => removeEventType(t.id)} className="text-red-500 text-sm font-bold">Excluir</button>}
+                                <div key={t.id} className="flex justify-between items-center p-3 border border-emerald-100 rounded-lg bg-white shadow-sm relative overflow-hidden">
+                                    <span className="font-bold text-gray-800 text-sm">{t.label}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">{t.behavior === 'credit_2x' ? '2x' : '1x'}</span>
+                                        {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
+                                    </div>
                                 </div>
                             ))}
-                            {settings.eventTypes.filter(t => t.behavior.startsWith('credit')).length === 0 && <p className="text-xs text-gray-400 italic">Nenhum evento de crédito.</p>}
                         </div>
                     </div>
                </div>
@@ -455,97 +590,138 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
        {/* --- CONTENT: ROTATIONS (ESCALAS) --- */}
        {activeTab === 'rotations' && (
-           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-               <h3 className="text-lg font-bold text-gray-800 mb-4">Escalas de Revezamento</h3>
-               <p className="text-sm text-gray-500 mb-4">Defina os identificadores para grupos de escala (Ex: Grupo A, Grupo B). Isso habilita a funcionalidade de escala no cadastro de colaboradores.</p>
+           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-fadeIn">
+               <SectionHeader title="Escalas de Revezamento" description="Defina os grupos de escala (Ex: Grupo A, B, C) para cálculo automático de folgas." />
                
-               <div className="flex gap-2 mb-6">
-                   <input type="text" value={newRotationLabel} onChange={e => setNewRotationLabel(e.target.value)} placeholder="Nome da Escala (Ex: Grupo C)..." className="flex-1 border border-gray-300 rounded-lg p-2 text-sm" />
-                   <button onClick={addRotation} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">Adicionar Escala</button>
+               <div className="flex gap-2 mb-8 max-w-lg">
+                   <div className="relative flex-1">
+                       <input 
+                        type="text" 
+                        value={newRotationLabel} 
+                        onChange={e => { setNewRotationLabel(e.target.value); validate('newRotationLabel', e.target.value); }}
+                        placeholder="Nome da Escala (Ex: Grupo Delta)..." 
+                        className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newRotationLabel ? 'border-red-300' : 'border-gray-300'}`} 
+                       />
+                       {errors.newRotationLabel && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newRotationLabel}</span>}
+                   </div>
+                   <button onClick={addRotation} className="bg-indigo-600 text-white px-6 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95">
+                       Adicionar
+                   </button>
                </div>
 
-               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                    {(settings.shiftRotations || []).map(r => (
-                       <div key={r.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-gray-50">
-                           <span className="font-bold text-gray-700">{r.label}</span>
-                           <button onClick={() => removeRotation(r.id)} className="text-red-500 hover:text-red-700 p-1">🗑️</button>
+                       <div key={r.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm hover:border-indigo-300 transition-colors group">
+                           <div className="flex items-center gap-2">
+                               <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-100">{r.label.charAt(0)}</span>
+                               <span className="font-bold text-gray-700 text-sm truncate">{r.label}</span>
+                           </div>
+                           <button onClick={() => removeRotation(r.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                           </button>
                        </div>
                    ))}
-                   {(settings.shiftRotations || []).length === 0 && <p className="text-gray-400 text-sm italic col-span-3">Nenhuma escala cadastrada.</p>}
+                   {(settings.shiftRotations || []).length === 0 && <p className="text-gray-400 text-sm italic col-span-full text-center py-4 border-2 border-dashed border-gray-100 rounded-lg">Nenhuma escala cadastrada.</p>}
                </div>
            </div>
        )}
 
        {/* --- CONTENT: TEMPLATES (JORNADAS) --- */}
        {activeTab === 'templates' && (
-           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-               <div className="flex justify-between items-center mb-6">
+           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-fadeIn">
+               <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                    <div>
-                       <h3 className="text-lg font-bold text-gray-800">Modelos de Jornada de Trabalho</h3>
+                       <h3 className="text-lg font-bold text-gray-800">Modelos de Jornada</h3>
                        <p className="text-sm text-gray-500">Crie modelos padrão (Ex: 08:00 as 17:00) para agilizar o cadastro.</p>
                    </div>
-                   <button onClick={openNewTemplate} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-700 text-sm shadow-sm">
-                       + Novo Modelo
+                   <button onClick={openNewTemplate} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-700 text-sm shadow-sm flex items-center gap-2 transition-transform active:scale-95">
+                       {Icons.Plus} Novo Modelo
                    </button>
                </div>
 
-               <div className="space-y-3">
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                    {(settings.scheduleTemplates || []).map(t => (
-                       <div key={t.id} className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow bg-white">
-                           <div className="flex items-center gap-3">
-                               <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">⏰</div>
-                               <span className="font-bold text-gray-800">{t.name}</span>
+                       <div key={t.id} className="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-all bg-white group">
+                           <div className="flex justify-between items-start mb-3">
+                               <div className="flex items-center gap-3">
+                                   <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">{Icons.View}</div>
+                                   <span className="font-bold text-gray-800">{t.name}</span>
+                               </div>
+                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                   <IconButton onClick={() => openEditTemplate(t)} icon={Icons.Edit} colorClass="text-blue-500 hover:bg-blue-50" />
+                                   <IconButton onClick={() => removeTemplate(t.id)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" />
+                               </div>
                            </div>
-                           <div className="flex gap-2">
-                               <button onClick={() => openEditTemplate(t)} className="text-blue-600 bg-blue-50 px-3 py-1 rounded text-xs font-bold hover:bg-blue-100">Editar</button>
-                               <button onClick={() => removeTemplate(t.id)} className="text-red-600 bg-red-50 px-3 py-1 rounded text-xs font-bold hover:bg-red-100">Excluir</button>
+                           <div className="space-y-1">
+                               {daysOrder.filter(d => t.schedule[d].enabled).slice(0, 3).map(d => (
+                                   <div key={d} className="text-xs flex justify-between text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                                       <span className="capitalize font-medium">{d}</span>
+                                       <span>{t.schedule[d].start} - {t.schedule[d].end}</span>
+                                   </div>
+                               ))}
+                               {Object.values(t.schedule).filter(d => d.enabled).length > 3 && (
+                                   <div className="text-[10px] text-center text-gray-400 italic pt-1">+ dias restantes</div>
+                               )}
                            </div>
                        </div>
                    ))}
-                   {(settings.scheduleTemplates || []).length === 0 && <p className="text-center text-gray-400 py-8">Nenhum modelo cadastrado.</p>}
+                   {(settings.scheduleTemplates || []).length === 0 && <p className="text-center text-gray-400 py-12 col-span-full border-2 border-dashed border-gray-100 rounded-xl">Nenhum modelo cadastrado.</p>}
                </div>
            </div>
        )}
 
        {/* --- CONTENT: INTEGRATIONS (LINKS) --- */}
        {activeTab === 'integrations' && (
-           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-               <h3 className="text-lg font-bold text-gray-800 mb-4">Integração entre Filiais (Visão da Liderança)</h3>
-               <p className="text-sm text-gray-500 mb-6">Permita que a liderança de uma filial visualize colaboradores de outras filiais vinculadas.</p>
+           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-fadeIn">
+               <SectionHeader title="Visibilidade entre Filiais" description="Permita que líderes de uma filial visualizem colaboradores de outras unidades." />
 
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                       <label className="text-xs font-bold text-gray-500 uppercase block mb-2">1. Selecione a Filial Principal (Quem vê)</label>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                   <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 h-fit">
+                       <label className="text-xs font-bold text-gray-500 uppercase block mb-3">1. Filial Principal (Líder)</label>
                        <select 
-                           className="w-full border border-gray-300 rounded-lg p-2.5 bg-white shadow-sm"
+                           className="w-full border border-gray-300 rounded-lg p-3 bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                            value={selectedBranchForLinks}
                            onChange={e => setSelectedBranchForLinks(e.target.value)}
                        >
-                           <option value="">Selecione...</option>
+                           <option value="">Selecione a Filial...</option>
                            {settings.branches.map(b => <option key={b} value={b}>{b}</option>)}
                        </select>
+                       <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+                           Selecione a filial cujos líderes precisam acessar dados de outras unidades.
+                       </p>
                    </div>
 
                    {selectedBranchForLinks && (
-                       <div className="md:col-span-2 bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
-                           <label className="text-xs font-bold text-gray-500 uppercase block mb-3">2. Marque as filiais visíveis para {selectedBranchForLinks}</label>
-                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                       <div className="md:col-span-2 bg-white p-6 rounded-xl border border-indigo-100 shadow-sm relative overflow-hidden">
+                           <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-4">2. Marque as filiais visíveis para: <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{selectedBranchForLinks}</span></label>
+                           
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                {settings.branches.filter(b => b !== selectedBranchForLinks).map(b => {
                                    const isLinked = settings.branchLinks?.[selectedBranchForLinks]?.includes(b);
                                    return (
-                                       <label key={b} className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-all ${isLinked ? 'bg-indigo-50 border-indigo-200' : 'hover:bg-gray-50 border-gray-200'}`}>
+                                       <label key={b} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isLinked ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'hover:bg-gray-50 border-gray-200'}`}>
+                                           <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isLinked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'}`}>
+                                               {isLinked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                           </div>
                                            <input 
                                                type="checkbox" 
                                                checked={!!isLinked}
                                                onChange={() => toggleBranchLink(b)}
-                                               className="rounded text-indigo-600 focus:ring-indigo-500"
+                                               className="hidden"
                                            />
-                                           <span className={`text-sm ${isLinked ? 'font-bold text-indigo-800' : 'text-gray-700'}`}>{b}</span>
+                                           <span className={`text-sm ${isLinked ? 'font-bold text-indigo-900' : 'text-gray-700'}`}>{b}</span>
                                        </label>
                                    );
                                })}
                            </div>
-                           {settings.branches.length <= 1 && <p className="text-sm text-gray-400 italic">Cadastre mais filiais na aba Geral para configurar integrações.</p>}
+                           {settings.branches.length <= 1 && <p className="text-sm text-gray-400 italic bg-gray-50 p-4 rounded-lg text-center">Cadastre mais filiais na aba "Estrutura" para configurar integrações.</p>}
+                       </div>
+                   )}
+                   {!selectedBranchForLinks && (
+                       <div className="md:col-span-2 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50 text-gray-400 p-10">
+                           <span className="text-4xl mb-2 opacity-30">🔗</span>
+                           <p>Selecione uma filial à esquerda para começar.</p>
                        </div>
                    )}
                </div>
@@ -554,34 +730,134 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
        {/* --- CONTENT: SEASONAL --- */}
        {activeTab === 'seasonal' && (
-           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-               <h3 className="text-lg font-bold text-gray-800 mb-4">Eventos Sazonais</h3>
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                   <div className="md:col-span-1"><input type="text" value={newSeasonal.label} onChange={e => setNewSeasonal({...newSeasonal, label: e.target.value})} className="w-full border border-gray-300 rounded p-2 text-sm" placeholder="Nome (Ex: Natal)" /></div>
-                   <div><input type="date" value={newSeasonal.startDate} onChange={e => setNewSeasonal({...newSeasonal, startDate: e.target.value})} className="w-full border border-gray-300 rounded p-2 text-sm" /></div>
-                   <div><input type="date" value={newSeasonal.endDate} onChange={e => setNewSeasonal({...newSeasonal, endDate: e.target.value})} className="w-full border border-gray-300 rounded p-2 text-sm" /></div>
-                   <div className="flex items-center"><input type="color" value={newSeasonal.color} onChange={e => setNewSeasonal({...newSeasonal, color: e.target.value})} className="h-9 w-12 border border-gray-300 rounded mr-2 p-1 bg-white" /><button onClick={addSeasonal} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 flex-1">Adicionar</button></div>
+           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-fadeIn">
+               <SectionHeader title="Eventos Sazonais" description="Períodos especiais (Ex: Natal, Black Friday) que aparecem destacados no calendário." />
+               
+               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-8 p-5 bg-gray-50 rounded-xl border border-gray-200 items-end">
+                   <div className="md:col-span-4">
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Evento</label>
+                        <input type="text" value={newSeasonal.label} onChange={e => { setNewSeasonal({...newSeasonal, label: e.target.value}); validate('seasonalLabel', e.target.value); }} className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.seasonalLabel ? 'border-red-300' : 'border-gray-300'}`} placeholder="Ex: Black Friday" />
+                   </div>
+                   <div className="md:col-span-3">
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Início</label>
+                        <input type="date" value={newSeasonal.startDate} onChange={e => setNewSeasonal({...newSeasonal, startDate: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 text-sm" />
+                   </div>
+                   <div className="md:col-span-3">
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Fim</label>
+                        <input type="date" value={newSeasonal.endDate} onChange={e => setNewSeasonal({...newSeasonal, endDate: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 text-sm" />
+                   </div>
+                   <div className="md:col-span-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Cor</label>
+                        <input type="color" value={newSeasonal.color} onChange={e => setNewSeasonal({...newSeasonal, color: e.target.value})} className="h-[38px] w-full border border-gray-300 rounded-lg p-1 bg-white cursor-pointer" />
+                   </div>
+                   <div className="md:col-span-1">
+                        <button onClick={addSeasonal} className="w-full bg-indigo-600 text-white h-[38px] rounded-lg font-bold hover:bg-indigo-700 shadow-sm flex items-center justify-center">
+                            {Icons.Plus}
+                        </button>
+                   </div>
                </div>
+
                <div className="space-y-3">
                    {(settings.seasonalEvents || []).map(s => (
-                       <div key={s.id} className="flex justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50" style={{ borderLeftWidth: '4px', borderLeftColor: s.color }}>
-                           <div><div className="font-bold">{s.label}</div><div className="text-xs text-gray-500">{new Date(s.startDate).toLocaleDateString()} - {new Date(s.endDate).toLocaleDateString()}</div></div>
-                           <button onClick={() => removeSeasonal(s.id)} className="text-red-500 text-sm">Excluir</button>
+                       <div key={s.id} className="flex justify-between items-center p-4 border rounded-xl hover:shadow-md transition-all bg-white group" style={{ borderColor: s.color, borderLeftWidth: '6px' }}>
+                           <div>
+                               <div className="font-bold text-gray-800 text-lg">{s.label}</div>
+                               <div className="text-xs text-gray-500 font-medium flex gap-2 mt-1">
+                                   <span className="bg-gray-100 px-2 py-0.5 rounded">📅 {new Date(s.startDate).toLocaleDateString()}</span>
+                                   <span className="text-gray-400">até</span>
+                                   <span className="bg-gray-100 px-2 py-0.5 rounded">📅 {new Date(s.endDate).toLocaleDateString()}</span>
+                               </div>
+                           </div>
+                           <IconButton onClick={() => removeSeasonal(s.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />
                        </div>
                    ))}
+                   {(settings.seasonalEvents || []).length === 0 && <p className="text-center text-gray-400 py-8 italic border-2 border-dashed border-gray-100 rounded-xl">Nenhum evento sazonal.</p>}
                </div>
            </div>
        )}
 
        {/* --- CONTENT: SYSTEM MSG --- */}
        {activeTab === 'system' && (
-           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-               <h3 className="text-lg font-bold text-gray-800 mb-4">Avisos do Sistema</h3>
-               <div className="space-y-4">
-                   <div className="flex items-center gap-2"><input type="checkbox" checked={sysMsg.active} onChange={e => setSysMsg({...sysMsg, active: e.target.checked})} /><label className="font-bold">Ativar</label></div>
-                   <select value={sysMsg.level} onChange={e => setSysMsg({...sysMsg, level: e.target.value as any})} className="w-full border border-gray-300 rounded-lg p-2"><option value="info">Info</option><option value="warning">Alerta</option><option value="error">Crítico</option></select>
-                   <textarea rows={4} value={sysMsg.message} onChange={e => setSysMsg({...sysMsg, message: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2" placeholder="Mensagem..." />
-                   <button onClick={saveSysMsg} className="bg-emerald-600 text-white font-bold py-2 px-6 rounded-lg">Salvar</button>
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fadeIn">
+               <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col h-full">
+                   <SectionHeader title="Configuração do Aviso" description="Exibe uma mensagem importante no topo de todas as páginas." />
+                   
+                   <div className="space-y-6 flex-1">
+                       <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+                           <span className="font-bold text-gray-700">Ativar Banner</span>
+                           <Switch checked={sysMsg.active} onChange={c => setSysMsg({...sysMsg, active: c})} />
+                       </div>
+
+                       <div>
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Nível de Urgência</label>
+                           <div className="grid grid-cols-3 gap-3">
+                               {['info', 'warning', 'error'].map((lvl) => (
+                                   <button 
+                                    key={lvl}
+                                    onClick={() => setSysMsg({...sysMsg, level: lvl as any})}
+                                    className={`py-2 rounded-lg text-sm font-bold border transition-all ${sysMsg.level === lvl ? (lvl === 'error' ? 'bg-red-50 border-red-500 text-red-700' : lvl === 'warning' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-blue-50 border-blue-500 text-blue-700') : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                   >
+                                       {lvl === 'error' ? 'Crítico' : lvl === 'warning' ? 'Alerta' : 'Informativo'}
+                                   </button>
+                               ))}
+                           </div>
+                       </div>
+
+                       <div>
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Mensagem</label>
+                           <textarea 
+                            rows={5} 
+                            value={sysMsg.message} 
+                            onChange={e => setSysMsg({...sysMsg, message: e.target.value})} 
+                            className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm leading-relaxed" 
+                            placeholder="Digite o comunicado aqui..." 
+                           />
+                       </div>
+
+                       <div className="mt-auto pt-4">
+                           <button onClick={saveSysMsg} className="w-full bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-emerald-700 shadow-lg transition-transform active:scale-95">
+                               Salvar e Publicar
+                           </button>
+                       </div>
+                   </div>
+               </div>
+
+               <div className="flex flex-col">
+                   <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex-1">
+                       <SectionHeader title="Pré-visualização em Tempo Real" description="Como o usuário verá o aviso." />
+                       
+                       <div className="flex-1 flex items-center justify-center bg-gray-100 rounded-xl border-2 border-dashed border-gray-200 p-8 min-h-[300px]">
+                           {sysMsg.active ? (
+                               <div className={`w-full rounded-lg p-4 shadow-lg flex items-start ${
+                                   sysMsg.level === 'error' ? 'bg-red-600 text-white' :
+                                   sysMsg.level === 'warning' ? 'bg-amber-600 text-white' :
+                                   'bg-blue-600 text-white'
+                                 }`}>
+                                    <div className="flex gap-3 w-full">
+                                       <div className="mt-0.5 text-2xl">
+                                         {sysMsg.level === 'error' ? '🚨' : 
+                                          sysMsg.level === 'warning' ? '⚠️' : 'ℹ️'}
+                                       </div>
+                                       <div>
+                                           <h3 className="font-bold uppercase text-sm mb-1 tracking-wide">
+                                             {sysMsg.level === 'error' ? 'MANUTENÇÃO / ERRO CRÍTICO' : 
+                                              sysMsg.level === 'warning' ? 'ATENÇÃO NECESSÁRIA' : 'COMUNICADO'}
+                                           </h3>
+                                           <p className="text-sm whitespace-pre-wrap leading-relaxed opacity-95 font-medium">
+                                               {sysMsg.message || "(Sua mensagem aparecerá aqui)"}
+                                           </p>
+                                       </div>
+                                    </div>
+                                 </div>
+                           ) : (
+                               <div className="text-center opacity-50">
+                                   <div className="text-4xl mb-2">👻</div>
+                                   <p className="font-bold text-gray-500">O banner está desativado.</p>
+                                   <p className="text-xs text-gray-400">Ative para ver o preview.</p>
+                               </div>
+                           )}
+                       </div>
+                   </div>
                </div>
            </div>
        )}
@@ -678,13 +954,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                                 const isChecked = selectedRoleConfig.permissions.includes(action.id);
                                                 
                                                 // Determine icon and color based on action type
-                                                let IconComp = IconSpecial;
+                                                let IconComp = Icons.Special;
                                                 let iconBg = 'bg-gray-100 text-gray-500';
                                                 
-                                                if (action.type === 'view') { IconComp = IconView; iconBg = 'bg-blue-100 text-blue-600'; }
-                                                if (action.type === 'create') { IconComp = IconCreate; iconBg = 'bg-green-100 text-green-600'; }
-                                                if (action.type === 'update') { IconComp = IconUpdate; iconBg = 'bg-amber-100 text-amber-600'; }
-                                                if (action.type === 'delete') { IconComp = IconDelete; iconBg = 'bg-red-100 text-red-600'; }
+                                                if (action.type === 'view') { IconComp = Icons.View; iconBg = 'bg-blue-100 text-blue-600'; }
+                                                if (action.type === 'create') { IconComp = Icons.Create; iconBg = 'bg-green-100 text-green-600'; }
+                                                if (action.type === 'update') { IconComp = Icons.Update; iconBg = 'bg-amber-100 text-amber-600'; }
+                                                if (action.type === 'delete') { IconComp = Icons.Delete; iconBg = 'bg-red-100 text-red-600'; }
 
                                                 return (
                                                     <div 
@@ -697,7 +973,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconBg} ${isChecked ? 'shadow-sm' : 'opacity-70 grayscale'}`}>
-                                                                <IconComp />
+                                                                {IconComp}
                                                             </div>
                                                             <div>
                                                                 <p className={`font-bold text-sm ${isChecked ? 'text-gray-900' : 'text-gray-500'}`}>{action.label}</p>
