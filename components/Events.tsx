@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus, Schedule, DaySchedule } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser } from '../utils/helpers';
@@ -157,7 +158,13 @@ export const Events: React.FC<EventsProps> = ({
      // Filter out inactive users events
      filtered = filtered.filter(e => {
         const colab = collaborators.find(c => c.id === e.collaboratorId);
-        return colab && colab.active !== false;
+        
+        // CORREÇÃO: Se o colaborador não for encontrado (ex: dados inconsistentes ou ID com erro),
+        // gestores ainda devem ver o evento para poder corrigi-lo ou excluí-lo. 
+        // Colaboradores comuns não veem eventos órfãos.
+        if (!colab) return isManager;
+
+        return colab.active !== false;
      });
 
      // 1. Strict Privacy for 'colaborador' profile
@@ -168,7 +175,12 @@ export const Events: React.FC<EventsProps> = ({
      if (currentUserAllowedSectors.length > 0) {
         filtered = filtered.filter(e => {
             const colab = collaborators.find(c => c.id === e.collaboratorId);
-            return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
+            // Se colab não encontrado, mas user é manager e passou no filtro anterior, 
+            // permitimos ver se for admin, ou ocultamos se tiver restrição de setor?
+            // Para segurança, se tem restrição de setor e não achou colab, oculta.
+            if (!colab) return currentUserAllowedSectors.length === 0;
+            
+            return colab.sector && currentUserAllowedSectors.includes(colab.sector);
         });
      }
 
@@ -177,7 +189,7 @@ export const Events: React.FC<EventsProps> = ({
         const term = historySearchTerm.toLowerCase();
         filtered = filtered.filter(e => {
             const colab = collaborators.find(c => c.id === e.collaboratorId);
-            const colabName = colab?.name.toLowerCase() || '';
+            const colabName = colab?.name.toLowerCase() || 'desconhecido';
             const typeStr = e.type.toLowerCase();
             const typeLabel = (e.typeLabel || '').toLowerCase();
             const obsStr = (e.observation || '').toLowerCase();
@@ -198,7 +210,7 @@ export const Events: React.FC<EventsProps> = ({
          const createdB = b.createdAt || '';
          return createdB.localeCompare(createdA);
      });
-  }, [events, collaborators, currentUserAllowedSectors, currentUserProfile, userColabId, historySearchTerm]);
+  }, [events, collaborators, currentUserAllowedSectors, currentUserProfile, userColabId, historySearchTerm, isManager]);
 
 
   const resetForm = () => {
@@ -340,7 +352,7 @@ export const Events: React.FC<EventsProps> = ({
       }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // VALIDATION DATE
@@ -380,7 +392,7 @@ export const Events: React.FC<EventsProps> = ({
             const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
             let count = 0;
 
-            multiSelectedIds.forEach(colId => {
+            const promises = multiSelectedIds.map(colId => {
                 const newEvent: EventRecord = {
                     id: generateUUID(),
                     collaboratorId: colId,
@@ -395,9 +407,12 @@ export const Events: React.FC<EventsProps> = ({
                     schedule: finalSchedule, // Save temporary schedule
                     createdAt: new Date().toISOString()
                 };
-                onAdd(newEvent);
                 count++;
+                // Cast to promise to await if onAdd was async (it is in App.tsx)
+                return Promise.resolve(onAdd(newEvent));
             });
+
+            await Promise.all(promises);
 
             logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${label}`, user);
             showToast(`${count} eventos registrados com sucesso!`);
@@ -433,7 +448,9 @@ export const Events: React.FC<EventsProps> = ({
             schedule: finalSchedule,
             createdAt: new Date().toISOString()
         };
-        onAdd(newEvent);
+        
+        await Promise.resolve(onAdd(newEvent));
+        
         showToast(isManager ? 'Evento registrado!' : 'Solicitação de folga enviada!');
         resetForm();
 
@@ -500,7 +517,13 @@ export const Events: React.FC<EventsProps> = ({
     }
   };
 
-  const getColabName = (id: string) => collaborators.find(c => c.id === id)?.name || '---';
+  const getColabName = (id: string) => {
+      const colab = collaborators.find(c => c.id === id);
+      if (colab) return colab.name;
+      // Fallback visual para IDs órfãos
+      if (id) return `ID: ${id.substring(0, 8)}...`;
+      return '---';
+  };
   
   const getEventLabel = (e: EventRecord) => {
      if (e.typeLabel) return e.typeLabel;

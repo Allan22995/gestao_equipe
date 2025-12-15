@@ -42,11 +42,12 @@ export const dbService = {
   },
 
   // --- GENERIC LISTENERS (TEMPO REAL) ---
+  // CORREÇÃO: Ordem do spread alterada ({ ...doc.data(), id: doc.id }) para garantir que o ID do Firestore tenha prioridade
   
   subscribeToCollaborators: (callback: (data: Collaborator[]) => void) => {
     const q = query(collection(db, COLLECTIONS.COLLABORATORS));
     return onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Collaborator));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Collaborator));
       callback(data);
     }, (error) => {
       console.error("❌ [DB] Erro ao carregar Colaboradores:", error.message);
@@ -56,7 +57,7 @@ export const dbService = {
   subscribeToEvents: (callback: (data: EventRecord[]) => void) => {
     const q = query(collection(db, COLLECTIONS.EVENTS));
     return onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventRecord));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as EventRecord));
       callback(data);
     }, (error) => {
       console.error("❌ [DB] Erro ao carregar Eventos:", error.message);
@@ -65,7 +66,7 @@ export const dbService = {
 
   subscribeToOnCalls: (callback: (data: OnCallRecord[]) => void) => {
     return onSnapshot(collection(db, COLLECTIONS.ON_CALLS), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OnCallRecord));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as OnCallRecord));
       callback(data);
     }, (error) => {
       console.error("❌ [DB] Erro ao carregar Plantões:", error.message);
@@ -74,7 +75,7 @@ export const dbService = {
 
   subscribeToAdjustments: (callback: (data: BalanceAdjustment[]) => void) => {
     return onSnapshot(collection(db, COLLECTIONS.ADJUSTMENTS), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BalanceAdjustment));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BalanceAdjustment));
       callback(data);
     }, (error) => {
       console.error("❌ [DB] Erro ao carregar Ajustes:", error.message);
@@ -83,7 +84,7 @@ export const dbService = {
 
   subscribeToVacationRequests: (callback: (data: VacationRequest[]) => void) => {
     return onSnapshot(collection(db, COLLECTIONS.VACATION_REQUESTS), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VacationRequest));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as VacationRequest));
       callback(data);
     }, (error) => {
       console.error("❌ [DB] Erro ao carregar Solicitações de Férias:", error.message);
@@ -127,6 +128,7 @@ export const dbService = {
 
   // Eventos
   addEvent: async (evt: EventRecord) => {
+    // Garante que o ID local seja removido para que o Firestore gere um novo
     const { id, ...rest } = evt; 
     await addDoc(collection(db, COLLECTIONS.EVENTS), rest);
   },
