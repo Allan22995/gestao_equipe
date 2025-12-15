@@ -32,10 +32,16 @@ const SectionHeader = ({ title, description }: { title: string, description?: st
   </div>
 );
 
-const Switch = ({ checked, onChange, label }: { checked: boolean, onChange: (checked: boolean) => void, label?: string }) => (
-  <label className="flex items-center cursor-pointer group">
+const Switch = ({ checked, onChange, label, disabled = false }: { checked: boolean, onChange: (checked: boolean) => void, label?: string, disabled?: boolean }) => (
+  <label className={`flex items-center group ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
     <div className="relative">
-      <input type="checkbox" className="sr-only" checked={checked} onChange={e => onChange(e.target.checked)} />
+      <input 
+        type="checkbox" 
+        className="sr-only" 
+        checked={checked} 
+        onChange={e => !disabled && onChange(e.target.checked)} 
+        disabled={disabled}
+      />
       <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ${checked ? 'bg-indigo-600' : 'bg-gray-300'}`}></div>
       <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ${checked ? 'transform translate-x-4' : ''}`}></div>
     </div>
@@ -43,8 +49,13 @@ const Switch = ({ checked, onChange, label }: { checked: boolean, onChange: (che
   </label>
 );
 
-const IconButton = ({ onClick, icon, colorClass = "text-gray-500 hover:text-indigo-600", title }: any) => (
-  <button onClick={onClick} className={`p-1.5 rounded-full hover:bg-gray-100 transition-all ${colorClass}`} title={title}>
+const IconButton = ({ onClick, icon, colorClass = "text-gray-500 hover:text-indigo-600", title, disabled = false }: any) => (
+  <button 
+    onClick={onClick} 
+    disabled={disabled}
+    className={`p-1.5 rounded-full transition-all ${disabled ? 'text-gray-300 cursor-not-allowed' : `hover:bg-gray-100 ${colorClass}`}`} 
+    title={disabled ? "Sem permissão para esta ação" : title}
+  >
     {icon}
   </button>
 );
@@ -352,15 +363,21 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <div className="relative flex-1">
                            <input 
                             type="text" 
+                            disabled={!hasPermission('settings:edit_hierarchy')}
                             value={newBranch} 
                             onChange={e => { setNewBranch(e.target.value); validate('newBranch', e.target.value); }} 
                             onKeyDown={e => e.key === 'Enter' && addBranch()}
                             placeholder="Nova Filial..." 
-                            className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${errors.newBranch ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-300'}`} 
+                            className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${errors.newBranch ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-300'} disabled:bg-gray-100 disabled:text-gray-500`} 
                            />
                            {errors.newBranch && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newBranch}</span>}
                        </div>
-                       <button onClick={addBranch} className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px]">
+                       <button 
+                        disabled={!hasPermission('settings:edit_hierarchy')}
+                        onClick={addBranch} 
+                        className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        title={!hasPermission('settings:edit_hierarchy') ? "Sem permissão para adicionar" : ""}
+                       >
                            {Icons.Plus}
                        </button>
                    </div>
@@ -369,7 +386,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        {settings.branches.map(b => (
                            <div key={b} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
                                <span className="font-medium">{b}</span> 
-                               <button onClick={() => removeBranch(b)} className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors">
+                               <button 
+                                disabled={!hasPermission('settings:edit_hierarchy')}
+                                onClick={() => removeBranch(b)} 
+                                className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
+                                title={!hasPermission('settings:edit_hierarchy') ? "Sem permissão para remover" : "Remover"}
+                               >
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                </button>
                            </div>
@@ -386,15 +408,21 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <div className="relative flex-1">
                            <input 
                             type="text" 
+                            disabled={!hasPermission('settings:edit_hierarchy')}
                             value={newSector} 
                             onChange={e => { setNewSector(e.target.value); validate('newSector', e.target.value); }}
                             onKeyDown={e => e.key === 'Enter' && addSector()}
                             placeholder="Novo Setor..." 
-                            className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${errors.newSector ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-300'}`} 
+                            className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${errors.newSector ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-300'} disabled:bg-gray-100 disabled:text-gray-500`} 
                            />
                            {errors.newSector && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newSector}</span>}
                        </div>
-                       <button onClick={addSector} className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px]">
+                       <button 
+                        disabled={!hasPermission('settings:edit_hierarchy')}
+                        onClick={addSector} 
+                        className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        title={!hasPermission('settings:edit_hierarchy') ? "Sem permissão para adicionar" : ""}
+                       >
                            {Icons.Plus}
                        </button>
                    </div>
@@ -403,7 +431,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        {settings.sectors.map(s => (
                            <div key={s} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
                                <span className="font-medium">{s}</span> 
-                               <button onClick={() => removeSector(s)} className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors">
+                               <button 
+                                disabled={!hasPermission('settings:edit_hierarchy')}
+                                onClick={() => removeSector(s)} 
+                                className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
+                                title={!hasPermission('settings:edit_hierarchy') ? "Sem permissão para remover" : "Remover"}
+                               >
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                </button>
                            </div>
@@ -425,21 +458,31 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome da Função</label>
                            <input 
                             type="text" 
+                            disabled={!hasPermission('settings:manage_access')}
                             value={newRole} 
                             onChange={e => { setNewRole(e.target.value); validate('newRole', e.target.value); }} 
                             placeholder="Ex: Supervisor Logístico" 
-                            className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newRole ? 'border-red-300' : 'border-gray-300'}`} 
+                            className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newRole ? 'border-red-300' : 'border-gray-300'} disabled:bg-gray-100`} 
                            />
                        </div>
                        <div className="w-full md:w-64">
                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Espelhar Permissões</label>
-                           <select value={newRoleMirrorSource} onChange={e => setNewRoleMirrorSource(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white">
+                           <select 
+                            disabled={!hasPermission('settings:manage_access')}
+                            value={newRoleMirrorSource} 
+                            onChange={e => setNewRoleMirrorSource(e.target.value)} 
+                            className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white disabled:bg-gray-100"
+                           >
                                <option value="">(Opcional)</option>
                                {settings.roles.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
                            </select>
                        </div>
                        <div className="mt-auto pt-5">
-                            <button onClick={addRole} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm whitespace-nowrap h-[38px]">
+                            <button 
+                                disabled={!hasPermission('settings:manage_access')}
+                                onClick={addRole} 
+                                className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm whitespace-nowrap h-[38px] disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
                                 Adicionar
                             </button>
                        </div>
@@ -461,8 +504,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                        <td className="p-4 text-center">
                                            <div className="flex justify-center">
                                                <button 
+                                                disabled={!hasPermission('settings:manage_access')}
                                                 onClick={() => toggleRoleViewAll(r.name)} 
-                                                className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-2 transition-all ${r.canViewAllSectors ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'}`}
+                                                className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-2 transition-all ${
+                                                    !hasPermission('settings:manage_access') ? 'opacity-50 cursor-not-allowed' : ''
+                                                } ${
+                                                    r.canViewAllSectors ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                                }`}
                                                >
                                                    <span className={`w-2 h-2 rounded-full ${r.canViewAllSectors ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
                                                    {r.canViewAllSectors ? 'Irrestrito (Vê Tudo)' : 'Restrito ao Setor'}
@@ -471,8 +519,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                        </td>
                                        <td className="p-4 text-right">
                                            <div className="flex justify-end gap-2 opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
-                                               <IconButton onClick={() => openMirrorModal(r.name)} icon={Icons.Copy} colorClass="text-blue-500 hover:bg-blue-50" title="Copiar Permissões de outra função" />
-                                               <IconButton onClick={() => removeRole(r.name)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" title="Excluir Função" />
+                                               <IconButton disabled={!hasPermission('settings:manage_access')} onClick={() => openMirrorModal(r.name)} icon={Icons.Copy} colorClass="text-blue-500 hover:bg-blue-50" title="Copiar Permissões de outra função" />
+                                               <IconButton disabled={!hasPermission('settings:manage_access')} onClick={() => removeRole(r.name)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" title="Excluir Função" />
                                            </div>
                                        </td>
                                    </tr>
@@ -512,22 +560,32 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Evento</label>
                        <input 
                         type="text" 
+                        disabled={!hasPermission('settings:edit_event_types')}
                         value={newEventLabel} 
                         onChange={e => { setNewEventLabel(e.target.value); validate('newEventLabel', e.target.value); }} 
                         placeholder="Ex: Licença Paternidade" 
-                        className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newEventLabel ? 'border-red-300' : 'border-gray-300'}`} 
+                        className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newEventLabel ? 'border-red-300' : 'border-gray-300'} disabled:bg-gray-100`} 
                        />
                    </div>
                    <div className="w-full md:w-48">
                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Comportamento</label>
-                       <select value={newEventBehavior} onChange={e => setNewEventBehavior(e.target.value as any)} className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white">
+                       <select 
+                        disabled={!hasPermission('settings:edit_event_types')}
+                        value={newEventBehavior} 
+                        onChange={e => setNewEventBehavior(e.target.value as any)} 
+                        className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white disabled:bg-gray-100"
+                       >
                            <option value="neutral">Neutro (Apenas Registro)</option>
                            <option value="debit">Débito (Desconta Dias)</option>
                            <option value="credit_1x">Crédito (Soma 1x)</option>
                            <option value="credit_2x">Crédito (Soma 2x)</option>
                        </select>
                    </div>
-                   <button onClick={addEventType} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm h-[38px]">
+                   <button 
+                    disabled={!hasPermission('settings:edit_event_types')}
+                    onClick={addEventType} 
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm h-[38px] disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
                        Adicionar
                    </button>
                </div>
@@ -543,7 +601,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                             {settings.eventTypes.filter(t => t.behavior === 'neutral').map(t => (
                                 <div key={t.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
                                     <span className="font-bold text-gray-700 text-sm">{t.label}</span>
-                                    {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
+                                    {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton disabled={!hasPermission('settings:edit_event_types')} onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
                                 </div>
                             ))}
                             {settings.eventTypes.filter(t => t.behavior === 'neutral').length === 0 && <p className="text-xs text-gray-400 italic text-center py-2">Vazio</p>}
@@ -560,7 +618,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                             {settings.eventTypes.filter(t => t.behavior === 'debit').map(t => (
                                 <div key={t.id} className="flex justify-between items-center p-3 border border-red-100 rounded-lg bg-white shadow-sm">
                                     <span className="font-bold text-gray-800 text-sm">{t.label}</span>
-                                    {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
+                                    {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton disabled={!hasPermission('settings:edit_event_types')} onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
                                 </div>
                             ))}
                         </div>
@@ -578,7 +636,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                     <span className="font-bold text-gray-800 text-sm">{t.label}</span>
                                     <div className="flex items-center gap-2">
                                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">{t.behavior === 'credit_2x' ? '2x' : '1x'}</span>
-                                        {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
+                                        {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton disabled={!hasPermission('settings:edit_event_types')} onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
                                     </div>
                                 </div>
                             ))}
@@ -597,14 +655,19 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                    <div className="relative flex-1">
                        <input 
                         type="text" 
+                        disabled={!hasPermission('settings:edit_rotations')}
                         value={newRotationLabel} 
                         onChange={e => { setNewRotationLabel(e.target.value); validate('newRotationLabel', e.target.value); }}
                         placeholder="Nome da Escala (Ex: Grupo Delta)..." 
-                        className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newRotationLabel ? 'border-red-300' : 'border-gray-300'}`} 
+                        className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newRotationLabel ? 'border-red-300' : 'border-gray-300'} disabled:bg-gray-100`} 
                        />
                        {errors.newRotationLabel && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newRotationLabel}</span>}
                    </div>
-                   <button onClick={addRotation} className="bg-indigo-600 text-white px-6 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95">
+                   <button 
+                    disabled={!hasPermission('settings:edit_rotations')}
+                    onClick={addRotation} 
+                    className="bg-indigo-600 text-white px-6 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
                        Adicionar
                    </button>
                </div>
@@ -616,7 +679,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-100">{r.label.charAt(0)}</span>
                                <span className="font-bold text-gray-700 text-sm truncate">{r.label}</span>
                            </div>
-                           <button onClick={() => removeRotation(r.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                           <button 
+                            disabled={!hasPermission('settings:edit_rotations')}
+                            onClick={() => removeRotation(r.id)} 
+                            className="text-gray-300 hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                           >
                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                            </button>
                        </div>
@@ -634,7 +701,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        <h3 className="text-lg font-bold text-gray-800">Modelos de Jornada</h3>
                        <p className="text-sm text-gray-500">Crie modelos padrão (Ex: 08:00 as 17:00) para agilizar o cadastro.</p>
                    </div>
-                   <button onClick={openNewTemplate} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-700 text-sm shadow-sm flex items-center gap-2 transition-transform active:scale-95">
+                   <button 
+                    disabled={!hasPermission('settings:edit_templates')}
+                    onClick={openNewTemplate} 
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-700 text-sm shadow-sm flex items-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
                        {Icons.Plus} Novo Modelo
                    </button>
                </div>
@@ -648,8 +719,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                    <span className="font-bold text-gray-800">{t.name}</span>
                                </div>
                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                   <IconButton onClick={() => openEditTemplate(t)} icon={Icons.Edit} colorClass="text-blue-500 hover:bg-blue-50" />
-                                   <IconButton onClick={() => removeTemplate(t.id)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" />
+                                   <IconButton disabled={!hasPermission('settings:edit_templates')} onClick={() => openEditTemplate(t)} icon={Icons.Edit} colorClass="text-blue-500 hover:bg-blue-50" />
+                                   <IconButton disabled={!hasPermission('settings:edit_templates')} onClick={() => removeTemplate(t.id)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" />
                                </div>
                            </div>
                            <div className="space-y-1">
@@ -699,15 +770,18 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                {settings.branches.filter(b => b !== selectedBranchForLinks).map(b => {
                                    const isLinked = settings.branchLinks?.[selectedBranchForLinks]?.includes(b);
+                                   const canEdit = hasPermission('settings:edit_integrations');
+                                   
                                    return (
-                                       <label key={b} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isLinked ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'hover:bg-gray-50 border-gray-200'}`}>
+                                       <label key={b} className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${isLinked ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'hover:bg-gray-50 border-gray-200'} ${!canEdit ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isLinked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'}`}>
                                                {isLinked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                            </div>
                                            <input 
                                                type="checkbox" 
                                                checked={!!isLinked}
-                                               onChange={() => toggleBranchLink(b)}
+                                               onChange={() => canEdit && toggleBranchLink(b)}
+                                               disabled={!canEdit}
                                                className="hidden"
                                            />
                                            <span className={`text-sm ${isLinked ? 'font-bold text-indigo-900' : 'text-gray-700'}`}>{b}</span>
@@ -736,22 +810,51 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-8 p-5 bg-gray-50 rounded-xl border border-gray-200 items-end">
                    <div className="md:col-span-4">
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Evento</label>
-                        <input type="text" value={newSeasonal.label} onChange={e => { setNewSeasonal({...newSeasonal, label: e.target.value}); validate('seasonalLabel', e.target.value); }} className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.seasonalLabel ? 'border-red-300' : 'border-gray-300'}`} placeholder="Ex: Black Friday" />
+                        <input 
+                            type="text" 
+                            disabled={!hasPermission('settings:edit_seasonal')}
+                            value={newSeasonal.label} 
+                            onChange={e => { setNewSeasonal({...newSeasonal, label: e.target.value}); validate('seasonalLabel', e.target.value); }} 
+                            className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.seasonalLabel ? 'border-red-300' : 'border-gray-300'} disabled:bg-gray-100`} 
+                            placeholder="Ex: Black Friday" 
+                        />
                    </div>
                    <div className="md:col-span-3">
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Início</label>
-                        <input type="date" value={newSeasonal.startDate} onChange={e => setNewSeasonal({...newSeasonal, startDate: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 text-sm" />
+                        <input 
+                            type="date" 
+                            disabled={!hasPermission('settings:edit_seasonal')}
+                            value={newSeasonal.startDate} 
+                            onChange={e => setNewSeasonal({...newSeasonal, startDate: e.target.value})} 
+                            className="w-full border border-gray-300 rounded-lg p-2 text-sm disabled:bg-gray-100" 
+                        />
                    </div>
                    <div className="md:col-span-3">
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Fim</label>
-                        <input type="date" value={newSeasonal.endDate} onChange={e => setNewSeasonal({...newSeasonal, endDate: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 text-sm" />
+                        <input 
+                            type="date" 
+                            disabled={!hasPermission('settings:edit_seasonal')}
+                            value={newSeasonal.endDate} 
+                            onChange={e => setNewSeasonal({...newSeasonal, endDate: e.target.value})} 
+                            className="w-full border border-gray-300 rounded-lg p-2 text-sm disabled:bg-gray-100" 
+                        />
                    </div>
                    <div className="md:col-span-1">
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Cor</label>
-                        <input type="color" value={newSeasonal.color} onChange={e => setNewSeasonal({...newSeasonal, color: e.target.value})} className="h-[38px] w-full border border-gray-300 rounded-lg p-1 bg-white cursor-pointer" />
+                        <input 
+                            type="color" 
+                            disabled={!hasPermission('settings:edit_seasonal')}
+                            value={newSeasonal.color} 
+                            onChange={e => setNewSeasonal({...newSeasonal, color: e.target.value})} 
+                            className="h-[38px] w-full border border-gray-300 rounded-lg p-1 bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" 
+                        />
                    </div>
                    <div className="md:col-span-1">
-                        <button onClick={addSeasonal} className="w-full bg-indigo-600 text-white h-[38px] rounded-lg font-bold hover:bg-indigo-700 shadow-sm flex items-center justify-center">
+                        <button 
+                            disabled={!hasPermission('settings:edit_seasonal')}
+                            onClick={addSeasonal} 
+                            className="w-full bg-indigo-600 text-white h-[38px] rounded-lg font-bold hover:bg-indigo-700 shadow-sm flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                             {Icons.Plus}
                         </button>
                    </div>
@@ -768,7 +871,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                    <span className="bg-gray-100 px-2 py-0.5 rounded">📅 {new Date(s.endDate).toLocaleDateString()}</span>
                                </div>
                            </div>
-                           <IconButton onClick={() => removeSeasonal(s.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />
+                           <IconButton disabled={!hasPermission('settings:edit_seasonal')} onClick={() => removeSeasonal(s.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />
                        </div>
                    ))}
                    {(settings.seasonalEvents || []).length === 0 && <p className="text-center text-gray-400 py-8 italic border-2 border-dashed border-gray-100 rounded-xl">Nenhum evento sazonal.</p>}
@@ -785,7 +888,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                    <div className="space-y-6 flex-1">
                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
                            <span className="font-bold text-gray-700">Ativar Banner</span>
-                           <Switch checked={sysMsg.active} onChange={c => setSysMsg({...sysMsg, active: c})} />
+                           <Switch 
+                            disabled={!hasPermission('settings:manage_system_msg')}
+                            checked={sysMsg.active} 
+                            onChange={c => setSysMsg({...sysMsg, active: c})} 
+                           />
                        </div>
 
                        <div>
@@ -794,8 +901,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                {['info', 'warning', 'error'].map((lvl) => (
                                    <button 
                                     key={lvl}
+                                    disabled={!hasPermission('settings:manage_system_msg')}
                                     onClick={() => setSysMsg({...sysMsg, level: lvl as any})}
-                                    className={`py-2 rounded-lg text-sm font-bold border transition-all ${sysMsg.level === lvl ? (lvl === 'error' ? 'bg-red-50 border-red-500 text-red-700' : lvl === 'warning' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-blue-50 border-blue-500 text-blue-700') : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                    className={`py-2 rounded-lg text-sm font-bold border transition-all ${sysMsg.level === lvl ? (lvl === 'error' ? 'bg-red-50 border-red-500 text-red-700' : lvl === 'warning' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-blue-50 border-blue-500 text-blue-700') : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'} disabled:opacity-50 disabled:cursor-not-allowed`}
                                    >
                                        {lvl === 'error' ? 'Crítico' : lvl === 'warning' ? 'Alerta' : 'Informativo'}
                                    </button>
@@ -807,15 +915,20 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Mensagem</label>
                            <textarea 
                             rows={5} 
+                            disabled={!hasPermission('settings:manage_system_msg')}
                             value={sysMsg.message} 
                             onChange={e => setSysMsg({...sysMsg, message: e.target.value})} 
-                            className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm leading-relaxed" 
+                            className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm leading-relaxed disabled:bg-gray-100" 
                             placeholder="Digite o comunicado aqui..." 
                            />
                        </div>
 
                        <div className="mt-auto pt-4">
-                           <button onClick={saveSysMsg} className="w-full bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-emerald-700 shadow-lg transition-transform active:scale-95">
+                           <button 
+                            disabled={!hasPermission('settings:manage_system_msg')}
+                            onClick={saveSysMsg} 
+                            className="w-full bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-emerald-700 shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                           >
                                Salvar e Publicar
                            </button>
                        </div>
@@ -864,7 +977,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
        {/* MODALS */}
        
-       {/* 1. PERMISSIONS MODAL (MASTER-DETAIL LAYOUT) */}
+       {/* 1. PERMISSIONS MODAL (MASTER-DETAIL LAYOUT + MATRIX SPLIT) */}
        <Modal 
             isOpen={!!selectedModule} 
             onClose={() => setSelectedModule(null)} 
@@ -918,7 +1031,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                             </div>
                         </div>
 
-                        {/* RIGHT CONTENT: PERMISSIONS */}
+                        {/* RIGHT CONTENT: PERMISSIONS MATRIX */}
                         <div className={`flex-1 bg-gray-50 flex flex-col h-full ${!activeRoleForPerms && 'hidden md:flex'}`}>
                             {selectedRoleConfig ? (
                                 <>
@@ -930,66 +1043,103 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                         <span className="font-bold text-gray-800">{selectedRoleConfig.name}</span>
                                     </div>
 
-                                    <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                                            <div>
-                                                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                                    {currentModuleDef.icon} {currentModuleDef.label}
-                                                </h3>
-                                                <p className="text-sm text-gray-500 mt-1">{currentModuleDef.description}</p>
+                                    {(() => {
+                                        // SPLIT ACTIONS LOGIC
+                                        const viewActions = currentModuleDef.actions.filter(a => a.type === 'view');
+                                        const manageActions = currentModuleDef.actions.filter(a => a.type !== 'view');
+                                        
+                                        const renderActionGrid = (actions: typeof viewActions) => (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                                {actions.map(action => {
+                                                    const isChecked = selectedRoleConfig.permissions.includes(action.id);
+                                                    
+                                                    // Determine icon and color based on action type
+                                                    let IconComp = Icons.Special;
+                                                    let iconBg = 'bg-gray-100 text-gray-500';
+                                                    
+                                                    if (action.type === 'view') { IconComp = Icons.View; iconBg = 'bg-blue-100 text-blue-600'; }
+                                                    if (action.type === 'create') { IconComp = Icons.Create; iconBg = 'bg-green-100 text-green-600'; }
+                                                    if (action.type === 'update') { IconComp = Icons.Update; iconBg = 'bg-amber-100 text-amber-600'; }
+                                                    if (action.type === 'delete') { IconComp = Icons.Delete; iconBg = 'bg-red-100 text-red-600'; }
+
+                                                    const canEditPerms = hasPermission('settings:manage_access'); // Only Admin/Access Manager can toggle
+
+                                                    return (
+                                                        <div 
+                                                            key={action.id} 
+                                                            onClick={() => canEditPerms && togglePermission(selectedRoleConfig.name, action.id)}
+                                                            className={`
+                                                                bg-white p-4 rounded-xl border transition-all shadow-sm group flex items-center justify-between
+                                                                ${canEditPerms ? 'cursor-pointer hover:shadow-md hover:border-gray-300' : 'cursor-not-allowed opacity-80'}
+                                                                ${isChecked ? 'border-indigo-300 ring-1 ring-indigo-100' : 'border-gray-200'}
+                                                            `}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconBg} ${isChecked ? 'shadow-sm' : 'opacity-70 grayscale'}`}>
+                                                                    {IconComp}
+                                                                </div>
+                                                                <div>
+                                                                    <p className={`font-bold text-sm ${isChecked ? 'text-gray-900' : 'text-gray-500'}`}>{action.label}</p>
+                                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{action.type}</p>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            {/* Custom Toggle Switch */}
+                                                            <div className={`w-12 h-6 rounded-full transition-colors relative duration-300 ${isChecked ? 'bg-indigo-600' : 'bg-gray-200'}`}>
+                                                                <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-0.5 transition-transform duration-300 ${isChecked ? 'left-[26px]' : 'left-0.5'}`}></div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                            <button 
-                                                onClick={() => {
-                                                    const moduleActionIds = currentModuleDef.actions.map(a => a.id);
-                                                    toggleAllModulePermissionsForRole(selectedRoleConfig.name, moduleActionIds);
-                                                }}
-                                                className="text-xs font-bold bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-lg hover:bg-indigo-50 shadow-sm transition-colors uppercase tracking-wide"
-                                            >
-                                                {currentModuleDef.actions.every(a => selectedRoleConfig.permissions.includes(a.id)) ? 'Desmarcar Todos' : 'Habilitar Todos'}
-                                            </button>
-                                        </div>
+                                        );
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                                            {currentModuleDef.actions.map(action => {
-                                                const isChecked = selectedRoleConfig.permissions.includes(action.id);
-                                                
-                                                // Determine icon and color based on action type
-                                                let IconComp = Icons.Special;
-                                                let iconBg = 'bg-gray-100 text-gray-500';
-                                                
-                                                if (action.type === 'view') { IconComp = Icons.View; iconBg = 'bg-blue-100 text-blue-600'; }
-                                                if (action.type === 'create') { IconComp = Icons.Create; iconBg = 'bg-green-100 text-green-600'; }
-                                                if (action.type === 'update') { IconComp = Icons.Update; iconBg = 'bg-amber-100 text-amber-600'; }
-                                                if (action.type === 'delete') { IconComp = Icons.Delete; iconBg = 'bg-red-100 text-red-600'; }
-
-                                                return (
-                                                    <div 
-                                                        key={action.id} 
-                                                        onClick={() => togglePermission(selectedRoleConfig.name, action.id)}
-                                                        className={`
-                                                            bg-white p-4 rounded-xl border transition-all cursor-pointer shadow-sm group hover:shadow-md flex items-center justify-between
-                                                            ${isChecked ? 'border-indigo-300 ring-1 ring-indigo-100' : 'border-gray-200 hover:border-gray-300'}
-                                                        `}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconBg} ${isChecked ? 'shadow-sm' : 'opacity-70 grayscale'}`}>
-                                                                {IconComp}
-                                                            </div>
-                                                            <div>
-                                                                <p className={`font-bold text-sm ${isChecked ? 'text-gray-900' : 'text-gray-500'}`}>{action.label}</p>
-                                                                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{action.type}</p>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        {/* Custom Toggle Switch */}
-                                                        <div className={`w-12 h-6 rounded-full transition-colors relative duration-300 ${isChecked ? 'bg-indigo-600' : 'bg-gray-200'}`}>
-                                                            <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-0.5 transition-transform duration-300 ${isChecked ? 'left-[26px]' : 'left-0.5'}`}></div>
-                                                        </div>
+                                        return (
+                                            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-8">
+                                                {/* Header Info */}
+                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-200 pb-4">
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                                            {currentModuleDef.icon} {currentModuleDef.label}
+                                                        </h3>
+                                                        <p className="text-sm text-gray-500 mt-1">{currentModuleDef.description}</p>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+                                                    <button 
+                                                        disabled={!hasPermission('settings:manage_access')}
+                                                        onClick={() => {
+                                                            const moduleActionIds = currentModuleDef.actions.map(a => a.id);
+                                                            toggleAllModulePermissionsForRole(selectedRoleConfig.name, moduleActionIds);
+                                                        }}
+                                                        className="text-xs font-bold bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-lg hover:bg-indigo-50 shadow-sm transition-colors uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {currentModuleDef.actions.every(a => selectedRoleConfig.permissions.includes(a.id)) ? 'Desmarcar Todos' : 'Habilitar Todos'}
+                                                    </button>
+                                                </div>
+
+                                                {/* VIEW SECTION */}
+                                                {viewActions.length > 0 && (
+                                                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                                                        <h4 className="text-sm font-bold text-blue-800 uppercase tracking-wide mb-4 flex items-center gap-2">
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                            Permissões de Visualização (View)
+                                                        </h4>
+                                                        {renderActionGrid(viewActions)}
+                                                    </div>
+                                                )}
+
+                                                {/* ACTION SECTION */}
+                                                {manageActions.length > 0 && (
+                                                    <div className="bg-gray-100/50 p-4 rounded-xl border border-gray-200">
+                                                        <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4 flex items-center gap-2">
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                            Permissões de Ação (Gestão)
+                                                        </h4>
+                                                        {renderActionGrid(manageActions)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </>
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8">
@@ -1007,8 +1157,24 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        <Modal isOpen={isMirrorModalOpen} onClose={() => setIsMirrorModalOpen(false)} title="Espelhar Permissões">
            <div className="space-y-4">
                <p className="text-sm bg-amber-50 p-3 rounded text-amber-800">Isso substituirá todas as permissões de <b>{mirrorTargetRole}</b>.</p>
-               <select value={mirrorSourceRole} onChange={e => setMirrorSourceRole(e.target.value)} className="w-full border p-2 rounded"><option value="">Copiar de...</option>{settings.roles.filter(r => r.name !== mirrorTargetRole).map(r => <option key={r.name} value={r.name}>{r.name}</option>)}</select>
-               <div className="flex justify-end gap-2"><button onClick={() => setIsMirrorModalOpen(false)} className="px-4 py-2">Cancelar</button><button onClick={executeMirroring} className="bg-indigo-600 text-white px-4 py-2 rounded font-bold">Confirmar</button></div>
+               <select 
+                value={mirrorSourceRole} 
+                onChange={e => setMirrorSourceRole(e.target.value)} 
+                className="w-full border p-2 rounded disabled:bg-gray-100"
+                disabled={!hasPermission('settings:manage_access')}
+               >
+                   <option value="">Copiar de...</option>{settings.roles.filter(r => r.name !== mirrorTargetRole).map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
+                </select>
+               <div className="flex justify-end gap-2">
+                   <button onClick={() => setIsMirrorModalOpen(false)} className="px-4 py-2">Cancelar</button>
+                   <button 
+                    onClick={executeMirroring} 
+                    className="bg-indigo-600 text-white px-4 py-2 rounded font-bold disabled:opacity-50"
+                    disabled={!hasPermission('settings:manage_access')}
+                   >
+                       Confirmar
+                   </button>
+               </div>
            </div>
        </Modal>
 
@@ -1017,27 +1183,64 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            <div className="space-y-6">
                <div>
                    <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Modelo</label>
-                   <input type="text" value={tempTemplateName} onChange={e => setTempTemplateName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2" placeholder="Ex: Comercial 08 as 18" />
+                   <input 
+                    type="text" 
+                    value={tempTemplateName} 
+                    onChange={e => setTempTemplateName(e.target.value)} 
+                    className="w-full border border-gray-300 rounded-lg p-2" 
+                    placeholder="Ex: Comercial 08 as 18" 
+                    disabled={!hasPermission('settings:edit_templates')}
+                   />
                </div>
                <div className="space-y-2">
                    {daysOrder.map(day => (
                        <div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-2 bg-gray-50 rounded border border-gray-100">
                            <div className="w-24 font-bold capitalize text-sm flex items-center gap-2">
-                               <input type="checkbox" checked={tempSchedule[day].enabled} onChange={e => handleTempScheduleChange(day, 'enabled', e.target.checked)} />
+                               <input 
+                                type="checkbox" 
+                                checked={tempSchedule[day].enabled} 
+                                onChange={e => handleTempScheduleChange(day, 'enabled', e.target.checked)} 
+                                disabled={!hasPermission('settings:edit_templates')}
+                               />
                                {day}
                            </div>
                            <div className={`flex items-center gap-2 flex-1 ${!tempSchedule[day].enabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                               <input type="time" value={tempSchedule[day].start} onChange={e => handleTempScheduleChange(day, 'start', e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                               <input 
+                                type="time" 
+                                value={tempSchedule[day].start} 
+                                onChange={e => handleTempScheduleChange(day, 'start', e.target.value)} 
+                                className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" 
+                                disabled={!hasPermission('settings:edit_templates')}
+                               />
                                <span className="text-xs text-gray-400">até</span>
-                               <input type="time" value={tempSchedule[day].end} onChange={e => handleTempScheduleChange(day, 'end', e.target.value)} className="border rounded px-2 py-1 text-sm" />
-                               <label className="flex items-center gap-1 ml-4 text-xs"><input type="checkbox" checked={tempSchedule[day].startsPreviousDay} onChange={e => handleTempScheduleChange(day, 'startsPreviousDay', e.target.checked)} /> Inicia dia anterior</label>
+                               <input 
+                                type="time" 
+                                value={tempSchedule[day].end} 
+                                onChange={e => handleTempScheduleChange(day, 'end', e.target.value)} 
+                                className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" 
+                                disabled={!hasPermission('settings:edit_templates')}
+                               />
+                               <label className="flex items-center gap-1 ml-4 text-xs">
+                                   <input 
+                                    type="checkbox" 
+                                    checked={tempSchedule[day].startsPreviousDay} 
+                                    onChange={e => handleTempScheduleChange(day, 'startsPreviousDay', e.target.checked)} 
+                                    disabled={!hasPermission('settings:edit_templates')}
+                                   /> Inicia dia anterior
+                                </label>
                            </div>
                        </div>
                    ))}
                </div>
                <div className="flex justify-end gap-3 pt-4 border-t">
                    <button onClick={() => setIsTemplateModalOpen(false)} className="px-4 py-2 text-gray-600">Cancelar</button>
-                   <button onClick={saveTemplate} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-indigo-700">Salvar Modelo</button>
+                   <button 
+                    onClick={saveTemplate} 
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!hasPermission('settings:edit_templates')}
+                   >
+                       Salvar Modelo
+                   </button>
                </div>
            </div>
        </Modal>
