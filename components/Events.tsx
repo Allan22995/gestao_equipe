@@ -17,7 +17,7 @@ interface EventsProps {
   currentUserAllowedSectors: string[];
   currentUserProfile: UserProfile;
   userColabId: string | null;
-  availableBranches: string[]; // NOVO: Recebe filiais permitidas para filtragem correta da liderança
+  availableBranches: string[];
 }
 
 const CalendarIcon = () => (
@@ -157,39 +157,46 @@ export const Events: React.FC<EventsProps> = ({
 
   // --- LÓGICA CORRIGIDA DO HISTÓRICO DE EVENTOS ---
   const allowedEvents = useMemo(() => {
+     // 1. VISÃO DO COLABORADOR (RETORNO IMEDIATO - SEM FILTROS DE HIERARQUIA)
+     if (currentUserProfile === 'colaborador') {
+         if (!userColabId) return [];
+         
+         // Retorna APENAS eventos do próprio usuário, independente de status ativo/setor/filial
+         const myEvents = events
+            .filter(e => e.collaboratorId === userColabId)
+            .sort((a, b) => {
+               // Ordena por data mais recente
+               const dateA = a.startDate || '';
+               const dateB = b.startDate || '';
+               return dateB.localeCompare(dateA);
+            });
+         return myEvents;
+     }
+
+     // 2. VISÃO DA LIDERANÇA / ADMIN
      let filtered = events;
-     
-     // 0. Filter out inactive users events
+
+     // Filtro 2.1: Remover eventos de usuários inativos (Opção de design: Líderes focam na equipe ativa)
      filtered = filtered.filter(e => {
         const colab = collaborators.find(c => c.id === e.collaboratorId);
         return colab && colab.active !== false;
      });
 
-     // 1. VISÃO DO COLABORADOR (Correção: Retorna direto, sem aplicar filtros de setor/filial que poderiam ocultar o evento)
-     if (currentUserProfile === 'colaborador') {
-         if (userColabId) {
-            return filtered
-              .filter(e => e.collaboratorId === userColabId)
-              .sort((a, b) => b.startDate.localeCompare(a.startDate)); // Mais recente primeiro
-         }
-         return [];
-     }
-
-     // 2. VISÃO DA LIDERANÇA / ADMIN (Aplica filtros hierárquicos)
-
-     // Filtro por Filial (Se aplicável)
+     // Filtro 2.2: Filiais Permitidas (Available Branches)
      if (availableBranches.length > 0) {
          filtered = filtered.filter(e => {
             const colab = collaborators.find(c => c.id === e.collaboratorId);
+            // Se o colaborador não existe ou não está na filial permitida, remove
             return colab && availableBranches.includes(colab.branch);
          });
      }
 
-     // Filtro por Setor (Se aplicável)
+     // Filtro 2.3: Setores Permitidos (Se houver restrição)
      if (currentUserAllowedSectors.length > 0) {
         filtered = filtered.filter(e => {
             const colab = collaborators.find(c => c.id === e.collaboratorId);
-            // Nota: Se o colaborador não tiver setor, o líder com restrição de setor NÃO verá o evento. Isso é esperado.
+            // Se o colaborador não tem setor, e o líder é restrito a setores específicos,
+            // o líder NÃO deve ver (segurança padrão).
             return colab && colab.sector && currentUserAllowedSectors.includes(colab.sector);
         });
      }
