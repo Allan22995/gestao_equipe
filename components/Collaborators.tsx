@@ -402,15 +402,10 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const sectorOptions = useMemo(() => {
       if (!formData.branch) return [];
       
-      // Use branch-specific sectors if available, otherwise fallback to global
-      let branchSectors: string[] = [];
-      if (settings.branchSectors && settings.branchSectors[formData.branch]) {
-          branchSectors = settings.branchSectors[formData.branch];
-      } else {
-          branchSectors = settings.sectors || [];
-      }
+      const specific = settings.branchSectors?.[formData.branch] || [];
+      const global = settings.sectors || [];
       
-      return branchSectors;
+      return Array.from(new Set([...specific, ...global])).sort();
   }, [formData.branch, settings.branchSectors, settings.sectors]);
 
   // --- FILTER COPY OPTIONS (Searchable Dropdown Logic) ---

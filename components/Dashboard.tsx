@@ -57,40 +57,49 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   }, [availableBranches]);
 
-  // Available sectors for filter dropdown (Dynamic based on branch)
+  // Available sectors for filter dropdown (Dynamic based on branch + Global)
   const availableSectors = useMemo(() => {
     if (!settings) return [];
     
-    // Determine the source of sectors
-    let sectorsPool: string[] = [];
+    // 1. Inicia com Setores Globais (Sempre Visíveis)
+    const sectorsSet = new Set<string>(settings.sectors || []);
 
-    if (filterBranches.length > 0) {
-        filterBranches.forEach(branch => {
-            const branchSectors = settings.branchSectors?.[branch] || [];
-            sectorsPool = [...sectorsPool, ...branchSectors];
-        });
-    } else {
-        if (availableBranches.length > 0) {
-             availableBranches.forEach(branch => {
-                const branchSectors = settings.branchSectors?.[branch] || [];
-                sectorsPool = [...sectorsPool, ...branchSectors];
-             });
+    // 2. Adiciona setores específicos de filiais conforme contexto
+    if (settings.branchSectors) {
+        let branchesToCheck: string[] = [];
+
+        if (filterBranches.length > 0) {
+            // Se tem filtro de filial, olha apenas elas
+            branchesToCheck = filterBranches;
+        } else if (availableBranches.length > 0) {
+            // Se tem restrição de acesso (e não filtrou), olha todas as permitidas
+            branchesToCheck = availableBranches;
         } else {
-             if (settings.branchSectors) {
-                Object.values(settings.branchSectors).forEach(s => sectorsPool = [...sectorsPool, ...(s as string[])]);
-             } else {
-                sectorsPool = settings.sectors || [];
-             }
+            // Se é admin e não filtrou, olha todas as cadastradas no settings
+            branchesToCheck = settings.branches || [];
+            
+            // Fallback: Se settings.branches estiver vazio, pega chaves do mapa
+            if (branchesToCheck.length === 0) {
+                branchesToCheck = Object.keys(settings.branchSectors);
+            }
         }
-    }
-    
-    sectorsPool = Array.from(new Set(sectorsPool));
 
-    if (currentUserAllowedSectors.length > 0) {
-        return sectorsPool.filter(s => currentUserAllowedSectors.includes(s));
+        branchesToCheck.forEach(branch => {
+            const specific = settings.branchSectors?.[branch];
+            if (specific && Array.isArray(specific)) {
+                specific.forEach(s => sectorsSet.add(s));
+            }
+        });
     }
     
-    return sectorsPool.sort();
+    let result = Array.from(sectorsSet);
+
+    // 3. Filtro de Segurança (Permissão do Usuário)
+    if (currentUserAllowedSectors.length > 0) {
+        result = result.filter(s => currentUserAllowedSectors.includes(s));
+    }
+    
+    return result.sort();
   }, [settings, currentUserAllowedSectors, filterBranches, availableBranches]);
 
   // Reset sector filter if selected sector is no longer available
@@ -644,7 +653,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 options={availableSectors}
                 selected={filterSectors}
                 onChange={setFilterSectors}
-                placeholder={filterBranches.length === 0 ? 'Selecione a Filial' : 'Todos'}
+                placeholder="Todos os Setores"
                 disabled={currentUserAllowedSectors.length === 1}
               />
           </div>
