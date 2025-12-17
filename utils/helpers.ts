@@ -1,4 +1,5 @@
 
+import { Collaborator } from '../types';
 
 export const generateUUID = () => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -101,4 +102,36 @@ export const checkRotationDay = (checkDate: Date, referenceDateStr?: string): bo
 
 export const promptForUser = (action: string): string | null => {
   return window.prompt(`Ação: ${action}\nPor favor, digite seu nome para registro de auditoria:`);
+};
+
+// Constrói a cadeia de aprovação subindo a hierarquia
+export const buildApprovalChain = (startColabId: string, allCollaborators: Collaborator[]): string[] => {
+  const chain: string[] = [];
+  let currentId = startColabId;
+  const visited = new Set<string>();
+
+  while (true) {
+    const currentColab = allCollaborators.find(c => c.id === currentId);
+    if (!currentColab || !currentColab.leaderId) break;
+
+    const leaderId = currentColab.leaderId;
+    
+    // Evita loops infinitos se houver referência circular
+    if (visited.has(leaderId)) break;
+    visited.add(leaderId);
+
+    // Adiciona o líder à cadeia
+    const leader = allCollaborators.find(c => c.id === leaderId);
+    if (leader) {
+      chain.push(leader.id);
+      currentId = leader.id; // Sobe um nível
+    } else {
+      break;
+    }
+    
+    // Limite de segurança (ex: 10 níveis)
+    if (chain.length >= 10) break;
+  }
+
+  return chain;
 };

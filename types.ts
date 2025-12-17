@@ -112,10 +112,18 @@ export interface SystemSettings {
   spreadsheetUrl?: string;
   systemMessage?: SystemMessage; 
   coverageRules?: CoverageRule[]; 
+  approvalEscalationDelay?: number; // NOVO: Prazo em horas para escalonamento automático
 }
 
 export type EventType = string; 
 export type EventStatus = 'pendente' | 'aprovado' | 'nova_opcao' | 'reprovado';
+
+export interface EscalationLog {
+  date: string;
+  fromId: string;
+  toId: string;
+  reason: string;
+}
 
 export interface EventRecord {
   id: string;
@@ -133,6 +141,11 @@ export interface EventRecord {
   createdAt: string;
   updatedBy?: string;
   lastUpdatedAt?: string;
+  
+  // NOVO: Fluxo de Aprovação
+  approverChain?: string[]; // IDs dos líderes na cadeia
+  currentApproverId?: string; // ID de quem deve aprovar agora
+  escalationHistory?: EscalationLog[];
 }
 
 export interface OnCallRecord {
