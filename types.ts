@@ -60,6 +60,7 @@ export interface Collaborator {
   hasRotation?: boolean;
   rotationGroup?: string;
   rotationStartDate?: string;
+  balanceHours?: number; // NOVO: Saldo importado via CSV (Sobrescreve cálculo automático)
   createdAt: string;
   active?: boolean;
   leaderId?: string;

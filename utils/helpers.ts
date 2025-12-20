@@ -1,5 +1,5 @@
 
-import { Collaborator } from '../types';
+import { Collaborator, Schedule } from '../types';
 
 export const generateUUID = () => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -134,4 +134,54 @@ export const buildApprovalChain = (startColabId: string, allCollaborators: Colla
   }
 
   return chain;
+};
+
+// --- NOVOS HELPERS DE HORAS ---
+
+export const parseTimeStr = (timeStr: string): number => {
+  if (!timeStr) return 0;
+  if (timeStr.includes(':')) {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours + (minutes / 60);
+  }
+  return parseFloat(timeStr.replace(',', '.'));
+};
+
+export const decimalToTimeStr = (decimal: number): string => {
+  const sign = decimal < 0 ? '-' : '';
+  const absDecimal = Math.abs(decimal);
+  const hours = Math.floor(absDecimal);
+  const minutes = Math.round((absDecimal - hours) * 60);
+  return `${sign}${hours}h ${String(minutes).padStart(2, '0')}m`;
+};
+
+export const getDailyWorkHours = (schedule: Schedule): number => {
+  if (!schedule) return 8.8; // Default fallback
+  
+  let totalHours = 0;
+  let workDays = 0;
+  
+  Object.values(schedule).forEach(day => {
+    if (day.enabled && day.start && day.end) {
+      const start = parseTimeStr(day.start);
+      let end = parseTimeStr(day.end);
+      
+      if (day.startsPreviousDay) {
+         // Ajuste complexo, assumindo duração direta
+         end += 24; 
+      }
+      
+      let duration = end - start;
+      if (duration < 0) duration += 24;
+      
+      // Desconta 1h de almoço padrão se jornada > 6h
+      if (duration > 6) duration -= 1;
+      
+      totalHours += duration;
+      workDays++;
+    }
+  });
+  
+  if (workDays === 0) return 8.8; // Padrao comercial se não tiver escala
+  return totalHours / workDays;
 };
