@@ -1,8 +1,6 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
-import { generateUUID, decimalToTimeStr, getDailyWorkHours } from '../utils/helpers';
-import { dbService } from '../services/storage';
+import { generateUUID } from '../utils/helpers';
 
 interface BalanceProps {
   collaborators: Collaborator[];
@@ -36,11 +34,6 @@ export const Balance: React.FC<BalanceProps> = ({
   const [colabSearch, setColabSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Estados para Importação CSV
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Fechar dropdown ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -51,27 +44,6 @@ export const Balance: React.FC<BalanceProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Filter Collaborators First based on Sector Restrictions and Profile
-  const allowedCollaborators = useMemo(() => {
-     let filtered = collaborators;
-
-     // 0. Filter Active
-     filtered = filtered.filter(c => c.active !== false);
-
-     // 1. Strict Privacy for 'colaborador' profile
-     if (currentUserProfile === 'colaborador' && userColabId) {
-        return filtered.filter(c => c.id === userColabId);
-     }
-
-     // 2. Sector filtering
-     if (currentUserAllowedSectors.length > 0) {
-         filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
-     }
-
-     // Ordenação Alfabética A-Z
-     return filtered.sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   const handleAdjustmentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,79 +92,26 @@ export const Balance: React.FC<BalanceProps> = ({
     setColabSearch('');
   };
 
-  const handleCsvImport = async () => {
-      if (!csvFile) {
-          showToast('Selecione um arquivo CSV.', true);
-          return;
-      }
-      
-      setIsImporting(true);
-      const reader = new FileReader();
-      
-      reader.onload = async (e) => {
-          try {
-              const text = e.target?.result as string;
-              if (!text) return;
+  // Filter Collaborators First based on Sector Restrictions and Profile
+  const allowedCollaborators = useMemo(() => {
+     let filtered = collaborators;
 
-              const lines = text.split('\n');
-              let updatedCount = 0;
-              let errorCount = 0;
+     // 0. Filter Active
+     filtered = filtered.filter(c => c.active !== false);
 
-              // Identificar delimitador (vírgula ou ponto e vírgula)
-              const firstLine = lines[0] || '';
-              const separator = firstLine.includes(';') ? ';' : ',';
+     // 1. Strict Privacy for 'colaborador' profile
+     if (currentUserProfile === 'colaborador' && userColabId) {
+        return filtered.filter(c => c.id === userColabId);
+     }
 
-              for (const line of lines) {
-                  const parts = line.trim().split(separator);
-                  if (parts.length < 2) continue; // Skip linhas inválidas
+     // 2. Sector filtering
+     if (currentUserAllowedSectors.length > 0) {
+         filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
+     }
 
-                  // Assume ID na primeira coluna e Horas na última
-                  const idStr = parts[0].trim();
-                  const hoursStr = parts[parts.length - 1].trim();
-                  
-                  if (!idStr || !hoursStr || idStr.toLowerCase() === 'id') continue; // Header check
-
-                  // Parse Hours (HH:MM or Decimal)
-                  let hoursValue = 0;
-                  if (hoursStr.includes(':')) {
-                      const [h, m] = hoursStr.split(':').map(Number);
-                      hoursValue = (h || 0) + ((m || 0) / 60);
-                      // Handle negative format "-HH:MM"
-                      if (hoursStr.startsWith('-')) hoursValue = -Math.abs(hoursValue);
-                  } else {
-                      hoursValue = parseFloat(hoursStr.replace(',', '.'));
-                  }
-
-                  if (isNaN(hoursValue)) {
-                      errorCount++;
-                      continue;
-                  }
-
-                  // Find Collaborator
-                  // Importante: Só atualiza se o colaborador estiver na lista "allowedCollaborators" (filial filtrada)
-                  const colab = allowedCollaborators.find(c => c.colabId === idStr);
-                  
-                  if (colab) {
-                      await dbService.updateCollaborator(colab.id, { balanceHours: hoursValue });
-                      updatedCount++;
-                  }
-              }
-
-              showToast(`Importação concluída! ${updatedCount} atualizados. ${errorCount > 0 ? `${errorCount} erros.` : ''}`);
-              logAction('update', 'ajuste_saldo', `Importação CSV: ${updatedCount} saldos atualizados.`, currentUserName);
-              setCsvFile(null);
-              if (fileInputRef.current) fileInputRef.current.value = '';
-
-          } catch (err) {
-              console.error(err);
-              showToast('Erro ao processar arquivo CSV.', true);
-          } finally {
-              setIsImporting(false);
-          }
-      };
-
-      reader.readAsText(csvFile);
-  };
+     // Ordenação Alfabética A-Z
+     return filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
   // Opções filtradas para o dropdown de busca
   const filteredDropdownOptions = useMemo(() => {
@@ -206,43 +125,23 @@ export const Balance: React.FC<BalanceProps> = ({
       return collaborators.find(c => c.id === adjForm.collaboratorId)?.name;
   }, [adjForm.collaboratorId, collaborators]);
 
-  // CALCULO DE SALDOS (Prioriza Importação CSV se existir, senão Cálculo Histórico)
+  // Then calculate balances for allowed collaborators
   const balances = useMemo(() => {
     return allowedCollaborators.map(c => {
-        // Se existe saldo importado, usa ele como base (Snapshot)
-        // Nota: Idealmente somaria eventos POSTERIORES à importação, mas a regra solicitada é "Sobrescreva".
-        // Vamos exibir o valor importado diretamente se existir.
+        // IMPORTANTE: Filtrar apenas eventos APROVADOS ou LEGADOS (sem status)
+        const userEvents = events.filter(e => 
+            e.collaboratorId === c.id && 
+            (e.status === 'aprovado' || e.status === undefined)
+        );
+        const userAdjustments = adjustments.filter(a => a.collaboratorId === c.id);
         
-        let balanceHours = 0;
-        let balanceDays = 0;
-        const dailyHours = getDailyWorkHours(c.schedule);
-
-        if (c.balanceHours !== undefined) {
-            balanceHours = c.balanceHours;
-            // Converte horas em dias
-            balanceDays = dailyHours > 0 ? parseFloat((balanceHours / dailyHours).toFixed(1)) : 0;
-        } else {
-            // Cálculo Legado (Eventos em Dias)
-            const userEvents = events.filter(e => 
-                e.collaboratorId === c.id && 
-                (e.status === 'aprovado' || e.status === undefined)
-            );
-            const userAdjustments = adjustments.filter(a => a.collaboratorId === c.id);
-            
-            const totalGained = userEvents.reduce((acc, curr) => acc + curr.daysGained, 0);
-            const totalUsed = userEvents.reduce((acc, curr) => acc + curr.daysUsed, 0);
-            const totalAdjusted = userAdjustments.reduce((acc, curr) => acc + curr.amount, 0);
-            
-            balanceDays = (totalGained - totalUsed) + totalAdjusted;
-            balanceHours = balanceDays * dailyHours;
-        }
+        const totalGained = userEvents.reduce((acc, curr) => acc + curr.daysGained, 0);
+        const totalUsed = userEvents.reduce((acc, curr) => acc + curr.daysUsed, 0);
+        const totalAdjusted = userAdjustments.reduce((acc, curr) => acc + curr.amount, 0);
         
-        return { 
-            ...c, 
-            balanceDays, 
-            balanceHours,
-            dailyHours
-        };
+        const balance = (totalGained - totalUsed) + totalAdjusted;
+        
+        return { ...c, balance, totalGained, totalUsed, totalAdjusted };
     });
   }, [allowedCollaborators, events, adjustments]);
 
@@ -254,9 +153,9 @@ export const Balance: React.FC<BalanceProps> = ({
   }, [balances, searchTerm]);
 
   // Grouping Logic
-  const positiveBalances = useMemo(() => filteredBalances.filter(c => c.balanceHours > 0).sort((a,b) => b.balanceHours - a.balanceHours), [filteredBalances]);
-  const zeroBalances = useMemo(() => filteredBalances.filter(c => c.balanceHours === 0).sort((a,b) => a.name.localeCompare(b.name)), [filteredBalances]);
-  const negativeBalances = useMemo(() => filteredBalances.filter(c => c.balanceHours < 0).sort((a,b) => a.balanceHours - b.balanceHours), [filteredBalances]);
+  const positiveBalances = useMemo(() => filteredBalances.filter(c => c.balance > 0).sort((a,b) => b.balance - a.balance), [filteredBalances]);
+  const zeroBalances = useMemo(() => filteredBalances.filter(c => c.balance === 0).sort((a,b) => a.name.localeCompare(b.name)), [filteredBalances]);
+  const negativeBalances = useMemo(() => filteredBalances.filter(c => c.balance < 0).sort((a,b) => a.balance - b.balance), [filteredBalances]);
 
   // Filter Log Items based on Sector, Search Term, and Profile
   const filteredLogItems = useMemo(() => {
@@ -323,107 +222,111 @@ export const Balance: React.FC<BalanceProps> = ({
           </div>
       </div>
 
-      {/* Seção de Importação CSV */}
-      {canCreate && (
-      <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 flex flex-col md:flex-row items-center justify-between gap-6 bg-gradient-to-r from-white to-indigo-50">
-          <div className="flex-1">
-              <h3 className="text-sm font-bold text-indigo-800 uppercase mb-2 flex items-center gap-2">
-                  📂 Importar Relatório de Horas (CSV)
-              </h3>
-              <p className="text-xs text-gray-600 mb-2">
-                  Atualize o banco de horas em massa. O arquivo deve conter colunas com <b>ID (Matrícula)</b> e <b>Horas (Saldo)</b>.
-                  <br/><i>Nota: Isso sobrescreverá o saldo atual dos colaboradores da filial selecionada.</i>
-              </p>
-              <div className="flex items-center gap-2">
-                  <input 
-                      type="file" 
-                      accept=".csv"
-                      ref={fileInputRef}
-                      onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer"
-                  />
-                  <button 
-                      onClick={handleCsvImport}
-                      disabled={!csvFile || isImporting}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm whitespace-nowrap"
-                  >
-                      {isImporting ? 'Importando...' : 'Importar CSV'}
-                  </button>
-              </div>
-          </div>
-      </div>
-      )}
+      {/* Top 3 Boxes */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+         
+         {/* POSITIVE */}
+         <div className="bg-gradient-to-b from-white to-emerald-50/50 border border-emerald-100 rounded-xl shadow-lg flex flex-col h-[450px] overflow-hidden">
+            <div className="p-4 bg-emerald-100/80 border-b border-emerald-200 flex justify-between items-center">
+                <div>
+                    <h3 className="text-emerald-900 font-bold flex items-center gap-2 text-lg">
+                        🚀 Folguistas em Alta
+                    </h3>
+                    <p className="text-emerald-700 text-xs">Saldo Positivo</p>
+                </div>
+                <span className="bg-white text-emerald-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                    {positiveBalances.length}
+                </span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
+                {positiveBalances.map(c => (
+                    <div key={c.id} className="bg-white p-3 rounded-lg border border-emerald-100 shadow-sm flex justify-between items-center hover:shadow-md transition-all">
+                        <div className="flex flex-col flex-1 pr-2">
+                            <span className="font-bold text-gray-800 text-sm leading-tight mb-0.5">{c.name}</span>
+                            <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
+                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
+                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
+                            </span>
+                        </div>
+                        <div className="text-right">
+                            <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold text-sm whitespace-nowrap">+{c.balance}</span>
+                        </div>
+                    </div>
+                ))}
+                {positiveBalances.length === 0 && <div className="h-full flex flex-col items-center justify-center text-emerald-400 opacity-60"><span className="text-4xl mb-2">🍃</span><p className="text-sm">Ninguém por aqui.</p></div>}
+            </div>
+         </div>
 
-      {/* Cards de Visualização Positivo / Negativo */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Card Positivo */}
-          <div className="bg-white rounded-xl shadow-lg border border-emerald-100 flex flex-col h-[400px]">
-              <div className="p-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center rounded-t-xl">
-                  <h3 className="text-emerald-800 font-bold flex items-center gap-2">
-                      <span className="text-xl">📈</span> Saldo Positivo
-                  </h3>
-                  <span className="bg-white text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">
-                      {positiveBalances.length} Colaboradores
-                  </span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
-                  {positiveBalances.map(c => (
-                      <div key={c.id} className="flex justify-between items-center p-3 bg-white border border-emerald-50 hover:border-emerald-200 rounded-lg shadow-sm hover:shadow-md transition-all">
-                          <div>
-                              <div className="font-bold text-gray-800 text-sm">{c.name}</div>
-                              <div className="text-[10px] text-gray-500 font-mono">ID: {c.colabId}</div>
-                          </div>
-                          <div className="text-right">
-                              <div className="font-bold text-emerald-600 text-sm bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                                  {decimalToTimeStr(c.balanceHours)}
-                              </div>
-                              <div className="text-[10px] text-gray-400 mt-0.5">
-                                  ~ {c.balanceDays} dias de folga
-                              </div>
-                          </div>
-                      </div>
-                  ))}
-                  {positiveBalances.length === 0 && <p className="text-center text-gray-400 py-10 italic">Nenhum saldo positivo.</p>}
-              </div>
-          </div>
+         {/* ZERO */}
+         <div className="bg-gradient-to-b from-white to-slate-50/50 border border-slate-200 rounded-xl shadow-lg flex flex-col h-[450px] overflow-hidden">
+            <div className="p-4 bg-slate-100/80 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                    <h3 className="text-slate-800 font-bold flex items-center gap-2 text-lg">
+                        ⚖️ Zerados no Jogo
+                    </h3>
+                    <p className="text-slate-600 text-xs">Saldo Neutro</p>
+                </div>
+                <span className="bg-white text-slate-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                    {zeroBalances.length}
+                </span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
+                {zeroBalances.map(c => (
+                    <div key={c.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex justify-between items-center hover:shadow-md transition-all opacity-80 hover:opacity-100">
+                        <div className="flex flex-col flex-1 pr-2">
+                            <span className="font-bold text-gray-700 text-sm leading-tight mb-0.5">{c.name}</span>
+                            <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
+                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
+                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
+                            </span>
+                        </div>
+                        <div className="text-right">
+                            <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded font-bold text-sm border border-slate-200 whitespace-nowrap">0</span>
+                        </div>
+                    </div>
+                ))}
+                {zeroBalances.length === 0 && <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60"><span className="text-4xl mb-2">⚖️</span><p className="text-sm">Ninguém zerado.</p></div>}
+            </div>
+         </div>
 
-          {/* Card Negativo */}
-          <div className="bg-white rounded-xl shadow-lg border border-rose-100 flex flex-col h-[400px]">
-              <div className="p-4 bg-rose-50 border-b border-rose-100 flex justify-between items-center rounded-t-xl">
-                  <h3 className="text-rose-800 font-bold flex items-center gap-2">
-                      <span className="text-xl">📉</span> Saldo Negativo
-                  </h3>
-                  <span className="bg-white text-rose-700 px-3 py-1 rounded-full text-xs font-bold border border-rose-200 shadow-sm">
-                      {negativeBalances.length} Colaboradores
-                  </span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
-                  {negativeBalances.map(c => (
-                      <div key={c.id} className="flex justify-between items-center p-3 bg-white border border-rose-50 hover:border-rose-200 rounded-lg shadow-sm hover:shadow-md transition-all">
-                          <div>
-                              <div className="font-bold text-gray-800 text-sm">{c.name}</div>
-                              <div className="text-[10px] text-gray-500 font-mono">ID: {c.colabId}</div>
-                          </div>
-                          <div className="text-right">
-                              <div className="font-bold text-rose-600 text-sm bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
-                                  {decimalToTimeStr(c.balanceHours)}
-                              </div>
-                              <div className="text-[10px] text-gray-400 mt-0.5">
-                                  ~ {Math.abs(c.balanceDays)} dias a pagar
-                              </div>
-                          </div>
-                      </div>
-                  ))}
-                  {negativeBalances.length === 0 && <p className="text-center text-gray-400 py-10 italic">Nenhum saldo negativo.</p>}
-              </div>
-          </div>
+         {/* NEGATIVE */}
+         <div className="bg-gradient-to-b from-white to-rose-50/50 border border-rose-100 rounded-xl shadow-lg flex flex-col h-[450px] overflow-hidden">
+            <div className="p-4 bg-rose-100/80 border-b border-rose-200 flex justify-between items-center">
+                <div>
+                    <h3 className="text-rose-900 font-bold flex items-center gap-2 text-lg">
+                        📉 A Recuperar
+                    </h3>
+                    <p className="text-rose-700 text-xs">Saldo Negativo</p>
+                </div>
+                <span className="bg-white text-rose-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                    {negativeBalances.length}
+                </span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
+                {negativeBalances.map(c => (
+                    <div key={c.id} className="bg-white p-3 rounded-lg border border-rose-100 shadow-sm flex justify-between items-center hover:shadow-md transition-all">
+                        <div className="flex flex-col flex-1 pr-2">
+                            <span className="font-bold text-gray-800 text-sm leading-tight mb-0.5">{c.name}</span>
+                            <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
+                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
+                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
+                            </span>
+                        </div>
+                        <div className="text-right">
+                            <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold text-sm whitespace-nowrap">{c.balance}</span>
+                        </div>
+                    </div>
+                ))}
+                {negativeBalances.length === 0 && <div className="h-full flex flex-col items-center justify-center text-rose-400 opacity-60"><span className="text-4xl mb-2">🎉</span><p className="text-sm">Todos positivos!</p></div>}
+            </div>
+         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Card Lançamento Manual */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col">
            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-               📝 Lançamento Manual (Dias)
+               📝 Lançamento Manual
            </h2>
            {canCreate ? (
            <form onSubmit={handleAdjustmentSubmit} className="space-y-4 flex-1">
