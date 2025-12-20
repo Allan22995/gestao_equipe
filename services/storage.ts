@@ -10,9 +10,10 @@ import {
   query,
   setDoc,
   where,
-  getDocs
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
-import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings } from '../types';
+import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, ImportedHourRecord } from '../types';
 
 // Nomes das Coleções no Firestore
 const COLLECTIONS = {
@@ -23,6 +24,7 @@ const COLLECTIONS = {
   VACATION_REQUESTS: 'vacation_requests',
   AUDIT_LOGS: 'audit_logs',
   SETTINGS: 'settings',
+  IMPORTED_HOURS: 'imported_hours' // Nova coleção
 };
 
 // ID fixo para o documento de configurações (já que é único)
@@ -53,7 +55,6 @@ export const dbService = {
   },
 
   // --- GENERIC LISTENERS (TEMPO REAL) ---
-  // A ordem ({ ...doc.data(), id: doc.id }) garante que o ID do Firestore seja usado
   
   subscribeToCollaborators: (callback: (data: Collaborator[]) => void) => {
     const q = query(collection(db, COLLECTIONS.COLLABORATORS));
@@ -123,6 +124,18 @@ export const dbService = {
     });
   },
 
+  // NOVO: Listener para Horas Importadas
+  subscribeToImportedHours: (callback: (data: ImportedHourRecord[]) => void) => {
+    // Escuta toda a coleção, filtro será feito no frontend por segurança/simplicidade de query
+    // Idealmente, filtrar por filial se a coleção for enorme, mas para este escopo é aceitável.
+    return onSnapshot(collection(db, COLLECTIONS.IMPORTED_HOURS), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ImportedHourRecord));
+      callback(data);
+    }, (error) => {
+      console.error("❌ [DB] Erro ao carregar Horas Importadas:", error.message);
+    });
+  },
+
   // --- ACTIONS (Escrever no Banco) ---
 
   // Colaboradores
@@ -142,9 +155,7 @@ export const dbService = {
 
   // Eventos
   addEvent: async (evt: EventRecord) => {
-    // Garante que o ID local seja removido para que o Firestore gere um novo
     const { id, ...rest } = evt; 
-    // Remove campos undefined (ex: schedule quando é folga)
     const cleanData = sanitizePayload(rest);
     await addDoc(collection(db, COLLECTIONS.EVENTS), cleanData);
   },
@@ -212,5 +223,27 @@ export const dbService = {
     const { id, ...rest } = log;
     const cleanData = sanitizePayload(rest);
     await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), cleanData);
+  },
+
+  // NOVO: Salvar Horas Importadas (Overwrite por Filial)
+  saveImportedHours: async (branch: string, records: ImportedHourRecord[]) => {
+    const batch = writeBatch(db);
+    
+    // 1. Buscar registros existentes desta filial para deletar
+    const q = query(collection(db, COLLECTIONS.IMPORTED_HOURS), where("branch", "==", branch));
+    const snapshot = await getDocs(q);
+    
+    snapshot.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+
+    // 2. Adicionar novos registros
+    records.forEach(rec => {
+      const { id, ...rest } = rec; // Remove ID local se existir
+      const docRef = doc(collection(db, COLLECTIONS.IMPORTED_HOURS)); // Gera novo ID
+      batch.set(docRef, sanitizePayload(rest));
+    });
+
+    await batch.commit();
   }
 };
