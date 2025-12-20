@@ -1,8 +1,6 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
-import { HourImportControl } from './HourImportControl';
 
 interface BalanceProps {
   collaborators: Collaborator[];
@@ -114,12 +112,6 @@ export const Balance: React.FC<BalanceProps> = ({
      // Ordenação Alfabética A-Z
      return filtered.sort((a, b) => a.name.localeCompare(b.name));
   }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
-
-  // Derive available branches for the import component based on allowed collaborators
-  const availableBranches = useMemo(() => {
-      const branches = new Set(allowedCollaborators.map(c => c.branch));
-      return Array.from(branches).sort();
-  }, [allowedCollaborators]);
 
   // Opções filtradas para o dropdown de busca
   const filteredDropdownOptions = useMemo(() => {
@@ -504,16 +496,6 @@ export const Balance: React.FC<BalanceProps> = ({
             </div>
         </div>
       </div>
-
-      {/* COMPONENTE DE IMPORTAÇÃO DE HORAS (NOVO) */}
-      {(canCreate || currentUserProfile === 'admin') && (
-        <HourImportControl 
-          collaborators={allowedCollaborators} 
-          availableBranches={availableBranches}
-          currentUserAllowedSectors={currentUserAllowedSectors}
-          showToast={showToast}
-        />
-      )}
     </div>
   );
 };

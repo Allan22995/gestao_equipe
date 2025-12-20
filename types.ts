@@ -170,15 +170,6 @@ export interface BalanceAdjustment {
   createdBy: string;
 }
 
-// NOVO: Registro de Horas Importadas (CSV)
-export interface ImportedHourRecord {
-  id: string;
-  collaboratorId: string;
-  hours: number;
-  branch: string;
-  updatedAt: string;
-}
-
 export type VacationStatus = 'pendente' | 'aprovado' | 'negociacao' | 'nova_opcao';
 
 export interface VacationRequest {
@@ -299,8 +290,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     icon: '💰',
     actions: [
       { id: 'balance:view', label: 'Visualizar Saldo', type: 'view' },
-      { id: 'balance:create', label: 'Lançar Ajuste Manual', type: 'create' },
-      { id: 'balance:import', label: 'Importar CSV (Horas)', type: 'special' }
+      { id: 'balance:create', label: 'Lançar Ajuste Manual', type: 'create' }
     ]
   },
   {
