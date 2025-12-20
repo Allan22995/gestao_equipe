@@ -241,12 +241,15 @@ export const Balance: React.FC<BalanceProps> = ({
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
                 {positiveBalances.map(c => (
                     <div key={c.id} className="bg-white p-3 rounded-lg border border-emerald-100 shadow-sm flex justify-between items-center hover:shadow-md transition-all">
-                        <div className="flex flex-col">
-                            <span className="font-bold text-gray-800 text-sm truncate max-w-[120px]" title={c.name}>{c.name}</span>
-                            <span className="text-[10px] text-gray-400 font-mono">ID: {c.colabId}</span>
+                        <div className="flex flex-col flex-1 pr-2">
+                            <span className="font-bold text-gray-800 text-sm leading-tight mb-0.5">{c.name}</span>
+                            <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
+                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
+                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
+                            </span>
                         </div>
                         <div className="text-right">
-                            <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold text-sm">+{c.balance}</span>
+                            <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold text-sm whitespace-nowrap">+{c.balance}</span>
                         </div>
                     </div>
                 ))}
@@ -270,12 +273,15 @@ export const Balance: React.FC<BalanceProps> = ({
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
                 {zeroBalances.map(c => (
                     <div key={c.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex justify-between items-center hover:shadow-md transition-all opacity-80 hover:opacity-100">
-                        <div className="flex flex-col">
-                            <span className="font-bold text-gray-700 text-sm truncate max-w-[120px]" title={c.name}>{c.name}</span>
-                            <span className="text-[10px] text-gray-400 font-mono">ID: {c.colabId}</span>
+                        <div className="flex flex-col flex-1 pr-2">
+                            <span className="font-bold text-gray-700 text-sm leading-tight mb-0.5">{c.name}</span>
+                            <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
+                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
+                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
+                            </span>
                         </div>
                         <div className="text-right">
-                            <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded font-bold text-sm border border-slate-200">0</span>
+                            <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded font-bold text-sm border border-slate-200 whitespace-nowrap">0</span>
                         </div>
                     </div>
                 ))}
@@ -299,12 +305,15 @@ export const Balance: React.FC<BalanceProps> = ({
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
                 {negativeBalances.map(c => (
                     <div key={c.id} className="bg-white p-3 rounded-lg border border-rose-100 shadow-sm flex justify-between items-center hover:shadow-md transition-all">
-                        <div className="flex flex-col">
-                            <span className="font-bold text-gray-800 text-sm truncate max-w-[120px]" title={c.name}>{c.name}</span>
-                            <span className="text-[10px] text-gray-400 font-mono">ID: {c.colabId}</span>
+                        <div className="flex flex-col flex-1 pr-2">
+                            <span className="font-bold text-gray-800 text-sm leading-tight mb-0.5">{c.name}</span>
+                            <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
+                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
+                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
+                            </span>
                         </div>
                         <div className="text-right">
-                            <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold text-sm">{c.balance}</span>
+                            <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold text-sm whitespace-nowrap">{c.balance}</span>
                         </div>
                     </div>
                 ))}
