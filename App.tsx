@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, onAuthStateChanged, signOut } from './services/firebase';
 import { dbService } from './services/storage';
@@ -12,9 +13,10 @@ import { VacationForecast } from './components/VacationForecast';
 import { Settings } from './components/Settings';
 import { Simulator } from './components/Simulator';
 import { CommunicationGenerator } from './components/CommunicationGenerator';
+import { SkillsMatrix } from './components/SkillsMatrix'; // NOVO
 import { 
   Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, 
-  VacationRequest, SystemSettings, TabType, UserProfile 
+  VacationRequest, SystemSettings, TabType, UserProfile, Skill 
 } from './types';
 
 // Default settings
@@ -41,7 +43,8 @@ const TAB_PERMISSIONS: Record<TabType, string> = {
   'saldo': 'balance:view',
   'simulador': 'simulator:view',
   'comunicados': 'comms:view',
-  'configuracoes': 'settings:view'
+  'configuracoes': 'settings:view',
+  'skills_matrix': 'skills:view' // NOVO
 };
 
 function App() {
@@ -57,6 +60,7 @@ function App() {
   const [onCalls, setOnCalls] = useState<OnCallRecord[]>([]);
   const [adjustments, setAdjustments] = useState<BalanceAdjustment[]>([]);
   const [vacationRequests, setVacationRequests] = useState<VacationRequest[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]); // NOVO
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
   
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -80,6 +84,7 @@ function App() {
       dbService.subscribeToOnCalls(setOnCalls),
       dbService.subscribeToAdjustments(setAdjustments),
       dbService.subscribeToVacationRequests(setVacationRequests),
+      dbService.subscribeToSkills(setSkills), // NOVO
       dbService.subscribeToSettings((data) => {
         if (data) setSettings(data);
       })
@@ -112,16 +117,12 @@ function App() {
 
   // Efeito para validar e redirecionar se a aba atual não for permitida
   useEffect(() => {
-    // Só executa se já tivermos carregado o usuário e configurações básicas
     if (loading || !user) return;
     
-    // Se ainda não carregou colaboradores ou roles, aguarda para evitar falsos negativos
     if (collaborators.length > 0 && settings.roles.length > 0) {
       const currentPerm = TAB_PERMISSIONS[activeTab];
       
-      // Se não tem permissão para a aba atual
       if (!hasPermission(currentPerm)) {
-         // Procura a primeira aba permitida
          const availableTabs = Object.keys(TAB_PERMISSIONS) as TabType[];
          const firstAllowed = availableTabs.find(t => hasPermission(TAB_PERMISSIONS[t]));
          
@@ -175,10 +176,8 @@ function App() {
   }
 
   const renderContent = () => {
-    // Bloqueio de segurança na renderização
     const requiredPerm = TAB_PERMISSIONS[activeTab];
     if (!hasPermission(requiredPerm)) {
-       // Se os dados ainda estão carregando, mostra loading, senão mostra acesso negado
        if (collaborators.length === 0) return <div className="p-8 text-center text-gray-500">Carregando perfil...</div>;
        return (
          <div className="flex flex-col items-center justify-center h-full text-gray-500">
@@ -223,6 +222,19 @@ function App() {
             currentUserAllowedSectors={allowedSectors}
             currentUserRole={userRoleName}
             availableBranches={availableBranches}
+        />;
+      case 'skills_matrix':
+        return <SkillsMatrix 
+            collaborators={collaborators}
+            skills={skills}
+            onUpdateCollaborator={(c) => dbService.updateCollaborator(c.id, c)}
+            logAction={logAction}
+            settings={settings}
+            currentUserProfile={userProfile}
+            canGrade={hasPermission('skills:grade')}
+            currentUserAllowedSectors={allowedSectors}
+            availableBranches={availableBranches}
+            currentUserName={currentUserColab?.name || user.email}
         />;
       case 'eventos':
         return <Events 
@@ -321,13 +333,9 @@ function App() {
                <h1 className="text-xl font-bold tracking-wider">Nexo</h1>
                <p className="text-xs text-indigo-300 mt-1">Gestão de Equipes</p>
              </div>
-             {/* Botão de Fechar no Mobile ou Desktop se desejar */}
-             <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-indigo-300 hover:text-white">
-                ✕
-             </button>
+             <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-indigo-300 hover:text-white">✕</button>
           </div>
           
-          {/* User Info */}
           <div className="p-4 border-b border-indigo-800 flex items-center gap-3 bg-indigo-800/50">
              <div className="w-10 h-10 rounded-full bg-indigo-700 flex items-center justify-center font-bold border-2 border-indigo-500 shadow-sm text-sm">
                  {currentUserColab?.name ? currentUserColab.name.charAt(0) : user.email?.charAt(0).toUpperCase()}
@@ -342,6 +350,7 @@ function App() {
              <SidebarItem label="Dashboard" icon="📊" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} visible={hasPermission('dashboard:view')} />
              <SidebarItem label="Calendário" icon="📅" active={activeTab === 'calendario'} onClick={() => setActiveTab('calendario')} visible={hasPermission('calendar:view')} />
              <SidebarItem label="Colaboradores" icon="👥" active={activeTab === 'colaboradores'} onClick={() => setActiveTab('colaboradores')} visible={hasPermission('collaborators:view')} />
+             <SidebarItem label="Matriz de Skills" icon="🏆" active={activeTab === 'skills_matrix'} onClick={() => setActiveTab('skills_matrix')} visible={hasPermission('skills:view')} />
              <SidebarItem label="Eventos / Folgas" icon="📝" active={activeTab === 'eventos'} onClick={() => setActiveTab('eventos')} visible={hasPermission('events:view')} />
              <SidebarItem label="Plantões" icon="🌙" active={activeTab === 'plantoes'} onClick={() => setActiveTab('plantoes')} visible={hasPermission('on_calls:view')} />
              <SidebarItem label="Férias" icon="✈️" active={activeTab === 'previsao_ferias'} onClick={() => setActiveTab('previsao_ferias')} visible={hasPermission('vacation:view')} />
@@ -351,21 +360,20 @@ function App() {
              <SidebarItem label="Configurações" icon="⚙️" active={activeTab === 'configuracoes'} onClick={() => setActiveTab('configuracoes')} visible={hasPermission('settings:view')} />
           </nav>
           
-          {/* Rodapé / Assinatura */}
           <div className="p-4 border-t border-indigo-800 bg-indigo-900">
              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-indigo-800 hover:bg-indigo-700 text-white py-2.5 rounded-lg transition-colors border border-indigo-700 shadow-lg">
                 <span>🚪</span> <span className="font-semibold text-sm">Sair do Sistema</span>
              </button>
              <div className="text-center mt-4 text-[10px] text-indigo-300 opacity-80 flex flex-col items-center">
-                <p>v1.2.0 • Nexo System</p>
+                <p>v1.3.0 • Nexo System</p>
                 <div className="mt-1 flex items-center gap-1">
                     <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
                     <span>Desenvolvido por</span>
                 </div>
                 <div>
-                    <a href="https://www.linkedin.com/in/alan-matheus-91316a109" target="_blank" rel="noopener noreferrer" className="font-bold hover:text-white transition-colors underline decoration-indigo-500">Alan</a>
+                    <a href="#" className="font-bold hover:text-white transition-colors underline decoration-indigo-500">Alan</a>
                     <span className="mx-1">e</span>
-                    <a href="https://www.linkedin.com/in/fabio-moraes-3b6897161" target="_blank" rel="noopener noreferrer" className="font-bold hover:text-white transition-colors underline decoration-indigo-500">Fabio</a>
+                    <a href="#" className="font-bold hover:text-white transition-colors underline decoration-indigo-500">Fabio</a>
                 </div>
              </div>
           </div>
@@ -379,23 +387,13 @@ function App() {
            ${isSidebarOpen ? 'ml-64' : 'ml-0'}
          `}
        >
-          {/* Header da Área Principal (Toggle Button) */}
           <div className="mb-6 flex items-center gap-3">
-             <button 
-               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-               className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all focus:outline-none"
-               title={isSidebarOpen ? "Ocultar Menu" : "Mostrar Menu"}
-             >
-                {isSidebarOpen ? (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-                )}
+             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all focus:outline-none">
+                {isSidebarOpen ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg> : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>}
              </button>
              {!isSidebarOpen && <h2 className="text-xl font-bold text-gray-800 tracking-tight">Nexo</h2>}
           </div>
 
-          {/* Banner de Comunicado (Sem Botão de Fechar e Cores Densas) */}
           {settings.systemMessage?.active && (
             <div className={`mb-6 rounded-lg p-4 shadow-lg flex items-start animate-fadeIn ${
               settings.systemMessage.level === 'error' ? 'bg-red-600 text-white' :
@@ -418,7 +416,6 @@ function App() {
             </div>
           )}
 
-          {/* Conteúdo da Aba */}
           {renderContent()}
        </main>
     </div>

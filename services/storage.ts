@@ -12,7 +12,7 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
-import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings } from '../types';
+import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, Skill } from '../types';
 
 // Nomes das Coleções no Firestore
 const COLLECTIONS = {
@@ -23,6 +23,7 @@ const COLLECTIONS = {
   VACATION_REQUESTS: 'vacation_requests',
   AUDIT_LOGS: 'audit_logs',
   SETTINGS: 'settings',
+  SKILLS: 'skills', // Nova Coleção
 };
 
 // ID fixo para o documento de configurações (já que é único)
@@ -53,7 +54,6 @@ export const dbService = {
   },
 
   // --- GENERIC LISTENERS (TEMPO REAL) ---
-  // A ordem ({ ...doc.data(), id: doc.id }) garante que o ID do Firestore seja usado
   
   subscribeToCollaborators: (callback: (data: Collaborator[]) => void) => {
     const q = query(collection(db, COLLECTIONS.COLLABORATORS));
@@ -102,11 +102,20 @@ export const dbService = {
     });
   },
 
+  // NOVO: Listener de Skills
+  subscribeToSkills: (callback: (data: Skill[]) => void) => {
+    return onSnapshot(collection(db, COLLECTIONS.SKILLS), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Skill));
+      callback(data);
+    }, (error) => {
+      console.error("❌ [DB] Erro ao carregar Skills:", error.message);
+    });
+  },
+
   subscribeToSettings: (callback: (data: SystemSettings | null) => void, onError?: (msg: string) => void) => {
     console.log('📡 [DB] Conectando em Settings...');
     return onSnapshot(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), (docSnap) => {
       if (docSnap.exists()) {
-        console.log('✅ [DB] Configurações recebidas do banco.', docSnap.data());
         callback(docSnap.data() as SystemSettings);
       } else {
         console.warn('⚠️ [DB] Documento de configurações não existe (ainda). Usando Default.');
@@ -117,7 +126,6 @@ export const dbService = {
       let msg = "Erro ao conectar com o banco.";
       if (error.code === 'permission-denied') {
         msg = "🔒 PERMISSÃO NEGADA: Verifique as Regras (Rules) do Firestore no Console do Firebase.";
-        console.error(msg);
       }
       if (onError) onError(msg);
     });
@@ -127,7 +135,6 @@ export const dbService = {
 
   // Colaboradores
   addCollaborator: async (colab: Omit<Collaborator, 'id'>) => {
-    console.log('💾 [DB] Salvando Colaborador...');
     const { id, ...rest } = colab as any;
     const cleanData = sanitizePayload(rest);
     await addDoc(collection(db, COLLECTIONS.COLLABORATORS), cleanData);
@@ -142,9 +149,7 @@ export const dbService = {
 
   // Eventos
   addEvent: async (evt: EventRecord) => {
-    // Garante que o ID local seja removido para que o Firestore gere um novo
     const { id, ...rest } = evt; 
-    // Remove campos undefined (ex: schedule quando é folga)
     const cleanData = sanitizePayload(rest);
     await addDoc(collection(db, COLLECTIONS.EVENTS), cleanData);
   },
@@ -191,13 +196,25 @@ export const dbService = {
     await deleteDoc(doc(db, COLLECTIONS.VACATION_REQUESTS, id));
   },
 
+  // NOVO: Skills
+  addSkill: async (skill: Skill) => {
+    const { id, ...rest } = skill;
+    const cleanData = sanitizePayload(rest);
+    await addDoc(collection(db, COLLECTIONS.SKILLS), cleanData);
+  },
+  updateSkill: async (id: string, data: Partial<Skill>) => {
+    const cleanData = sanitizePayload(data);
+    await updateDoc(doc(db, COLLECTIONS.SKILLS, id), cleanData);
+  },
+  deleteSkill: async (id: string) => {
+    await deleteDoc(doc(db, COLLECTIONS.SKILLS, id));
+  },
+
   // Configurações
   saveSettings: async (settings: SystemSettings) => {
-    console.log('💾 [DB] Tentando salvar Configurações...', settings);
     try {
       const cleanData = sanitizePayload(settings);
       await setDoc(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), cleanData);
-      console.log('✅ [DB] Configurações gravadas com sucesso!');
     } catch (error: any) {
       console.error('❌ [DB] Erro ao salvar configurações:', error);
       if (error.code === 'permission-denied') {
