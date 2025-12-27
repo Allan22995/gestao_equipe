@@ -49,6 +49,23 @@ export const Events: React.FC<EventsProps> = ({
   // Helper para identificar se é um perfil de liderança/admin
   const isManager = currentUserProfile !== 'colaborador';
 
+  // Helper para identificar se o colaborador logado (ou selecionado) pode selecionar tipo de evento
+  // Se não estiver editando e for um colaborador (não manager), usa o ID do usuário logado.
+  const currentUserContextId = userColabId;
+  const currentContextColab = useMemo(() => collaborators.find(c => c.id === currentUserContextId), [collaborators, currentUserContextId]);
+  
+  const canSelectType = useMemo(() => {
+      // 1. Se for gerente/admin, sempre pode
+      if (isManager) return true;
+      
+      // 2. Se for colaborador, verifica se o setor dele está na lista permitida
+      if (currentContextColab && currentContextColab.sector && settings.sectorsWithEventTypeSelection) {
+          return settings.sectorsWithEventTypeSelection.includes(currentContextColab.sector);
+      }
+      
+      return false;
+  }, [isManager, currentContextColab, settings.sectorsWithEventTypeSelection]);
+
   // State para Lançamento em Lote
   const [isMultiMode, setIsMultiMode] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<string[]>([]);
@@ -72,7 +89,7 @@ export const Events: React.FC<EventsProps> = ({
   // Inicialização Lazy do Form Data para garantir que userColabId seja usado se disponível
   const [formData, setFormData] = useState(() => ({
     collaboratorId: (!isManager && userColabId) ? userColabId : '',
-    type: (!isManager) ? 'folga' : '',
+    type: (!isManager && !canSelectType) ? 'folga' : '', // Inicializa vazio se puder selecionar
     startDate: '',
     endDate: '',
     observation: '',
@@ -99,10 +116,10 @@ export const Events: React.FC<EventsProps> = ({
       setFormData(prev => ({
         ...prev,
         collaboratorId: userColabId,
-        type: prev.type || 'folga'
+        type: (prev.type || (canSelectType ? '' : 'folga'))
       }));
     }
-  }, [isManager, userColabId, editingId]);
+  }, [isManager, userColabId, editingId, canSelectType]);
 
   // --- AUTOMATIC ESCALATION CHECK (RUNS ONCE ON MOUNT) ---
   useEffect(() => {
@@ -276,7 +293,7 @@ export const Events: React.FC<EventsProps> = ({
     setCopySearchTerm('');
     setFormData({
       collaboratorId: (!isManager && userColabId) ? userColabId : '',
-      type: (!isManager) ? 'folga' : '', // Default to Folga for collaborator
+      type: (!isManager && !canSelectType) ? 'folga' : '', // Default to Folga for collaborator if no selection allowed
       startDate: '',
       endDate: '',
       observation: '',
@@ -327,14 +344,6 @@ export const Events: React.FC<EventsProps> = ({
   };
 
   const handleEdit = (evt: EventRecord) => {
-    // Permission check for editing:
-    // 1. Can Update generally
-    // 2. AND (Manager OR Creator)
-    // 3. If Manager: Must be Current Approver or Admin if it's pending? 
-    //    Actually, managers can edit any event in their sector usually. 
-    //    But for strict approval flow, only current approver should "approve".
-    //    Editing details is generally allowed for admins/managers.
-    
     if (!canUpdate) return;
 
     if (!isManager) {
@@ -443,7 +452,11 @@ export const Events: React.FC<EventsProps> = ({
             }
 
             let finalType = formData.type;
-            if (!isManager) finalType = 'folga'; // Force 'folga' for collaborators
+            
+            // Lógica de Permissão de Tipo:
+            // Se NÃO é manager E NÃO tem permissão de seleção (baseado no setor), força 'folga'.
+            // Se tem permissão (canSelectType=true), usa o que foi selecionado no form.
+            if (!isManager && !canSelectType) finalType = 'folga';
 
             if (!finalType) {
                 showToast("Selecione o tipo de evento.", true);
@@ -452,7 +465,6 @@ export const Events: React.FC<EventsProps> = ({
 
             // --- LOTE (MULTI) ---
             if (isMultiMode && isManager) {
-                // ... (Multi creation doesn't use approval chain logic usually as it's done by admin, assuming approved)
                 if (multiSelectedIds.length === 0) {
                     showToast("Selecione pelo menos um colaborador.", true);
                     return;
@@ -545,21 +557,19 @@ export const Events: React.FC<EventsProps> = ({
 
             // Validar se o usuário pode aprovar (se estiver tentando aprovar)
             if (formData.status === 'aprovado' && isManager) {
-                // Find existing event to check permissions
                 const existing = events.find(e => e.id === editingId);
-                // Strict check: Must be current approver OR admin
-                // (Assuming "admin" profile bypasses checks in UI logic, but good to be robust)
                 if (existing && existing.status === 'pendente' && existing.currentApproverId) {
                     if (existing.currentApproverId !== userColabId && currentUserProfile !== 'admin') {
                         // Allow if they are higher in the chain? 
-                        // Usually "currentApprover" is the bottleneck.
-                        // But let's allow admins/managers to override if they have edit rights in general
                     }
                 }
             }
 
             let finalType = formData.type;
-            if (!isManager && !finalType) finalType = 'folga';
+            
+            // Mesma lógica de permissão no Update
+            if (!isManager && !canSelectType) finalType = 'folga';
+            if (!finalType) finalType = 'folga'; // Fallback
 
             let finalStatus: EventStatus = formData.status;
             let acceptedFlag = false;
@@ -576,7 +586,6 @@ export const Events: React.FC<EventsProps> = ({
             // Se for aprovado ou reprovado, limpa o currentApproverId (fluxo encerra)
             const isFinished = finalStatus === 'aprovado' || finalStatus === 'reprovado';
             
-            // Recovers existing chain info to persist it
             const existingEvent = events.find(e => e.id === editingId);
             
             await onUpdate({
@@ -593,7 +602,7 @@ export const Events: React.FC<EventsProps> = ({
                 collaboratorAcceptedProposal: acceptedFlag,
                 schedule: finalSchedule,
                 approverChain: existingEvent?.approverChain,
-                currentApproverId: isFinished ? '' : existingEvent?.currentApproverId, // Clear if done
+                currentApproverId: isFinished ? '' : existingEvent?.currentApproverId,
                 updatedBy: user,
                 lastUpdatedAt: new Date().toISOString()
             } as EventRecord);
@@ -652,7 +661,7 @@ export const Events: React.FC<EventsProps> = ({
         <div className="flex justify-between items-center mb-6">
           <div className="flex flex-col">
              <h2 className="text-xl font-bold text-gray-800">
-               {editingId ? 'Editar Evento / Solicitação' : (isManager ? 'Registrar Evento' : 'Solicitar Folga')}
+               {editingId ? 'Editar Evento / Solicitação' : (isManager ? 'Registrar Evento' : 'Solicitar Evento')}
              </h2>
              {isManager && !editingId && (
                 <div className="mt-2 flex items-center gap-3">
@@ -764,16 +773,17 @@ export const Events: React.FC<EventsProps> = ({
               className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100 disabled:text-gray-500"
               value={formData.type}
               onChange={e => setFormData({...formData, type: e.target.value})}
-              disabled={!isManager} // Colaborador travado em 'folga' (via lógica do state)
+              disabled={!canSelectType && !isManager} // Habilita se for manager OU se tiver permissão por setor
             >
               <option value="">Selecione...</option>
-              {isManager ? settings.eventTypes.map(t => (
+              {(isManager || canSelectType) ? settings.eventTypes.map(t => (
                 <option key={t.id} value={t.id}>{t.label}</option>
               )) : (
                  <option value="folga">Folga</option>
               )}
             </select>
-            {!isManager && <p className="text-[10px] text-gray-400 mt-1">Colaboradores só podem solicitar Folga.</p>}
+            {(!isManager && !canSelectType) && <p className="text-[10px] text-gray-400 mt-1">Seu setor permite apenas solicitar Folga.</p>}
+            {(!isManager && canSelectType) && <p className="text-[10px] text-green-600 mt-1 font-medium">Seleção habilitada para seu setor.</p>}
           </div>
 
           {/* Status Field - Only visible/editable for Managers */}
@@ -834,7 +844,132 @@ export const Events: React.FC<EventsProps> = ({
               <div className="md:col-span-2 border-t border-gray-100 pt-6">
                   {/* ... (mantido igual ao anterior, omitido para brevidade) ... */}
                   <h3 className="text-sm font-bold text-gray-800 mb-4 bg-purple-50 p-2 rounded text-purple-800 border border-purple-100">Jornada Temporária</h3>
-                  {/* ... Conteúdo do formulário de jornada ... */}
+                  
+                  <div className="flex flex-col md:flex-row gap-4 mb-4">
+                        {/* Carregar Modelo */}
+                        {settings.scheduleTemplates && settings.scheduleTemplates.length > 0 && (
+                        <div className="flex-1 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
+                            <span className="text-xs font-bold text-blue-800 whitespace-nowrap">Carregar Modelo:</span>
+                            <select 
+                            value={selectedTemplateId} 
+                            onChange={(e) => handleTemplateSelect(e.target.value)}
+                            className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white truncate"
+                            >
+                                <option value="">Selecione...</option>
+                                {settings.scheduleTemplates.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        )}
+
+                        {/* Copiar de Colaborador (SEARCHABLE DROPDOWN) */}
+                        <div className="flex-1 bg-purple-50 p-3 rounded-lg border border-purple-100 relative" ref={copyDropdownRef}>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-purple-800 whitespace-nowrap">Copiar Escala de:</span>
+                            </div>
+                            
+                            {/* Dropdown Trigger */}
+                            <div 
+                                onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)}
+                                className="w-full bg-white border border-purple-200 rounded p-1.5 flex justify-between items-center cursor-pointer hover:border-purple-300"
+                            >
+                                <span className={`text-sm truncate ${copySourceId ? 'text-purple-900 font-medium' : 'text-gray-400'}`}>
+                                    {selectedCopyCollaboratorName || "Selecione..."}
+                                </span>
+                                <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+
+                            {/* Dropdown Content */}
+                            {isCopyDropdownOpen && (
+                                <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl z-50 max-h-60 flex flex-col overflow-hidden animate-fadeIn">
+                                    <div className="p-2 border-b border-gray-100 bg-gray-50">
+                                        <input 
+                                            type="text" 
+                                            autoFocus
+                                            className="w-full border border-gray-300 rounded px-2 py-1 text-xs outline-none focus:border-purple-500"
+                                            placeholder="Buscar Nome ou ID..."
+                                            value={copySearchTerm}
+                                            onChange={e => setCopySearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="overflow-y-auto flex-1 p-1">
+                                        {filteredCopyOptions.map(c => (
+                                            <div 
+                                                key={c.id} 
+                                                onClick={() => handleCopyFromCollaborator(c.id)}
+                                                className={`flex justify-between items-center p-2 hover:bg-purple-50 cursor-pointer rounded text-sm ${copySourceId === c.id ? 'bg-purple-50 font-bold text-purple-700' : 'text-gray-700'}`}
+                                            >
+                                                <span className="truncate mr-2">{c.name}</span>
+                                                <span className="text-xs text-gray-400 font-mono bg-gray-100 px-1 rounded shrink-0">#{c.colabId}</span>
+                                            </div>
+                                        ))}
+                                        {filteredCopyOptions.length === 0 && (
+                                            <p className="text-center text-gray-400 text-xs py-2">Nenhum colaborador encontrado.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                    {daysOrder.map(day => (
+                        <div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="w-24">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={tempSchedule[day].enabled} 
+                                onChange={e => handleScheduleChange(day, 'enabled', e.target.checked)}
+                                className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                            />
+                            <span className="capitalize font-medium text-gray-700 text-sm">{day}</span>
+                            </label>
+                        </div>
+                        
+                        <div className={`flex items-center gap-2 flex-1 transition-opacity ${!tempSchedule[day].enabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                            <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-500 font-bold mb-0.5 uppercase">Início</span>
+                            <input 
+                                type="time" 
+                                value={tempSchedule[day].start} 
+                                onChange={e => handleScheduleChange(day, 'start', e.target.value)}
+                                className="border border-gray-300 rounded px-2 py-1 text-sm"
+                            />
+                            </div>
+                            
+                            <div className="flex flex-col px-2">
+                            <span className="text-[10px] text-gray-400 font-bold mb-0.5 opacity-0">.</span>
+                            <span className="text-gray-400 font-bold text-xs">até</span>
+                            </div>
+
+                            <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-500 font-bold mb-0.5 uppercase">Fim</span>
+                            <input 
+                                type="time" 
+                                value={tempSchedule[day].end} 
+                                onChange={e => handleScheduleChange(day, 'end', e.target.value)}
+                                className="border border-gray-300 rounded px-2 py-1 text-sm"
+                            />
+                            </div>
+
+                            <div className="flex flex-col ml-4">
+                            <span className="text-[10px] text-gray-500 font-bold mb-0.5 uppercase">Virada de Turno</span>
+                            <label className="flex items-center gap-1 cursor-pointer bg-white px-2 py-1.5 rounded border border-gray-200 hover:bg-gray-50">
+                                <input 
+                                    type="checkbox" 
+                                    checked={tempSchedule[day].startsPreviousDay || false} 
+                                    onChange={e => handleScheduleChange(day, 'startsPreviousDay', e.target.checked)}
+                                    className="rounded text-indigo-600 w-3 h-3"
+                                />
+                                <span className="text-xs text-gray-600">Inicia dia anterior (-1d)</span>
+                            </label>
+                            </div>
+                        </div>
+                        </div>
+                    ))}
+                    </div>
               </div>
           )}
 

@@ -679,7 +679,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                               >
                                   <option value="">Selecione...</option>
                                   {activeCollaborators
-                                    .filter(c => {
+                                    .filter((c: Collaborator) => {
                                       if (currentUserAllowedSectors.length > 0) {
                                           if (!c.sector) return false;
                                           if (!currentUserAllowedSectors.includes(c.sector)) return false;

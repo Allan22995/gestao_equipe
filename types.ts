@@ -113,6 +113,7 @@ export interface SystemSettings {
   systemMessage?: SystemMessage; 
   coverageRules?: CoverageRule[]; 
   approvalEscalationDelay?: number; // NOVO: Prazo em horas para escalonamento automático
+  sectorsWithEventTypeSelection?: string[]; // NOVO: Setores que podem selecionar o tipo de evento
 }
 
 export type EventType = string; 

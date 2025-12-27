@@ -1,8 +1,8 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule } from '../types';
 import { generateUUID } from '../utils/helpers';
 import { Modal } from './ui/Modal';
+import { MultiSelect } from './ui/MultiSelect';
 
 interface SettingsProps {
   settings: SystemSettings;
@@ -107,6 +107,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   // --- EVENTS STATES ---
   const [newEventLabel, setNewEventLabel] = useState('');
   const [newEventBehavior, setNewEventBehavior] = useState<'neutral' | 'debit' | 'credit_1x' | 'credit_2x'>('neutral');
+  const [selectedAllowedSectors, setSelectedAllowedSectors] = useState<string[]>(settings.sectorsWithEventTypeSelection || []);
 
   // --- ROTATIONS STATES ---
   const [newRotationLabel, setNewRotationLabel] = useState('');
@@ -143,6 +144,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
           setActiveTab(allowedTabs[0].id);
       }
   }, [allowedTabs, activeTab]);
+
+  useEffect(() => {
+      setSelectedAllowedSectors(settings.sectorsWithEventTypeSelection || []);
+  }, [settings.sectorsWithEventTypeSelection]);
 
   // Helper to update settings
   const updateSettings = async (newSettings: SystemSettings) => {
@@ -191,7 +196,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       updateSettings({ ...settings, approvalEscalationDelay: escalationDelay });
   };
 
-  // ... (rest of handlers omitted for brevity, keeping only render logic updates)
   // Re-declare Handlers for missing context in XML replacement
   const addRole = () => {
     if (!validate('newRole', newRole)) return;
@@ -228,6 +232,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const addSeasonal = () => { if (!validate('seasonalLabel', newSeasonal.label || '') || !newSeasonal.startDate || !newSeasonal.endDate) { showToast('Preencha todos os campos.', true); return; } const newItem: SeasonalEvent = { id: generateUUID(), label: newSeasonal.label!, startDate: newSeasonal.startDate!, endDate: newSeasonal.endDate!, color: newSeasonal.color || '#3B82F6', active: true }; updateSettings({ ...settings, seasonalEvents: [...(settings.seasonalEvents || []), newItem] }); setNewSeasonal({ label: '', startDate: '', endDate: '', color: '#3B82F6', active: true }); };
   const removeSeasonal = (id: string) => updateSettings({ ...settings, seasonalEvents: (settings.seasonalEvents || []).filter(s => s.id !== id) });
   const saveSysMsg = () => updateSettings({ ...settings, systemMessage: sysMsg as any });
+  
+  // Handler for Sectors with Event Selection
+  const updateAllowedSectors = (newSelected: string[]) => {
+      setSelectedAllowedSectors(newSelected);
+      updateSettings({ ...settings, sectorsWithEventTypeSelection: newSelected });
+  };
 
   const currentModuleDef = PERMISSION_MODULES.find(m => m.id === selectedModule);
   const selectedRoleConfig = useMemo(() => { if (!activeRoleForPerms) return null; return settings.roles.find(r => r.name === activeRoleForPerms); }, [settings.roles, activeRoleForPerms]);
@@ -379,7 +389,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* --- CONTENT: ROLES --- */}
        {activeTab === 'roles' && (
            <div className="space-y-6 animate-fadeIn">
-               {hasPermission('settings:view_roles_list') && (
+               {/* ... (Roles content remains mostly the same, ensuring handlers are used) ... */}
+                {hasPermission('settings:view_roles_list') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                    <SectionHeader title="Funções e Cargos" description="Defina os cargos e suas permissões de visibilidade." />
                    
@@ -483,101 +494,122 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            </div>
        )}
 
-       {/* ... (rest of tabs: events, rotations, templates, etc. - maintained but abbreviated in this thought process if no changes) ... */}
-       {/* Ensure all other tabs are included exactly as they were, just wrapping in the component return */}
        {/* --- CONTENT: EVENTS --- */}
        {activeTab === 'events' && (
-           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-fadeIn">
-               <SectionHeader title="Tipos de Eventos" description="Configure os motivos de ausência ou trabalho extra." />
-               
-               <div className="flex flex-col md:flex-row gap-4 mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200 items-end">
-                   <div className="flex-1 w-full">
-                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Evento</label>
-                       <input 
-                        type="text" 
+           <div className="space-y-6 animate-fadeIn">
+               <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                   <SectionHeader title="Tipos de Eventos" description="Configure os motivos de ausência ou trabalho extra." />
+                   
+                   <div className="flex flex-col md:flex-row gap-4 mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200 items-end">
+                       <div className="flex-1 w-full">
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Evento</label>
+                           <input 
+                            type="text" 
+                            disabled={!hasPermission('settings:edit_event_types')}
+                            value={newEventLabel} 
+                            onChange={e => { setNewEventLabel(e.target.value); validate('newEventLabel', e.target.value); }} 
+                            placeholder="Ex: Licença Paternidade" 
+                            className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newEventLabel ? 'border-red-300' : 'border-gray-300'} disabled:bg-gray-100`} 
+                           />
+                       </div>
+                       <div className="w-full md:w-48">
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Comportamento</label>
+                           <select 
+                            disabled={!hasPermission('settings:edit_event_types')}
+                            value={newEventBehavior} 
+                            onChange={e => setNewEventBehavior(e.target.value as any)} 
+                            className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white disabled:bg-gray-100"
+                           >
+                               <option value="neutral">Neutro (Apenas Registro)</option>
+                               <option value="debit">Débito (Desconta Dias)</option>
+                               <option value="credit_1x">Crédito (Soma 1x)</option>
+                               <option value="credit_2x">Crédito (Soma 2x)</option>
+                           </select>
+                       </div>
+                       <button 
                         disabled={!hasPermission('settings:edit_event_types')}
-                        value={newEventLabel} 
-                        onChange={e => { setNewEventLabel(e.target.value); validate('newEventLabel', e.target.value); }} 
-                        placeholder="Ex: Licença Paternidade" 
-                        className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${errors.newEventLabel ? 'border-red-300' : 'border-gray-300'} disabled:bg-gray-100`} 
-                       />
-                   </div>
-                   <div className="w-full md:w-48">
-                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Comportamento</label>
-                       <select 
-                        disabled={!hasPermission('settings:edit_event_types')}
-                        value={newEventBehavior} 
-                        onChange={e => setNewEventBehavior(e.target.value as any)} 
-                        className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white disabled:bg-gray-100"
+                        onClick={addEventType} 
+                        className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm h-[38px] disabled:opacity-50 disabled:cursor-not-allowed"
                        >
-                           <option value="neutral">Neutro (Apenas Registro)</option>
-                           <option value="debit">Débito (Desconta Dias)</option>
-                           <option value="credit_1x">Crédito (Soma 1x)</option>
-                           <option value="credit_2x">Crédito (Soma 2x)</option>
-                       </select>
+                           Adicionar
+                       </button>
                    </div>
-                   <button 
-                    disabled={!hasPermission('settings:edit_event_types')}
-                    onClick={addEventType} 
-                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm h-[38px] disabled:opacity-50 disabled:cursor-not-allowed"
-                   >
-                       Adicionar
-                   </button>
-               </div>
-               
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Eventos Neutros */}
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
-                            <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-                            <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider">Neutros</h4>
-                        </div>
-                        <div className="space-y-2">
-                            {settings.eventTypes.filter(t => t.behavior === 'neutral').map(t => (
-                                <div key={t.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
-                                    <span className="font-bold text-gray-700 text-sm">{t.label}</span>
-                                    {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton disabled={!hasPermission('settings:edit_event_types')} onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
-                                </div>
-                            ))}
-                            {settings.eventTypes.filter(t => t.behavior === 'neutral').length === 0 && <p className="text-xs text-gray-400 italic text-center py-2">Vazio</p>}
-                        </div>
-                    </div>
-
-                    {/* Eventos Débitos */}
-                    <div className="bg-red-50 rounded-xl p-4 border border-red-100">
-                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-red-200">
-                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                            <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider">Débitos (Ausências)</h4>
-                        </div>
-                        <div className="space-y-2">
-                            {settings.eventTypes.filter(t => t.behavior === 'debit').map(t => (
-                                <div key={t.id} className="flex justify-between items-center p-3 border border-red-100 rounded-lg bg-white shadow-sm">
-                                    <span className="font-bold text-gray-800 text-sm">{t.label}</span>
-                                    {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton disabled={!hasPermission('settings:edit_event_types')} onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Eventos Créditos */}
-                    <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
-                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-emerald-200">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                            <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Créditos (Extras)</h4>
-                        </div>
-                        <div className="space-y-2">
-                            {settings.eventTypes.filter(t => t.behavior.startsWith('credit')).map(t => (
-                                <div key={t.id} className="flex justify-between items-center p-3 border border-emerald-100 rounded-lg bg-white shadow-sm relative overflow-hidden">
-                                    <span className="font-bold text-gray-800 text-sm">{t.label}</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">{t.behavior === 'credit_2x' ? '2x' : '1x'}</span>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Eventos Neutros */}
+                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
+                                <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                                <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider">Neutros</h4>
+                            </div>
+                            <div className="space-y-2">
+                                {settings.eventTypes.filter(t => t.behavior === 'neutral').map(t => (
+                                    <div key={t.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                        <span className="font-bold text-gray-700 text-sm">{t.label}</span>
                                         {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton disabled={!hasPermission('settings:edit_event_types')} onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                                {settings.eventTypes.filter(t => t.behavior === 'neutral').length === 0 && <p className="text-xs text-gray-400 italic text-center py-2">Vazio</p>}
+                            </div>
                         </div>
-                    </div>
+
+                        {/* Eventos Débitos */}
+                        <div className="bg-red-50 rounded-xl p-4 border border-red-100">
+                            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-red-200">
+                                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider">Débitos (Ausências)</h4>
+                            </div>
+                            <div className="space-y-2">
+                                {settings.eventTypes.filter(t => t.behavior === 'debit').map(t => (
+                                    <div key={t.id} className="flex justify-between items-center p-3 border border-red-100 rounded-lg bg-white shadow-sm">
+                                        <span className="font-bold text-gray-800 text-sm">{t.label}</span>
+                                        {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton disabled={!hasPermission('settings:edit_event_types')} onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Eventos Créditos */}
+                        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-emerald-200">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Créditos (Extras)</h4>
+                            </div>
+                            <div className="space-y-2">
+                                {settings.eventTypes.filter(t => t.behavior.startsWith('credit')).map(t => (
+                                    <div key={t.id} className="flex justify-between items-center p-3 border border-emerald-100 rounded-lg bg-white shadow-sm relative overflow-hidden">
+                                        <span className="font-bold text-gray-800 text-sm">{t.label}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">{t.behavior === 'credit_2x' ? '2x' : '1x'}</span>
+                                            {!['ferias','folga','trabalhado'].includes(t.id) && <IconButton disabled={!hasPermission('settings:edit_event_types')} onClick={() => removeEventType(t.id)} icon={Icons.Trash} colorClass="text-red-400 hover:bg-red-50" />}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                   </div>
                </div>
+
+               {/* NOVO: Permissões de Seleção de Tipo de Evento por Setor */}
+               {hasPermission('settings:edit_event_types') && (
+                   <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+                       <SectionHeader title="Permissões de Seleção de Tipo" description="Defina quais setores permitem que colaboradores selecionem o tipo de evento (ex: 'Trabalhado') ao invés de apenas 'Folga'." />
+                       
+                       <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                           <MultiSelect 
+                               label="Setores com Permissão de Seleção"
+                               options={settings.sectors || []}
+                               selected={selectedAllowedSectors}
+                               onChange={updateAllowedSectors}
+                               placeholder="Selecione os setores..."
+                           />
+                           <p className="text-xs text-blue-600 mt-2">
+                               Colaboradores destes setores poderão escolher o tipo de evento ao criar uma solicitação.
+                               Para os demais, o tipo será fixado em 'Folga'.
+                           </p>
+                       </div>
+                   </div>
+               )}
            </div>
        )}
 
@@ -910,7 +942,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            </div>
        )}
 
-       {/* MODALS (Permissions, Mirroring, Templates) - Mantidos iguais */}
+       {/* MODALS (Permissions, Mirroring, Templates) */}
        {/* 1. PERMISSIONS MODAL */}
        <Modal 
             isOpen={!!selectedModule} 
@@ -942,7 +974,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                         <div className={`flex-1 bg-gray-50 flex flex-col h-full ${!activeRoleForPerms && 'hidden md:flex'}`}>
                             {selectedRoleConfig ? (
                                 <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-8">
-                                    {/* ... Permissions Matrix Logic (Same as before) ... */}
+                                    {/* ... Permissions Matrix Logic ... */}
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-200 pb-4">
                                         <div>
                                             <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">{currentModuleDef.icon} {currentModuleDef.label}</h3>
@@ -990,8 +1022,29 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* 3. TEMPLATE EDIT MODAL */}
        <Modal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} title={editingTemplateId ? "Editar Modelo" : "Novo Modelo"} maxWidth="max-w-4xl">
            <div className="space-y-6">
-               <div><label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Modelo</label><input type="text" value={tempTemplateName} onChange={e => setTempTemplateName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2" placeholder="Ex: Comercial 08 as 18" disabled={!hasPermission('settings:edit_templates')} /></div>
-               <div className="space-y-2">{daysOrder.map(day => (<div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-2 bg-gray-50 rounded border border-gray-100"><div className="w-24 font-bold capitalize text-sm flex items-center gap-2"><input type="checkbox" checked={tempSchedule[day].enabled} onChange={e => handleTempScheduleChange(day, 'enabled', e.target.checked)} disabled={!hasPermission('settings:edit_templates')} />{day}</div><div className={`flex items-center gap-2 flex-1 ${!tempSchedule[day].enabled ? 'opacity-40 pointer-events-none' : ''}`}><input type="time" value={tempSchedule[day].start} onChange={e => handleTempScheduleChange(day, 'start', e.target.value)} className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" disabled={!hasPermission('settings:edit_templates')} /><span className="text-xs text-gray-400">até</span><input type="time" value={tempSchedule[day].end} onChange={e => handleTempScheduleChange(day, 'end', e.target.value)} className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" disabled={!hasPermission('settings:edit_templates')} /><label className="flex items-center gap-1 ml-4 text-xs"><input type="checkbox" checked={tempSchedule[day].startsPreviousDay} onChange={e => handleTempScheduleChange(day, 'startsPreviousDay', e.target.checked)} disabled={!hasPermission('settings:edit_templates')} /> Inicia dia anterior</label></div></div>))}</div>
+               <div>
+                   <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Modelo</label>
+                   <input type="text" value={tempTemplateName} onChange={e => setTempTemplateName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2" placeholder="Ex: Comercial 08 as 18" disabled={!hasPermission('settings:edit_templates')} />
+               </div>
+               <div className="space-y-2">
+                   {daysOrder.map((day: keyof Schedule) => (
+                       <div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-2 bg-gray-50 rounded border border-gray-100">
+                           <div className="w-24 font-bold capitalize text-sm flex items-center gap-2">
+                               <input type="checkbox" checked={tempSchedule[day].enabled} onChange={e => handleTempScheduleChange(day, 'enabled', e.target.checked)} disabled={!hasPermission('settings:edit_templates')} />
+                               {day}
+                           </div>
+                           <div className={`flex items-center gap-2 flex-1 ${!tempSchedule[day].enabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                               <input type="time" value={tempSchedule[day].start} onChange={e => handleTempScheduleChange(day, 'start', e.target.value)} className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" disabled={!hasPermission('settings:edit_templates')} />
+                               <span className="text-xs text-gray-400">até</span>
+                               <input type="time" value={tempSchedule[day].end} onChange={e => handleTempScheduleChange(day, 'end', e.target.value)} className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" disabled={!hasPermission('settings:edit_templates')} />
+                               <label className="flex items-center gap-1 ml-4 text-xs">
+                                   <input type="checkbox" checked={tempSchedule[day].startsPreviousDay} onChange={e => handleTempScheduleChange(day, 'startsPreviousDay', e.target.checked)} disabled={!hasPermission('settings:edit_templates')} /> 
+                                   Inicia dia anterior
+                               </label>
+                           </div>
+                       </div>
+                   ))}
+               </div>
                <div className="flex justify-end gap-3 pt-4 border-t"><button onClick={() => setIsTemplateModalOpen(false)} className="px-4 py-2 text-gray-600">Cancelar</button><button onClick={saveTemplate} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={!hasPermission('settings:edit_templates')}>Salvar Modelo</button></div>
            </div>
        </Modal>
