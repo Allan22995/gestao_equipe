@@ -430,8 +430,23 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       return collaborators.find(c => c.id === copySourceId)?.name;
   }, [copySourceId, collaborators]);
 
+  // --- FILTERED TEMPLATES (Branch Logic) ---
+  const filteredTemplates = useMemo(() => {
+      if (!settings.scheduleTemplates) return [];
+      
+      // Se não tem filial selecionada, mostra apenas os globais (sem branch definido)
+      if (!formData.branch) {
+          return settings.scheduleTemplates.filter(t => !t.branches || t.branches.length === 0);
+      }
 
-  const scheduleTemplates = settings.scheduleTemplates || [];
+      // Se tem filial, mostra os vinculados à filial + globais
+      return settings.scheduleTemplates.filter(t => {
+          const isGlobal = !t.branches || t.branches.length === 0;
+          const isLinked = t.branches?.includes(formData.branch);
+          return isGlobal || isLinked;
+      });
+  }, [settings.scheduleTemplates, formData.branch]);
+
   const rotationOptions = settings.shiftRotations || [];
 
   const filteredCollaborators = collaborators.filter(c => {
@@ -560,6 +575,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                 onChange={e => {
                     const newBranch = e.target.value;
                     setFormData({...formData, branch: newBranch, leaderId: '', sector: ''});
+                    // Reset template selection if branch changes (to force re-selection from valid list)
+                    setSelectedTemplateId('');
                 }}
               >
                  <option value="">Selecione...</option>
@@ -728,22 +745,23 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             </div>
 
             <div className="flex flex-col md:flex-row gap-4 mb-4">
-                {/* Carregar Modelo */}
-                {scheduleTemplates.length > 0 && (
-                  <div className="flex-1 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
+                {/* Carregar Modelo (Filtrado por Filial) */}
+                <div className="flex-1 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
                      <span className="text-xs font-bold text-blue-800 whitespace-nowrap">Carregar Modelo:</span>
                      <select 
                        value={selectedTemplateId} 
                        onChange={(e) => handleTemplateSelect(e.target.value)}
-                       className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white truncate"
+                       className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white truncate disabled:opacity-50"
+                       disabled={!formData.branch && !editingId} // Disable if no branch selected
                      >
-                        <option value="">Selecione...</option>
-                        {scheduleTemplates.map(t => (
+                        <option value="">
+                            {(!formData.branch && !editingId) ? 'Selecione a Filial primeiro' : 'Selecione...'}
+                        </option>
+                        {filteredTemplates.map(t => (
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                      </select>
-                  </div>
-                )}
+                </div>
 
                 {/* Copiar de Colaborador (SEARCHABLE DROPDOWN) */}
                 <div className="flex-1 bg-purple-50 p-3 rounded-lg border border-purple-100 relative" ref={copyDropdownRef}>

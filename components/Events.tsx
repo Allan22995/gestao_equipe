@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus, Schedule, DaySchedule } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser, buildApprovalChain } from '../utils/helpers';
@@ -220,6 +219,29 @@ export const Events: React.FC<EventsProps> = ({
   const selectedCopyCollaboratorName = useMemo(() => {
       return activeCollaborators.find(c => c.id === copySourceId)?.name;
   }, [copySourceId, activeCollaborators]);
+
+  // --- FILTERED TEMPLATES (Branch Logic for Events) ---
+  const filteredTemplates = useMemo(() => {
+      if (!settings.scheduleTemplates) return [];
+      
+      const targetColabId = formData.collaboratorId;
+      if (!targetColabId) return settings.scheduleTemplates; // Show all if no colab selected yet
+
+      const targetColab = collaborators.find(c => c.id === targetColabId);
+      const targetBranch = targetColab?.branch;
+
+      // Se não encontrou filial, mostra os globais
+      if (!targetBranch) {
+          return settings.scheduleTemplates.filter(t => !t.branches || t.branches.length === 0);
+      }
+
+      // Se tem filial, mostra os vinculados à filial + globais
+      return settings.scheduleTemplates.filter(t => {
+          const isGlobal = !t.branches || t.branches.length === 0;
+          const isLinked = t.branches?.includes(targetBranch);
+          return isGlobal || isLinked;
+      });
+  }, [settings.scheduleTemplates, formData.collaboratorId, collaborators]);
 
   // Filter Events History and Sort by Date Descending
   const allowedEvents = useMemo(() => {
@@ -846,7 +868,7 @@ export const Events: React.FC<EventsProps> = ({
                   <h3 className="text-sm font-bold text-gray-800 mb-4 bg-purple-50 p-2 rounded text-purple-800 border border-purple-100">Jornada Temporária</h3>
                   
                   <div className="flex flex-col md:flex-row gap-4 mb-4">
-                        {/* Carregar Modelo */}
+                        {/* Carregar Modelo (Filtrado por Filial) */}
                         {settings.scheduleTemplates && settings.scheduleTemplates.length > 0 && (
                         <div className="flex-1 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
                             <span className="text-xs font-bold text-blue-800 whitespace-nowrap">Carregar Modelo:</span>
@@ -854,9 +876,12 @@ export const Events: React.FC<EventsProps> = ({
                             value={selectedTemplateId} 
                             onChange={(e) => handleTemplateSelect(e.target.value)}
                             className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white truncate"
+                            disabled={!formData.collaboratorId}
                             >
-                                <option value="">Selecione...</option>
-                                {settings.scheduleTemplates.map(t => (
+                                <option value="">
+                                    {formData.collaboratorId ? 'Selecione...' : 'Selecione o Colaborador primeiro'}
+                                </option>
+                                {filteredTemplates.map(t => (
                                 <option key={t.id} value={t.id}>{t.name}</option>
                                 ))}
                             </select>

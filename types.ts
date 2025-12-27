@@ -20,6 +20,7 @@ export interface ScheduleTemplate {
   id: string;
   name: string;
   schedule: Schedule;
+  branches?: string[]; // NOVO: Vinculação com filiais
 }
 
 export interface RotationRule {

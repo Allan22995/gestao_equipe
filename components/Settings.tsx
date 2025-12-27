@@ -117,6 +117,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [tempTemplateName, setTempTemplateName] = useState('');
   const [tempSchedule, setTempSchedule] = useState<Schedule>(initialSchedule);
+  const [tempTemplateBranches, setTempTemplateBranches] = useState<string[]>([]); // New state for branches
 
   // --- INTEGRATIONS STATES ---
   const [selectedBranchForLinks, setSelectedBranchForLinks] = useState('');
@@ -223,9 +224,44 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const removeEventType = (id: string) => { if (['ferias', 'folga', 'trabalhado'].includes(id)) return; if (window.confirm('Remover?')) updateSettings({ ...settings, eventTypes: settings.eventTypes.filter(t => t.id !== id) }); };
   const addRotation = () => { if (!validate('newRotationLabel', newRotationLabel)) return; const id = newRotationLabel.trim().toUpperCase().replace(/\s+/g, '_'); if (settings.shiftRotations?.some(r => r.id === id)) { showToast('Escala já existe.', true); return; } const newRot: RotationRule = { id, label: newRotationLabel.trim() }; updateSettings({ ...settings, shiftRotations: [...(settings.shiftRotations || []), newRot] }); setNewRotationLabel(''); };
   const removeRotation = (id: string) => { if (window.confirm('Remover escala?')) updateSettings({ ...settings, shiftRotations: (settings.shiftRotations || []).filter(r => r.id !== id) }); };
-  const openNewTemplate = () => { setEditingTemplateId(null); setTempTemplateName(''); setTempSchedule(JSON.parse(JSON.stringify(initialSchedule))); setIsTemplateModalOpen(true); };
-  const openEditTemplate = (tpl: ScheduleTemplate) => { setEditingTemplateId(tpl.id); setTempTemplateName(tpl.name); setTempSchedule(JSON.parse(JSON.stringify(tpl.schedule))); setIsTemplateModalOpen(true); };
-  const saveTemplate = () => { if (!tempTemplateName.trim()) { showToast('Nome obrigatório', true); return; } const newTpl: ScheduleTemplate = { id: editingTemplateId || generateUUID(), name: tempTemplateName, schedule: tempSchedule }; let newTemplates = [...(settings.scheduleTemplates || [])]; if (editingTemplateId) { newTemplates = newTemplates.map(t => t.id === editingTemplateId ? newTpl : t); } else { newTemplates.push(newTpl); } updateSettings({ ...settings, scheduleTemplates: newTemplates }); setIsTemplateModalOpen(false); };
+  
+  const openNewTemplate = () => { 
+      setEditingTemplateId(null); 
+      setTempTemplateName(''); 
+      setTempSchedule(JSON.parse(JSON.stringify(initialSchedule))); 
+      setTempTemplateBranches([]); // Init branches
+      setIsTemplateModalOpen(true); 
+  };
+  
+  const openEditTemplate = (tpl: ScheduleTemplate) => { 
+      setEditingTemplateId(tpl.id); 
+      setTempTemplateName(tpl.name); 
+      setTempSchedule(JSON.parse(JSON.stringify(tpl.schedule))); 
+      setTempTemplateBranches(tpl.branches || []); // Load branches
+      setIsTemplateModalOpen(true); 
+  };
+  
+  const saveTemplate = () => { 
+      if (!tempTemplateName.trim()) { showToast('Nome obrigatório', true); return; } 
+      if (tempTemplateBranches.length === 0) { showToast('Selecione pelo menos uma filial.', true); return; }
+
+      const newTpl: ScheduleTemplate = { 
+          id: editingTemplateId || generateUUID(), 
+          name: tempTemplateName, 
+          schedule: tempSchedule,
+          branches: tempTemplateBranches
+      }; 
+      
+      let newTemplates = [...(settings.scheduleTemplates || [])]; 
+      if (editingTemplateId) { 
+          newTemplates = newTemplates.map(t => t.id === editingTemplateId ? newTpl : t); 
+      } else { 
+          newTemplates.push(newTpl); 
+      } 
+      updateSettings({ ...settings, scheduleTemplates: newTemplates }); 
+      setIsTemplateModalOpen(false); 
+  };
+  
   const removeTemplate = (id: string) => { if (window.confirm('Excluir modelo?')) updateSettings({ ...settings, scheduleTemplates: (settings.scheduleTemplates || []).filter(t => t.id !== id) }); };
   const handleTempScheduleChange = (day: keyof Schedule, field: string, val: any) => { setTempSchedule(prev => ({ ...prev, [day]: { ...prev[day], [field]: val } })); };
   const toggleBranchLink = (targetBranch: string) => { if (!selectedBranchForLinks) return; const currentLinks = settings.branchLinks?.[selectedBranchForLinks] || []; let newLinks; if (currentLinks.includes(targetBranch)) newLinks = currentLinks.filter(b => b !== targetBranch); else newLinks = [...currentLinks, targetBranch]; updateSettings({ ...settings, branchLinks: { ...settings.branchLinks, [selectedBranchForLinks]: newLinks } }); };
@@ -386,6 +422,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            </div>
        )}
 
+       {/* ... (Roles content omitted for brevity, logic maintained) ... */}
+       {/* (This part was not requested to change, skipping to relevant sections) */}
        {/* --- CONTENT: ROLES --- */}
        {activeTab === 'roles' && (
            <div className="space-y-6 animate-fadeIn">
@@ -679,7 +717,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
 
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                    {(settings.scheduleTemplates || []).map(t => (
-                       <div key={t.id} className="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-all bg-white group">
+                       <div key={t.id} className="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-all bg-white group flex flex-col">
                            <div className="flex justify-between items-start mb-3">
                                <div className="flex items-center gap-3">
                                    <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">{Icons.View}</div>
@@ -690,7 +728,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                    <IconButton disabled={!hasPermission('settings:edit_templates')} onClick={() => removeTemplate(t.id)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" />
                                </div>
                            </div>
-                           <div className="space-y-1">
+                           <div className="space-y-1 mb-2">
                                {daysOrder.filter(d => t.schedule[d].enabled).slice(0, 3).map(d => (
                                    <div key={d} className="text-xs flex justify-between text-gray-500 bg-gray-50 px-2 py-1 rounded">
                                        <span className="capitalize font-medium">{d}</span>
@@ -699,6 +737,15 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                                ))}
                                {Object.values(t.schedule).filter(d => d.enabled).length > 3 && (
                                    <div className="text-[10px] text-center text-gray-400 italic pt-1">+ dias restantes</div>
+                               )}
+                           </div>
+                           <div className="mt-auto pt-2 border-t border-gray-100 flex flex-wrap gap-1">
+                               {(!t.branches || t.branches.length === 0) ? (
+                                   <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded border border-green-200">Global</span>
+                               ) : (
+                                   t.branches.map(b => (
+                                       <span key={b} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100 truncate max-w-[100px]">{b}</span>
+                                   ))
                                )}
                            </div>
                        </div>
@@ -1022,11 +1069,24 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* 3. TEMPLATE EDIT MODAL */}
        <Modal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} title={editingTemplateId ? "Editar Modelo" : "Novo Modelo"} maxWidth="max-w-4xl">
            <div className="space-y-6">
-               <div>
-                   <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Modelo</label>
-                   <input type="text" value={tempTemplateName} onChange={e => setTempTemplateName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2" placeholder="Ex: Comercial 08 as 18" disabled={!hasPermission('settings:edit_templates')} />
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div>
+                       <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome do Modelo *</label>
+                       <input type="text" value={tempTemplateName} onChange={e => setTempTemplateName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2" placeholder="Ex: Comercial 08 as 18" disabled={!hasPermission('settings:edit_templates')} />
+                   </div>
+                   <div>
+                       <MultiSelect 
+                           label="Filiais (Vinculação) *"
+                           options={settings.branches || []}
+                           selected={tempTemplateBranches}
+                           onChange={setTempTemplateBranches}
+                           placeholder="Selecione as filiais..."
+                           disabled={!hasPermission('settings:edit_templates')}
+                       />
+                       <p className="text-[10px] text-gray-400 mt-1">Este modelo só aparecerá para colaboradores destas filiais.</p>
+                   </div>
                </div>
-               <div className="space-y-2">
+               <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar border border-gray-100 rounded-lg p-2">
                    {daysOrder.map((day: keyof Schedule) => (
                        <div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-2 bg-gray-50 rounded border border-gray-100">
                            <div className="w-24 font-bold capitalize text-sm flex items-center gap-2">
