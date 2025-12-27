@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile, Skill } from '../types';
+import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
 
 interface CollaboratorsProps {
@@ -16,9 +15,7 @@ interface CollaboratorsProps {
   canDelete: boolean;
   currentUserAllowedSectors: string[];
   currentUserRole: string; 
-  availableBranches: string[];
-  // NOVO: Props para Skills
-  skills?: Skill[];
+  availableBranches: string[]; // Recebe as filiais permitidas para o usuário logado
 }
 
 const initialSchedule: Schedule = {
@@ -33,7 +30,7 @@ const initialSchedule: Schedule = {
 
 export const Collaborators: React.FC<CollaboratorsProps> = ({ 
   collaborators, onAdd, onUpdate, onDelete, showToast, settings, currentUserProfile, canCreate, canUpdate, canDelete,
-  currentUserAllowedSectors, currentUserRole, availableBranches, skills = []
+  currentUserAllowedSectors, currentUserRole, availableBranches
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,7 +53,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     rotationGroup: '',
     rotationStartDate: '',
     active: true,
-    skills: {} as Record<string, number>
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
@@ -137,19 +133,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     });
   };
 
-  // Helper for Skills Section
-  const handleSkillLevelChange = (skillId: string, level: number) => {
-      setFormData(prev => {
-          const newSkills = { ...prev.skills };
-          if (level === 0) {
-              delete newSkills[skillId];
-          } else {
-              newSkills[skillId] = level;
-          }
-          return { ...prev, skills: newSkills };
-      });
-  };
-
   const selectedRoleConfig = settings.roles.find(r => r.name === formData.role);
   const isRoleRestricted = selectedRoleConfig ? !selectedRoleConfig.canViewAllSectors : false;
 
@@ -165,8 +148,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', 
       branch: initialBranch,
       role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
-      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true,
-      skills: {}
+      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setCopySourceId('');
@@ -195,7 +177,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       rotationGroup: colab.rotationGroup || '',
       rotationStartDate: colab.rotationStartDate || '',
       active: colab.active ?? true,
-      skills: colab.skills || {}
     });
     
     const safeSchedule = JSON.parse(JSON.stringify(colab.schedule));
@@ -216,7 +197,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     setShowForm(false);
     setFormData({ 
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
-      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true, skills: {}
+      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
@@ -427,12 +408,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       return Array.from(new Set([...specific, ...global])).sort();
   }, [formData.branch, settings.branchSectors, settings.sectors]);
 
-  // --- SKILLS LOGIC (FILTER BY BRANCH) ---
-  const branchSkills = useMemo(() => {
-      if (!formData.branch) return [];
-      return skills.filter(s => s.branch === formData.branch);
-  }, [formData.branch, skills]);
-
   // --- FILTER COPY OPTIONS (Searchable Dropdown Logic) ---
   const filteredCopyOptions = useMemo(() => {
       return collaborators.filter(c => {
@@ -528,7 +503,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {/* ... Existing Inputs (ID, Login, Name, etc.) ... */}
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">ID (Matrícula) *</label>
               <input required type="text" className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" placeholder="Ex: 001" value={formData.colabId} onChange={e => setFormData({...formData, colabId: e.target.value})} />
@@ -563,6 +537,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               <label className="text-xs font-semibold text-gray-600 mb-1">Telefone (Celular)</label>
               <input 
                 type="text" 
+                // required removido
                 className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-gray-100" 
                 placeholder={formData.profile === 'noc' ? 'Opcional para NOC' : '(XX) 9XXXX-XXXX'} 
                 value={formData.phone} 
@@ -599,7 +574,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                 value={formData.branch} 
                 onChange={e => {
                     const newBranch = e.target.value;
-                    setFormData({...formData, branch: newBranch, leaderId: '', sector: '', skills: {} }); // Reset skills if branch changes
+                    setFormData({...formData, branch: newBranch, leaderId: '', sector: ''});
+                    // Reset template selection if branch changes (to force re-selection from valid list)
                     setSelectedTemplateId('');
                 }}
               >
@@ -662,11 +638,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    </option>
                  ))}
               </select>
+              <span className="text-[10px] text-gray-400">
+                 {!formData.branch 
+                    ? "Selecione a Filial para carregar os líderes." 
+                    : (settings.branchLinks?.[formData.branch]?.length || 0) > 0 
+                        ? "Exibe líderes da filial principal e das filiais vinculadas."
+                        : "Exibe líderes desta filial."}
+              </span>
             </div>
             
              {isRoleRestricted && (
                 <div className="md:col-span-3 bg-gray-50 p-4 rounded-lg border border-gray-200 animate-fadeIn">
-                   {/* ... Permission UI ... */}
                    <div className="flex justify-between items-start mb-2">
                       <label className="text-sm font-bold text-gray-700">Permissões de Visualização <span className="text-red-500">*</span></label>
                       <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-200">Função Restrita</span>
@@ -700,58 +682,21 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                    )}
                 </div>
              )}
-          </div>
 
-          {/* --- SKILLS SECTION --- */}
-          <div className="border-t border-gray-100 pt-6 mb-6">
-              <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  🎓 Competências & Skills
-                  {formData.branch && <span className="text-[10px] font-normal bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Filial: {formData.branch}</span>}
-              </h3>
-              
-              {!formData.branch ? (
-                  <p className="text-xs text-gray-400 italic">Selecione uma filial para ver as skills disponíveis.</p>
-              ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {branchSkills.length === 0 && <p className="text-xs text-gray-400 italic col-span-full">Nenhuma skill cadastrada para esta filial.</p>}
-                      {branchSkills.map(skill => {
-                          const currentLevel = formData.skills[skill.id] || 0;
-                          return (
-                              <div key={skill.id} className={`p-3 rounded-lg border transition-all ${currentLevel > 0 ? 'bg-white border-indigo-200 shadow-sm' : 'bg-gray-50 border-gray-200 opacity-80 hover:opacity-100'}`}>
-                                  <div className="flex justify-between items-start mb-2">
-                                      <span className={`text-sm font-bold ${currentLevel > 0 ? 'text-gray-800' : 'text-gray-500'}`}>{skill.name}</span>
-                                      {currentLevel > 0 && <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{currentLevel}</span>}
-                                  </div>
-                                  <div className="flex gap-1">
-                                      {[0, 1, 2, 3, 4].map(lvl => (
-                                          <button
-                                              key={lvl}
-                                              type="button"
-                                              onClick={() => handleSkillLevelChange(skill.id, lvl)}
-                                              className={`h-1.5 flex-1 rounded-full transition-colors ${currentLevel >= lvl && lvl > 0 ? (lvl === 4 ? 'bg-purple-500' : lvl === 3 ? 'bg-emerald-500' : lvl === 2 ? 'bg-blue-500' : 'bg-yellow-400') : 'bg-gray-200'} ${lvl === 0 ? 'hidden' : ''}`}
-                                              title={`Nível ${lvl}`}
-                                          />
-                                      ))}
-                                  </div>
-                                  <div className="mt-2 flex justify-between text-[10px] text-gray-400 uppercase">
-                                      <button type="button" onClick={() => handleSkillLevelChange(skill.id, 0)} className="hover:text-red-500">Zerar</button>
-                                      <div className="flex gap-2">
-                                          <button type="button" onClick={() => handleSkillLevelChange(skill.id, 1)} className="hover:text-yellow-600">B</button>
-                                          <button type="button" onClick={() => handleSkillLevelChange(skill.id, 2)} className="hover:text-blue-600">I</button>
-                                          <button type="button" onClick={() => handleSkillLevelChange(skill.id, 3)} className="hover:text-emerald-600">A</button>
-                                          <button type="button" onClick={() => handleSkillLevelChange(skill.id, 4)} className="hover:text-purple-600">E</button>
-                                      </div>
-                                  </div>
-                              </div>
-                          );
-                      })}
+             {!isRoleRestricted && formData.role && (
+               <div className="md:col-span-3 bg-gray-50 p-3 rounded-lg border border-gray-200 opacity-75">
+                  <div className="flex items-center gap-2">
+                     <label className="text-sm font-bold text-gray-700">Permissões de Visualização</label>
+                     <span className="text-[10px] bg-green-100 text-green-800 px-2 py-0.5 rounded border border-green-200">Global</span>
                   </div>
-              )}
+                  <p className="text-xs text-gray-500 mt-1">A função selecionada ({formData.role}) tem permissão de visualização global. O usuário verá todos os setores.</p>
+               </div>
+             )}
           </div>
 
           <div className="border-t border-gray-100 pt-6">
             <h3 className="text-sm font-bold text-gray-800 mb-4">Jornada e Escala</h3>
-            {/* ... Existing Schedule Logic (Rotation, Templates, Copy, Days) ... */}
+            
             <div className="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
                <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-3">
@@ -792,6 +737,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                                 value={formData.rotationStartDate}
                                 onChange={e => setFormData({...formData, rotationStartDate: e.target.value})}
                             />
+                            <p className="text-[10px] text-gray-500 mt-1">Informe um domingo que o colaborador folgou. O sistema calculará o ciclo 3x1 (Trabalha 3, Folga 1) a partir desta data.</p>
                         </div>
                      </div>
                   )}
@@ -799,14 +745,14 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             </div>
 
             <div className="flex flex-col md:flex-row gap-4 mb-4">
-                {/* Carregar Modelo */}
+                {/* Carregar Modelo (Filtrado por Filial) */}
                 <div className="flex-1 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
                      <span className="text-xs font-bold text-blue-800 whitespace-nowrap">Carregar Modelo:</span>
                      <select 
                        value={selectedTemplateId} 
                        onChange={(e) => handleTemplateSelect(e.target.value)}
                        className="flex-1 text-sm border-blue-200 rounded p-1 text-blue-900 bg-white truncate disabled:opacity-50"
-                       disabled={!formData.branch && !editingId} 
+                       disabled={!formData.branch && !editingId} // Disable if no branch selected
                      >
                         <option value="">
                             {(!formData.branch && !editingId) ? 'Selecione a Filial primeiro' : 'Selecione...'}
@@ -817,12 +763,13 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                      </select>
                 </div>
 
-                {/* Copiar de Colaborador */}
+                {/* Copiar de Colaborador (SEARCHABLE DROPDOWN) */}
                 <div className="flex-1 bg-purple-50 p-3 rounded-lg border border-purple-100 relative" ref={copyDropdownRef}>
                      <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-bold text-purple-800 whitespace-nowrap">Copiar Escala de:</span>
                      </div>
                      
+                     {/* Dropdown Trigger / Input Like */}
                      <div 
                         onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)}
                         className="w-full bg-white border border-purple-200 rounded p-1.5 flex justify-between items-center cursor-pointer hover:border-purple-300"
@@ -833,6 +780,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                         <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                      </div>
 
+                     {/* Dropdown Content */}
                      {isCopyDropdownOpen && (
                          <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl z-50 max-h-60 flex flex-col overflow-hidden animate-fadeIn">
                              <div className="p-2 border-b border-gray-100 bg-gray-50">
@@ -856,12 +804,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                                          <span className="text-xs text-gray-400 font-mono bg-gray-100 px-1 rounded shrink-0">#{c.colabId}</span>
                                      </div>
                                  ))}
+                                 {filteredCopyOptions.length === 0 && (
+                                     <p className="text-center text-gray-400 text-xs py-2">Nenhum colaborador encontrado.</p>
+                                 )}
                              </div>
                          </div>
                      )}
                 </div>
             </div>
 
+            <p className="text-xs text-gray-500 mb-4">Configure os dias trabalhados. Se o turno inicia no dia anterior (Ex: A escala de Segunda começa Domingo às 22:00), marque a caixa "Inicia dia anterior".</p>
+            
             <div className="space-y-3">
               {daysOrder.map(day => (
                 <div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
@@ -889,6 +842,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                     </div>
                     
                     <div className="flex flex-col px-2">
+                       <span className="text-[10px] text-gray-400 font-bold mb-0.5 opacity-0">.</span>
                        <span className="text-gray-400 font-bold text-xs">até</span>
                     </div>
 
@@ -939,7 +893,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       </div>
       )}
 
-      {/* LIST VIEW (No changes needed here for now) */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
            <div className="flex items-center gap-4">
@@ -1065,15 +1018,21 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                         </span>
                       )}
                       
-                      {c.skills && Object.keys(c.skills).length > 0 && (
-                          <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full border border-emerald-100 font-bold" title="Skills Cadastradas">
-                              {Object.keys(c.skills).length} Skills
-                          </span>
+                      {c.hasRotation && c.rotationGroup && (
+                        <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-1 rounded-full border border-purple-100 font-bold">
+                          Escala {c.rotationGroup}
+                        </span>
                       )}
-
+                      
                       {!isActive && (
                         <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded-full border border-gray-300 font-bold uppercase">
                           Inativo
+                        </span>
+                      )}
+
+                      {c.role === 'admin' && (
+                        <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded-full border border-amber-100 font-bold">
+                          Admin
                         </span>
                       )}
                    </div>

@@ -12,7 +12,7 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
-import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings, Skill } from '../types';
+import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings } from '../types';
 
 // Nomes das Coleções no Firestore
 const COLLECTIONS = {
@@ -23,7 +23,6 @@ const COLLECTIONS = {
   VACATION_REQUESTS: 'vacation_requests',
   AUDIT_LOGS: 'audit_logs',
   SETTINGS: 'settings',
-  SKILLS: 'skills', // Nova coleção
 };
 
 // ID fixo para o documento de configurações (já que é único)
@@ -54,6 +53,7 @@ export const dbService = {
   },
 
   // --- GENERIC LISTENERS (TEMPO REAL) ---
+  // A ordem ({ ...doc.data(), id: doc.id }) garante que o ID do Firestore seja usado
   
   subscribeToCollaborators: (callback: (data: Collaborator[]) => void) => {
     const q = query(collection(db, COLLECTIONS.COLLABORATORS));
@@ -102,15 +102,6 @@ export const dbService = {
     });
   },
 
-  subscribeToSkills: (callback: (data: Skill[]) => void) => {
-    return onSnapshot(collection(db, COLLECTIONS.SKILLS), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Skill));
-      callback(data);
-    }, (error) => {
-      console.error("❌ [DB] Erro ao carregar Skills:", error.message);
-    });
-  },
-
   subscribeToSettings: (callback: (data: SystemSettings | null) => void, onError?: (msg: string) => void) => {
     console.log('📡 [DB] Conectando em Settings...');
     return onSnapshot(doc(db, COLLECTIONS.SETTINGS, SETTINGS_DOC_ID), (docSnap) => {
@@ -151,7 +142,9 @@ export const dbService = {
 
   // Eventos
   addEvent: async (evt: EventRecord) => {
+    // Garante que o ID local seja removido para que o Firestore gere um novo
     const { id, ...rest } = evt; 
+    // Remove campos undefined (ex: schedule quando é folga)
     const cleanData = sanitizePayload(rest);
     await addDoc(collection(db, COLLECTIONS.EVENTS), cleanData);
   },
@@ -196,20 +189,6 @@ export const dbService = {
   },
   deleteVacationRequest: async (id: string) => {
     await deleteDoc(doc(db, COLLECTIONS.VACATION_REQUESTS, id));
-  },
-
-  // Skills (NOVO)
-  addSkill: async (skill: Skill) => {
-    const { id, ...rest } = skill;
-    const cleanData = sanitizePayload(rest);
-    await addDoc(collection(db, COLLECTIONS.SKILLS), cleanData);
-  },
-  updateSkill: async (id: string, data: Partial<Skill>) => {
-    const cleanData = sanitizePayload(data);
-    await updateDoc(doc(db, COLLECTIONS.SKILLS, id), cleanData);
-  },
-  deleteSkill: async (id: string) => {
-    await deleteDoc(doc(db, COLLECTIONS.SKILLS, id));
   },
 
   // Configurações

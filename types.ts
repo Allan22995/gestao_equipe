@@ -43,15 +43,6 @@ export interface AccessProfileConfig {
 
 export type UserProfile = string;
 
-// NOVO: Interface para Skills
-export interface Skill {
-  id: string;
-  name: string;
-  description?: string;
-  branch: string; // Obrigatório vincular a filial
-  createdAt: string;
-}
-
 export interface Collaborator {
   id: string;
   colabId: string;
@@ -73,8 +64,6 @@ export interface Collaborator {
   createdAt: string;
   active?: boolean;
   leaderId?: string;
-  // NOVO: Mapa de Skills (ID da Skill -> Nível 1-4)
-  skills?: Record<string, number>;
 }
 
 export type EventBehavior = 'neutral' | 'debit' | 'credit_1x' | 'credit_2x';
@@ -201,13 +190,13 @@ export interface VacationRequest {
 export interface AuditLog {
   id: string;
   action: 'create' | 'update' | 'delete';
-  entity: 'evento' | 'plantao' | 'colaborador' | 'ajuste_saldo' | 'previsao_ferias' | 'configuracao' | 'skill';
+  entity: 'evento' | 'plantao' | 'colaborador' | 'ajuste_saldo' | 'previsao_ferias' | 'configuracao';
   details: string;
   performedBy: string;
   timestamp: string;
 }
 
-export type TabType = 'calendario' | 'dashboard' | 'simulador' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados' | 'skills';
+export type TabType = 'calendario' | 'dashboard' | 'simulador' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados';
 
 // --- NOVA DEFINIÇÃO DE PERMISSÕES GRANULARES ---
 
@@ -257,16 +246,6 @@ export const PERMISSION_MODULES: PermissionModule[] = [
       { id: 'collaborators:create', label: 'Cadastrar Novo', type: 'create' },
       { id: 'collaborators:update', label: 'Editar Dados', type: 'update' },
       { id: 'collaborators:delete', label: 'Excluir', type: 'delete' }
-    ]
-  },
-  {
-    id: 'skills',
-    label: 'Matriz de Skills',
-    description: 'Gestão de competências e matriz de polivalência.',
-    icon: '🎓',
-    actions: [
-      { id: 'skills:view', label: 'Visualizar Matriz', type: 'view' },
-      { id: 'skills:manage', label: 'Gerenciar Skills e Notas', type: 'special' }
     ]
   },
   {

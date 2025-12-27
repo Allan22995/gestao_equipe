@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, onAuthStateChanged, signOut } from './services/firebase';
 import { dbService } from './services/storage';
@@ -13,10 +12,9 @@ import { VacationForecast } from './components/VacationForecast';
 import { Settings } from './components/Settings';
 import { Simulator } from './components/Simulator';
 import { CommunicationGenerator } from './components/CommunicationGenerator';
-import { SkillsMatrix } from './components/SkillsMatrix'; // NOVO IMPORT
 import { 
   Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, 
-  VacationRequest, SystemSettings, TabType, UserProfile, Skill 
+  VacationRequest, SystemSettings, TabType, UserProfile 
 } from './types';
 
 // Default settings
@@ -43,8 +41,7 @@ const TAB_PERMISSIONS: Record<TabType, string> = {
   'saldo': 'balance:view',
   'simulador': 'simulator:view',
   'comunicados': 'comms:view',
-  'configuracoes': 'settings:view',
-  'skills': 'skills:view', // NOVA PERMISSÃO
+  'configuracoes': 'settings:view'
 };
 
 function App() {
@@ -60,7 +57,6 @@ function App() {
   const [onCalls, setOnCalls] = useState<OnCallRecord[]>([]);
   const [adjustments, setAdjustments] = useState<BalanceAdjustment[]>([]);
   const [vacationRequests, setVacationRequests] = useState<VacationRequest[]>([]);
-  const [skills, setSkills] = useState<Skill[]>([]); // NOVO STATE
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
   
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -84,7 +80,6 @@ function App() {
       dbService.subscribeToOnCalls(setOnCalls),
       dbService.subscribeToAdjustments(setAdjustments),
       dbService.subscribeToVacationRequests(setVacationRequests),
-      dbService.subscribeToSkills(setSkills), // NOVA SUBSCRIPTION
       dbService.subscribeToSettings((data) => {
         if (data) setSettings(data);
       })
@@ -228,23 +223,6 @@ function App() {
             currentUserAllowedSectors={allowedSectors}
             currentUserRole={userRoleName}
             availableBranches={availableBranches}
-            skills={skills} // Passa skills para o form
-        />;
-      case 'skills': // NOVO CASE
-        return <SkillsMatrix 
-            collaborators={collaborators}
-            skills={skills}
-            onAddSkill={(s) => dbService.addSkill(s)}
-            onUpdateSkill={(s) => dbService.updateSkill(s.id, s)}
-            onDeleteSkill={(id) => dbService.deleteSkill(id)}
-            onUpdateCollaborator={(c) => { dbService.updateCollaborator(c.id, c); logAction('update', 'skill', `Atualizou skills de ${c.name}`, user.email); }}
-            showToast={showToast}
-            logAction={logAction}
-            settings={settings}
-            availableBranches={availableBranches}
-            canManage={hasPermission('skills:manage')}
-            userEmail={user.email}
-            currentUserAllowedSectors={allowedSectors}
         />;
       case 'eventos':
         return <Events 
@@ -364,7 +342,6 @@ function App() {
              <SidebarItem label="Dashboard" icon="📊" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} visible={hasPermission('dashboard:view')} />
              <SidebarItem label="Calendário" icon="📅" active={activeTab === 'calendario'} onClick={() => setActiveTab('calendario')} visible={hasPermission('calendar:view')} />
              <SidebarItem label="Colaboradores" icon="👥" active={activeTab === 'colaboradores'} onClick={() => setActiveTab('colaboradores')} visible={hasPermission('collaborators:view')} />
-             <SidebarItem label="Matriz de Skills" icon="🎓" active={activeTab === 'skills'} onClick={() => setActiveTab('skills')} visible={hasPermission('skills:view')} />
              <SidebarItem label="Eventos / Folgas" icon="📝" active={activeTab === 'eventos'} onClick={() => setActiveTab('eventos')} visible={hasPermission('events:view')} />
              <SidebarItem label="Plantões" icon="🌙" active={activeTab === 'plantoes'} onClick={() => setActiveTab('plantoes')} visible={hasPermission('on_calls:view')} />
              <SidebarItem label="Férias" icon="✈️" active={activeTab === 'previsao_ferias'} onClick={() => setActiveTab('previsao_ferias')} visible={hasPermission('vacation:view')} />
