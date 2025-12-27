@@ -43,16 +43,6 @@ export interface AccessProfileConfig {
 
 export type UserProfile = string;
 
-// NOVO: Definição de Skill
-export interface Skill {
-  id: string;
-  name: string;
-  category: string; // Ex: 'DevOps', 'Frontend', 'Soft Skills'
-  description?: string;
-  branches: string[]; // Filiais onde essa skill é relevante
-  sectors: string[]; // Setores onde essa skill é relevante
-}
-
 export interface Collaborator {
   id: string;
   colabId: string;
@@ -74,8 +64,6 @@ export interface Collaborator {
   createdAt: string;
   active?: boolean;
   leaderId?: string;
-  // NOVO: Mapa de Skills (ID da Skill -> Nível 0 a 4)
-  skills?: Record<string, number>; 
 }
 
 export type EventBehavior = 'neutral' | 'debit' | 'credit_1x' | 'credit_2x';
@@ -127,8 +115,6 @@ export interface SystemSettings {
   coverageRules?: CoverageRule[]; 
   approvalEscalationDelay?: number; // NOVO: Prazo em horas para escalonamento automático
   sectorsWithEventTypeSelection?: string[]; // NOVO: Setores que podem selecionar o tipo de evento
-  // NOVO: Categorias de Skills pré-definidas para UX
-  skillCategories?: string[]; 
 }
 
 export type EventType = string; 
@@ -204,13 +190,13 @@ export interface VacationRequest {
 export interface AuditLog {
   id: string;
   action: 'create' | 'update' | 'delete';
-  entity: 'evento' | 'plantao' | 'colaborador' | 'ajuste_saldo' | 'previsao_ferias' | 'configuracao' | 'skill';
+  entity: 'evento' | 'plantao' | 'colaborador' | 'ajuste_saldo' | 'previsao_ferias' | 'configuracao';
   details: string;
   performedBy: string;
   timestamp: string;
 }
 
-export type TabType = 'calendario' | 'dashboard' | 'simulador' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados' | 'skills_matrix';
+export type TabType = 'calendario' | 'dashboard' | 'simulador' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados';
 
 // --- NOVA DEFINIÇÃO DE PERMISSÕES GRANULARES ---
 
@@ -260,17 +246,6 @@ export const PERMISSION_MODULES: PermissionModule[] = [
       { id: 'collaborators:create', label: 'Cadastrar Novo', type: 'create' },
       { id: 'collaborators:update', label: 'Editar Dados', type: 'update' },
       { id: 'collaborators:delete', label: 'Excluir', type: 'delete' }
-    ]
-  },
-  {
-    id: 'skills_matrix',
-    label: 'Matriz de Skills',
-    description: 'Gestão de competências da equipe.',
-    icon: '🏆',
-    actions: [
-      { id: 'skills:view', label: 'Visualizar Matriz', type: 'view' },
-      { id: 'skills:grade', label: 'Avaliar Colaboradores', type: 'update' },
-      { id: 'skills:manage_definitions', label: 'Criar/Editar Skills', type: 'special' }
     ]
   },
   {
