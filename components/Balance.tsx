@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
 import { generateUUID, timeToDecimal, decimalToTime } from '../utils/helpers';
@@ -36,15 +35,6 @@ export const Balance: React.FC<BalanceProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [colabSearch, setColabSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // States para Importação CSV
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [csvContent, setCsvContent] = useState<string[][]>([]);
-  const [selectedIdColumn, setSelectedIdColumn] = useState('');
-  const [selectedBalanceColumn, setSelectedBalanceColumn] = useState('');
-  const [isProcessingCsv, setIsProcessingCsv] = useState(false);
 
   // States para Importação HTML
   const [isProcessingHtml, setIsProcessingHtml] = useState(false);
@@ -218,91 +208,6 @@ export const Balance: React.FC<BalanceProps> = ({
 
   }, [events, adjustments, collaborators, currentUserAllowedSectors, searchTerm, currentUserProfile, userColabId]);
 
-  // --- CSV Handling Functions ---
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-          setCsvFile(file);
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-              const text = evt.target?.result as string;
-              const rows = text.split('\n').map(row => row.trim()).filter(row => row);
-              if (rows.length > 0) {
-                  // Detect delimiter (comma or semicolon)
-                  const firstRow = rows[0];
-                  const delimiter = firstRow.includes(';') ? ';' : ',';
-                  
-                  const headers = rows[0].split(delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
-                  const content = rows.slice(1).map(r => r.split(delimiter).map(c => c.trim().replace(/^"|"$/g, '')));
-                  
-                  setCsvHeaders(headers);
-                  setCsvContent(content);
-                  setIsImportModalOpen(true);
-                  
-                  // Auto-detect columns
-                  const idCol = headers.find(h => h.toLowerCase().includes('id') || h.toLowerCase().includes('matricula') || h.toLowerCase().includes('matrícula'));
-                  if (idCol) setSelectedIdColumn(idCol);
-                  
-                  const balCol = headers.find(h => h.toLowerCase().includes('saldo') || h.toLowerCase().includes('horas') || h.toLowerCase().includes('banco'));
-                  if (balCol) setSelectedBalanceColumn(balCol);
-              }
-          };
-          reader.readAsText(file);
-      }
-  };
-
-  const processImport = () => {
-      if (!selectedIdColumn || !selectedBalanceColumn) {
-          showToast('Selecione as colunas de ID e Saldo.', true);
-          return;
-      }
-
-      setIsProcessingCsv(true);
-      const idIdx = csvHeaders.indexOf(selectedIdColumn);
-      const balIdx = csvHeaders.indexOf(selectedBalanceColumn);
-      let successCount = 0;
-      let skippedCount = 0;
-      const now = new Date().toISOString();
-
-      const allowedIds = new Set(allowedCollaborators.map(c => c.colabId)); // ID (Matrícula) field
-
-      csvContent.forEach(row => {
-          if (row.length <= Math.max(idIdx, balIdx)) return;
-          const colabId = row[idIdx]; // Matrícula
-          let balanceValStr = row[balIdx];
-          
-          // Handle comma as decimal separator if needed
-          balanceValStr = balanceValStr.replace(',', '.');
-          const balanceVal = parseFloat(balanceValStr);
-
-          if (!colabId || isNaN(balanceVal)) {
-              skippedCount++;
-              return;
-          }
-
-          // Check permissions/hierarchy via allowedCollaborators
-          if (allowedIds.has(colabId)) {
-              // Find the collaborator object to get the Firestore document ID (which is different from colabId/Matrícula)
-              const targetColab = allowedCollaborators.find(c => c.colabId === colabId);
-              if (targetColab) {
-                  onUpdateCollaborator(targetColab.id, {
-                      bankBalance: balanceVal,
-                      lastBalanceImport: now
-                  });
-                  successCount++;
-              }
-          } else {
-              skippedCount++;
-          }
-      });
-
-      logAction('update', 'ajuste_saldo', `Importação CSV de Banco de Horas: ${successCount} atualizados, ${skippedCount} ignorados.`, currentUserName);
-      showToast(`Importação concluída: ${successCount} atualizados.`);
-      setIsProcessingCsv(false);
-      setIsImportModalOpen(false);
-      setCsvFile(null);
-  };
-
   // --- HTML IMPORT HANDLERS ---
   const handleHtmlFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -329,45 +234,63 @@ export const Balance: React.FC<BalanceProps> = ({
           const parser = new DOMParser();
           const doc = parser.parseFromString(html, 'text/html');
           
+          // 1. Mapear Classes de Cor (Parsing do CSS <style>)
+          // O Google Sheets exporta classes como .s1{...} .s7{background-color:#b5f9b5}
+          const colorMap = new Map<string, number>(); // className -> sign (1 ou -1)
+          const styleTags = doc.querySelectorAll('style');
+          
+          styleTags.forEach(style => {
+              const cssText = style.innerHTML;
+              // Regex para capturar .classname { ... background-color: #HEX ... }
+              // Captura o nome da classe e o conteúdo do bloco
+              const ruleRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
+              let match;
+              while ((match = ruleRegex.exec(cssText)) !== null) {
+                  const className = match[1];
+                  const body = match[2].toLowerCase();
+                  
+                  // Verifica se tem cor de fundo verde ou vermelha
+                  if (body.includes('#b5f9b5')) {
+                      colorMap.set(className, 1); // Verde (Positivo)
+                  } else if (body.includes('#ffb6c1')) {
+                      colorMap.set(className, -1); // Vermelho (Negativo)
+                  }
+              }
+          });
+
           // Tentar encontrar as colunas
           const rows = Array.from(doc.querySelectorAll('tr'));
           let idCol = -1;
-          let nameCol = -1; // Opcional, para validação
           let hourCol = -1;
 
           // Busca cabeçalho nas primeiras 30 linhas
           for (const row of rows.slice(0, 30)) {
               const cells = Array.from(row.querySelectorAll('td, th'));
               cells.forEach((cell, idx) => {
-                  // Normalize text: extrair do innerHTML para tratar <br> como espaço
-                  // Ex: "Horas<br>Acumuladas" vira "Horas Acumuladas"
+                  // Normalize text: extrair do innerHTML para tratar <br> como espaço e remover tags
                   const rawHtml = cell.innerHTML;
-                  // Replace <br> tags with space, then strip other tags
                   const cleanText = rawHtml
                       .replace(/<br\s*\/?>/gi, ' ')
                       .replace(/<\/?[^>]+(>|$)/g, ""); // strip tags
                   
                   const text = cleanText.toLowerCase().trim();
 
-                  // Mapeamento ID (Matrícula) - Prioridade para match exato 'id'
+                  // Mapeamento ID (Matrícula)
                   if (
                       text === 'id' || 
                       text === 'matricula' || 
                       text === 'matrícula' || 
-                      text.includes('id (matricula)') ||
-                      text.includes('id (matrícula)')
+                      text.includes('id (matricula)')
                   ) {
                       idCol = idx;
                   }
-
-                  if (text.includes('nome')) nameCol = idx;
                   
                   // Mapeamento Horas Acumuladas
                   if (
                       text.includes('horas acumuladas') || 
                       text.includes('banco de horas') || 
                       text === 'saldo' ||
-                      text.includes('horasacumuladas') // Fallback caso o parser tenha removido o espaço
+                      text.includes('horasacumuladas')
                   ) {
                       hourCol = idx;
                   }
@@ -376,7 +299,7 @@ export const Balance: React.FC<BalanceProps> = ({
           }
 
           if (idCol === -1 || hourCol === -1) {
-              showToast('Colunas "ID/Matrícula" ou "Horas Acumuladas" não encontradas no arquivo.', true);
+              showToast('Colunas "ID" ou "Horas Acumuladas" não encontradas no arquivo.', true);
               setIsProcessingHtml(false);
               return;
           }
@@ -391,41 +314,47 @@ export const Balance: React.FC<BalanceProps> = ({
               const cells = Array.from(row.querySelectorAll('td'));
               if (cells.length <= Math.max(idCol, hourCol)) continue;
 
-              const id = cells[idCol].textContent?.trim() || '';
+              const idVal = cells[idCol].textContent?.trim() || '';
               const hourStr = cells[hourCol].textContent?.trim() || '';
               
-              if (!id || !hourStr) continue;
+              if (!idVal || !hourStr) continue;
 
-              const targetColab = allowedMap.get(id);
+              // Verifica se o ID existe na lista permitida
+              const targetColab = allowedMap.get(idVal);
               if (!targetColab) {
-                  skippedCount++; // Fora da hierarquia ou não encontrado
+                  skippedCount++; 
                   continue;
               }
 
-              // Determinar sinal pela cor
+              // Determinar sinal: Verifica Classes mapeadas OU Style inline
               const cell = cells[hourCol];
-              const style = cell.getAttribute('style') || '';
-              const className = cell.className || '';
-              
+              const classList = Array.from(cell.classList);
               let sign = 0;
-              // Verde (Google Sheets export geralmente usa bg-color ou classe s6/similar)
-              if (style.includes('#b5f9b5') || style.includes('background-color: #b5f9b5') || className.includes('s6')) {
-                  sign = 1; 
-              }
-              // Vermelho
-              else if (style.includes('#ffb6c1') || style.includes('background-color: #ffb6c1') || className.includes('s7')) {
-                  sign = -1;
+
+              // 1. Checa classes do CSS
+              for (const cls of classList) {
+                  if (colorMap.has(cls)) {
+                      sign = colorMap.get(cls)!;
+                      break;
+                  }
               }
 
+              // 2. Fallback: Checa style inline (caso o export mude formato)
               if (sign === 0) {
-                  // Tenta inferir pelo sinal no texto se a cor falhar (fallback)
+                  const styleAttr = cell.getAttribute('style') || '';
+                  if (styleAttr.includes('#b5f9b5')) sign = 1;
+                  else if (styleAttr.includes('#ffb6c1')) sign = -1;
+              }
+
+              // Se não detectou cor, tenta inferir pelo sinal no texto (Fallback final) ou ignora
+              if (sign === 0) {
                   if (hourStr.startsWith('-')) sign = -1;
-                  else if (/\d/.test(hourStr)) sign = 1; // Tem numero, assume positivo se não tiver cor e não tiver sinal negativo explicito? Melhor ser estrito com a cor.
-                  else continue; // Ignora se não conseguir determinar
+                  // Se não tem cor nem sinal negativo, ignoramos (assume célula branca/neutra/título)
+                  else continue; 
               }
 
               // Parse HH:MM
-              const decimalHours = timeToDecimal(hourStr.replace('-', '')); // Remove sinal textual se houver
+              const decimalHours = timeToDecimal(hourStr.replace('-', '')); // Remove sinal textual se houver para tratar magnitude
               const finalBalance = decimalHours * sign;
 
               // Atualiza
@@ -437,7 +366,12 @@ export const Balance: React.FC<BalanceProps> = ({
           }
 
           logAction('update', 'ajuste_saldo', `Importação HTML: ${successCount} atualizados via planilha Google Sheets.`, currentUserName);
-          showToast(`Importação HTML concluída: ${successCount} registros atualizados.`);
+          
+          if (successCount === 0) {
+             showToast(`Processado, mas 0 registros atualizados. Verifique se os IDs no arquivo correspondem aos do sistema (${skippedCount} ignorados).`, true);
+          } else {
+             showToast(`Importação HTML concluída: ${successCount} registros atualizados.`);
+          }
 
       } catch (error) {
           console.error("Erro ao processar HTML", error);
@@ -738,7 +672,7 @@ export const Balance: React.FC<BalanceProps> = ({
         </div>
       </div>
 
-      {/* --- IMPORTAÇÃO OFICIAL (CSV ou HTML) --- */}
+      {/* --- IMPORTAÇÃO OFICIAL (HTML Only) --- */}
       {canCreate && (
           <div className="border-t border-gray-200 pt-8">
               <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -747,7 +681,7 @@ export const Balance: React.FC<BalanceProps> = ({
                   </h2>
                   
                   <div className="flex gap-2">
-                      {/* Botão HTML (Sheets) */}
+                      {/* Botão HTML (Sheets) - Estilizado como Única Opção */}
                       <div className="relative">
                           <input 
                               type="file" 
@@ -757,24 +691,10 @@ export const Balance: React.FC<BalanceProps> = ({
                               disabled={isProcessingHtml}
                           />
                           <button 
-                            className={`bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-all active:scale-95 flex items-center gap-2 ${isProcessingHtml ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`bg-green-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-green-700 transition-all active:scale-95 flex items-center gap-2 ${isProcessingHtml ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                              {isProcessingHtml ? 'Processando...' : 'Google Sheets (.html)'}
-                          </button>
-                      </div>
-
-                      {/* Botão CSV (Legacy) */}
-                      <div className="relative">
-                          <input 
-                              type="file" 
-                              accept=".csv"
-                              onChange={handleFileChange}
-                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          />
-                          <button className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2">
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                              CSV
+                              {isProcessingHtml ? 'Processando Arquivo...' : 'Importar Google Sheets (.html)'}
                           </button>
                       </div>
                   </div>
@@ -867,58 +787,6 @@ export const Balance: React.FC<BalanceProps> = ({
               </div>
           </div>
       )}
-
-      {/* CSV Mapping Modal */}
-      <Modal 
-        isOpen={isImportModalOpen} 
-        onClose={() => setIsImportModalOpen(false)} 
-        title="Mapeamento de Importação CSV"
-      >
-          <div className="space-y-6">
-              <p className="text-sm text-gray-600">Selecione quais colunas do seu arquivo correspondem aos dados necessários. Assegure-se de que a coluna ID corresponda à Matrícula do funcionário.</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Coluna ID (Matrícula)</label>
-                      <select 
-                        className="w-full border border-gray-300 rounded p-2"
-                        value={selectedIdColumn}
-                        onChange={e => setSelectedIdColumn(e.target.value)}
-                      >
-                          <option value="">Selecione...</option>
-                          {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                      </select>
-                  </div>
-                  <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Coluna Saldo/Horas</label>
-                      <select 
-                        className="w-full border border-gray-300 rounded p-2"
-                        value={selectedBalanceColumn}
-                        onChange={e => setSelectedBalanceColumn(e.target.value)}
-                      >
-                          <option value="">Selecione...</option>
-                          {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                      </select>
-                  </div>
-              </div>
-
-              <div className="bg-amber-50 p-4 rounded border border-amber-200 text-xs text-amber-800">
-                  ⚠️ <strong>Atenção:</strong> Esta ação substituirá o "Saldo Oficial" dos colaboradores listados. O saldo calculado via eventos permanecerá visível nos cards superiores, mas este valor importado será a referência oficial nestes novos cards. Apenas colaboradores sob sua gestão serão atualizados.
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                  <button onClick={() => setIsImportModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                  <button 
-                    onClick={processImport} 
-                    disabled={isProcessingCsv}
-                    className="bg-indigo-600 text-white px-6 py-2 rounded font-bold hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                      {isProcessingCsv ? 'Processando...' : 'Confirmar Importação'}
-                  </button>
-              </div>
-          </div>
-      </Modal>
-
     </div>
   );
 };
