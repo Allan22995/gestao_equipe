@@ -298,11 +298,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
 
   // --- SIMULATION ENGINE ---
 
-  const simulationData = useMemo<{
-      days: { date: string, label: string, weekDayName: string, isHoliday: string | null }[],
-      results: Record<string, Record<string, { available: number, min: number, status: 'ok' | 'alert' | 'violation', missing: number }>>,
-      grandTotals: Record<string, { available: number, min: number, status: 'ok' | 'alert' | 'violation' }>
-  }>(() => {
+  const simulationData = useMemo(() => {
     const start = new Date(simStartDate + 'T00:00:00');
     const end = new Date(simEndDate + 'T00:00:00');
     const days: { date: string, label: string, weekDayName: string, isHoliday: string | null }[] = [];

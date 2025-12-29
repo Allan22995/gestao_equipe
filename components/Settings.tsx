@@ -263,7 +263,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   };
   
   const removeTemplate = (id: string) => { if (window.confirm('Excluir modelo?')) updateSettings({ ...settings, scheduleTemplates: (settings.scheduleTemplates || []).filter(t => t.id !== id) }); };
-  const handleTempScheduleChange = (day: keyof Schedule, field: keyof DaySchedule, val: any) => { setTempSchedule(prev => ({ ...prev, [day]: { ...prev[day], [field]: val } })); };
+  const handleTempScheduleChange = (day: keyof Schedule, field: string, val: any) => { setTempSchedule(prev => ({ ...prev, [day]: { ...prev[day], [field]: val } })); };
   const toggleBranchLink = (targetBranch: string) => { if (!selectedBranchForLinks) return; const currentLinks = settings.branchLinks?.[selectedBranchForLinks] || []; let newLinks; if (currentLinks.includes(targetBranch)) newLinks = currentLinks.filter(b => b !== targetBranch); else newLinks = [...currentLinks, targetBranch]; updateSettings({ ...settings, branchLinks: { ...settings.branchLinks, [selectedBranchForLinks]: newLinks } }); };
   const addSeasonal = () => { if (!validate('seasonalLabel', newSeasonal.label || '') || !newSeasonal.startDate || !newSeasonal.endDate) { showToast('Preencha todos os campos.', true); return; } const newItem: SeasonalEvent = { id: generateUUID(), label: newSeasonal.label!, startDate: newSeasonal.startDate!, endDate: newSeasonal.endDate!, color: newSeasonal.color || '#3B82F6', active: true }; updateSettings({ ...settings, seasonalEvents: [...(settings.seasonalEvents || []), newItem] }); setNewSeasonal({ label: '', startDate: '', endDate: '', color: '#3B82F6', active: true }); };
   const removeSeasonal = (id: string) => updateSettings({ ...settings, seasonalEvents: (settings.seasonalEvents || []).filter(s => s.id !== id) });
@@ -295,7 +295,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
           {allowedTabs.length === 0 && <span className="p-3 text-sm text-gray-400 italic">Sem permissões de visualização.</span>}
        </div>
 
-       {/* ... (Previous tabs content omitted for brevity, logic remains same) ... */}
+       {/* --- CONTENT: GENERAL (STRUCTURE) --- */}
        {activeTab === 'general' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                {/* Fluxo de Aprovação - NOVO */}
@@ -422,9 +422,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            </div>
        )}
 
+       {/* --- CONTENT: ROLES --- */}
        {activeTab === 'roles' && (
            <div className="space-y-6 animate-fadeIn">
-                {/* ... (Roles logic logic remains same) ... */}
                 {hasPermission('settings:view_roles_list') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                    <SectionHeader title="Funções e Cargos" description="Defina os cargos e suas permissões de visibilidade." />
@@ -893,7 +893,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* --- CONTENT: SYSTEM MSG --- */}
        {activeTab === 'system' && (
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fadeIn">
-               {/* ... (System Msg logic same as before) ... */}
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col h-full">
                    <SectionHeader title="Configuração do Aviso" description="Exibe uma mensagem importante no topo de todas as páginas." />
                    
@@ -987,7 +986,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            </div>
        )}
 
-       {/* MODALS */}
+       {/* MODALS (Permissions, Mirroring, Templates) */}
+       {/* 1. PERMISSIONS MODAL */}
        <Modal 
             isOpen={!!selectedModule} 
             onClose={() => setSelectedModule(null)} 
@@ -1085,7 +1085,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                </div>
                <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar border border-gray-100 rounded-lg p-2">
                    {daysOrder.map((day: keyof Schedule) => {
-                       const daySchedule: DaySchedule = tempSchedule[day];
+                       const daySchedule = tempSchedule[day] as DaySchedule;
                        return (
                        <div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-2 bg-gray-50 rounded border border-gray-100">
                            <div className="w-24 font-bold capitalize text-sm flex items-center gap-2">
