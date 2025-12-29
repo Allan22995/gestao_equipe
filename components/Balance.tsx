@@ -339,10 +339,38 @@ export const Balance: React.FC<BalanceProps> = ({
           for (const row of rows.slice(0, 30)) {
               const cells = Array.from(row.querySelectorAll('td, th'));
               cells.forEach((cell, idx) => {
-                  const text = cell.textContent?.toLowerCase() || '';
-                  if (text.includes('id') || text.includes('matrícula') || text.includes('matricula')) idCol = idx;
+                  // Normalize text: extrair do innerHTML para tratar <br> como espaço
+                  // Ex: "Horas<br>Acumuladas" vira "Horas Acumuladas"
+                  const rawHtml = cell.innerHTML;
+                  // Replace <br> tags with space, then strip other tags
+                  const cleanText = rawHtml
+                      .replace(/<br\s*\/?>/gi, ' ')
+                      .replace(/<\/?[^>]+(>|$)/g, ""); // strip tags
+                  
+                  const text = cleanText.toLowerCase().trim();
+
+                  // Mapeamento ID (Matrícula) - Prioridade para match exato 'id'
+                  if (
+                      text === 'id' || 
+                      text === 'matricula' || 
+                      text === 'matrícula' || 
+                      text.includes('id (matricula)') ||
+                      text.includes('id (matrícula)')
+                  ) {
+                      idCol = idx;
+                  }
+
                   if (text.includes('nome')) nameCol = idx;
-                  if (text.includes('horas acumuladas') || text.includes('banco de horas')) hourCol = idx;
+                  
+                  // Mapeamento Horas Acumuladas
+                  if (
+                      text.includes('horas acumuladas') || 
+                      text.includes('banco de horas') || 
+                      text === 'saldo' ||
+                      text.includes('horasacumuladas') // Fallback caso o parser tenha removido o espaço
+                  ) {
+                      hourCol = idx;
+                  }
               });
               if (idCol !== -1 && hourCol !== -1) break;
           }
