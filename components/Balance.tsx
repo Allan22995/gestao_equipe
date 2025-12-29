@@ -311,7 +311,9 @@ export const Balance: React.FC<BalanceProps> = ({
 
           // Processar linhas de dados
           for (const row of rows) {
-              const cells = Array.from(row.querySelectorAll('td'));
+              // CHANGE: Seleciona 'td, th' para garantir que os índices coincidam com o cabeçalho
+              // O Google Sheets exporta a numeração de linha como 'th' na primeira coluna
+              const cells = Array.from(row.querySelectorAll('td, th'));
               if (cells.length <= Math.max(idCol, hourCol)) continue;
 
               const idVal = cells[idCol].textContent?.trim() || '';
