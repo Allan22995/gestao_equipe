@@ -168,6 +168,24 @@ export const Balance: React.FC<BalanceProps> = ({
   const totalImportedPositive = importedPositive.reduce((acc, c) => acc + (c.bankBalance || 0), 0);
   const totalImportedNegative = importedNegative.reduce((acc, c) => acc + (c.bankBalance || 0), 0);
 
+  // --- HELPERS PARA DATAS ---
+  // Obtém a data mais recente dentre os itens listados para exibir no rodapé do card
+  const getLatestImportDate = (list: Collaborator[]) => {
+      if (!list || list.length === 0) return null;
+      const dates = list
+        .map(c => c.lastBalanceImport)
+        .filter((d): d is string => !!d);
+      
+      if (dates.length === 0) return null;
+      
+      // Ordena decrescente (mais recente primeiro)
+      dates.sort((a, b) => b.localeCompare(a));
+      return dates[0];
+  };
+
+  const positiveLastUpdate = useMemo(() => getLatestImportDate(importedPositive), [importedPositive]);
+  const negativeLastUpdate = useMemo(() => getLatestImportDate(importedNegative), [importedNegative]);
+
   // Filter Log Items based on Sector, Search Term, and Profile
   const filteredLogItems = useMemo(() => {
      const allLogs = [
@@ -311,8 +329,6 @@ export const Balance: React.FC<BalanceProps> = ({
 
           // Processar linhas de dados
           for (const row of rows) {
-              // CHANGE: Seleciona 'td, th' para garantir que os índices coincidam com o cabeçalho
-              // O Google Sheets exporta a numeração de linha como 'th' na primeira coluna
               const cells = Array.from(row.querySelectorAll('td, th'));
               if (cells.length <= Math.max(idCol, hourCol)) continue;
 
@@ -381,6 +397,24 @@ export const Balance: React.FC<BalanceProps> = ({
       } finally {
           setIsProcessingHtml(false);
       }
+  };
+
+  const handleClearImportData = () => {
+      if (!window.confirm('ATENÇÃO: Isso zerará o saldo importado de TODOS os colaboradores visíveis nesta tela. Confirma?')) return;
+      
+      let count = 0;
+      allowedCollaborators.forEach(c => {
+          // Limpa se tiver saldo ou data de importação
+          if (c.bankBalance !== 0 || c.lastBalanceImport) {
+              onUpdateCollaborator(c.id, {
+                  bankBalance: 0,
+                  lastBalanceImport: '' // Limpa a data
+              });
+              count++;
+          }
+      });
+      showToast(`${count} registros de saldo limpos.`);
+      logAction('delete', 'ajuste_saldo', `Limpou dados de importação oficial (${count} registros)`, currentUserName);
   };
 
   return (
@@ -683,6 +717,16 @@ export const Balance: React.FC<BalanceProps> = ({
                   </h2>
                   
                   <div className="flex gap-2">
+                      {/* Botão Limpar Dados */}
+                      <button
+                          onClick={handleClearImportData}
+                          className="bg-red-50 text-red-600 border border-red-200 font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-red-100 transition-all active:scale-95 flex items-center gap-2 text-sm"
+                          title="Limpar todos os saldos importados"
+                      >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          Limpar Dados
+                      </button>
+
                       {/* Botão HTML (Sheets) - Estilizado como Única Opção */}
                       <div className="relative">
                           <input 
@@ -693,7 +737,7 @@ export const Balance: React.FC<BalanceProps> = ({
                               disabled={isProcessingHtml}
                           />
                           <button 
-                            className={`bg-green-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-green-700 transition-all active:scale-95 flex items-center gap-2 ${isProcessingHtml ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`bg-green-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-green-700 transition-all active:scale-95 flex items-center gap-2 text-sm ${isProcessingHtml ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                               {isProcessingHtml ? 'Processando Arquivo...' : 'Importar Google Sheets (.html)'}
@@ -741,7 +785,7 @@ export const Balance: React.FC<BalanceProps> = ({
                           </table>
                       </div>
                       <div className="bg-gray-50 p-2 text-[10px] text-center text-gray-400 border-t border-gray-100">
-                          {importedPositive[0]?.lastBalanceImport ? `Última atualização: ${new Date(importedPositive[0].lastBalanceImport).toLocaleString()}` : 'Sem dados de importação'}
+                          {positiveLastUpdate ? `Última atualização: ${new Date(positiveLastUpdate).toLocaleString()}` : 'Sem dados de importação'}
                       </div>
                   </div>
 
@@ -783,7 +827,7 @@ export const Balance: React.FC<BalanceProps> = ({
                           </table>
                       </div>
                       <div className="bg-gray-50 p-2 text-[10px] text-center text-gray-400 border-t border-gray-100">
-                          {importedNegative[0]?.lastBalanceImport ? `Última atualização: ${new Date(importedNegative[0].lastBalanceImport).toLocaleString()}` : 'Sem dados de importação'}
+                          {negativeLastUpdate ? `Última atualização: ${new Date(negativeLastUpdate).toLocaleString()}` : 'Sem dados de importação'}
                       </div>
                   </div>
               </div>
