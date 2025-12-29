@@ -243,6 +243,11 @@ export const Balance: React.FC<BalanceProps> = ({
           const provider = new GoogleAuthProvider();
           provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
           
+          // ADDED: Force consent to ensure a fresh access token is retrieved
+          provider.setCustomParameters({
+            prompt: 'consent'
+          });
+          
           const result = await signInWithPopup(auth, provider);
           // VALIDATION POINT 1: Extract Google Access Token, NOT Firebase ID Token
           const credential = GoogleAuthProvider.credentialFromResult(result);
