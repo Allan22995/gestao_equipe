@@ -2,6 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
 import { Modal } from './ui/Modal';
+import { auth, googleProvider, signInWithPopup } from '../services/firebase';
+import { GoogleAuthProvider } from 'firebase/auth';
 
 interface BalanceProps {
   collaborators: Collaborator[];
@@ -47,9 +49,10 @@ export const Balance: React.FC<BalanceProps> = ({
 
   // --- GOOGLE SHEETS STATES ---
   const [sheetUrl, setSheetUrl] = useState('');
-  const [accessToken, setAccessToken] = useState(''); // Token manual (fallback)
+  const [oauthToken, setOauthToken] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{success: number, errors: number, message: string} | null>(null);
+  const [authError, setAuthError] = useState(false);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -168,13 +171,13 @@ export const Balance: React.FC<BalanceProps> = ({
   const zeroBalances = useMemo(() => filteredBalances.filter(c => c.balance === 0).sort((a,b) => a.name.localeCompare(b.name)), [filteredBalances]);
   const negativeBalances = useMemo(() => filteredBalances.filter(c => c.balance < 0).sort((a,b) => a.balance - b.balance), [filteredBalances]);
 
-  // Imported Balances (Cards Bottom)
+  // Imported Balances (Cards Bottom) - Bank Balance IS NOW MINUTES
   const importedPositive = useMemo(() => filteredBalances.filter(c => (c.bankBalance || 0) > 0).sort((a,b) => (b.bankBalance || 0) - (a.bankBalance || 0)), [filteredBalances]);
   const importedNegative = useMemo(() => filteredBalances.filter(c => (c.bankBalance || 0) < 0).sort((a,b) => (a.bankBalance || 0) - (b.bankBalance || 0)), [filteredBalances]);
   
   // Totals for Imported (Minutes)
-  const totalImportedPositiveMinutes = importedPositive.reduce((acc, c) => acc + ((c.bankBalance || 0) * 60), 0);
-  const totalImportedNegativeMinutes = importedNegative.reduce((acc, c) => acc + ((c.bankBalance || 0) * 60), 0);
+  const totalImportedPositiveMinutes = importedPositive.reduce((acc, c) => acc + (c.bankBalance || 0), 0);
+  const totalImportedNegativeMinutes = importedNegative.reduce((acc, c) => acc + (c.bankBalance || 0), 0);
 
   // Helper to format minutes to HH:MM
   const formatMinutesToHHMM = (totalMinutes: number) => {
@@ -183,11 +186,6 @@ export const Balance: React.FC<BalanceProps> = ({
       const h = Math.floor(abs / 60);
       const m = Math.round(abs % 60);
       return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  };
-
-  // Helper to format hours (float) to HH:MM
-  const formatHoursToHHMM = (hours: number) => {
-      return formatMinutesToHHMM(hours * 60);
   };
 
   const filteredLogItems = useMemo(() => {
@@ -214,6 +212,11 @@ export const Balance: React.FC<BalanceProps> = ({
 
   // --- GOOGLE SHEETS SYNC LOGIC ---
 
+  const extractSpreadsheetId = (url: string) => {
+      const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      return match ? match[1] : null;
+  };
+
   const parseHourStringToMinutes = (str: string): number => {
     const parts = str.split(':');
     if (parts.length < 2) return 0;
@@ -223,13 +226,33 @@ export const Balance: React.FC<BalanceProps> = ({
     return h * 60 + m;
   };
 
-  const extractSpreadsheetId = (url: string) => {
-      const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
-      return match ? match[1] : null;
+  // Function to grant Google Permission via Popup
+  const grantPermission = async () => {
+      try {
+          const provider = new GoogleAuthProvider();
+          provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
+          
+          const result = await signInWithPopup(auth, provider);
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          const token = credential?.accessToken;
+          
+          if (token) {
+              setOauthToken(token);
+              setAuthError(false);
+              // Retry Sync immediately
+              handleSync(token);
+          } else {
+              showToast("Falha ao obter token de acesso.", true);
+          }
+      } catch (err) {
+          console.error("Erro na autenticação:", err);
+          showToast("Erro na autenticação. Verifique o console.", true);
+      }
   };
 
-  const handleSync = async () => {
+  const handleSync = async (overrideToken?: string) => {
       setSyncResult(null);
+      setAuthError(false);
       
       const spreadsheetId = extractSpreadsheetId(sheetUrl);
       if (!spreadsheetId) {
@@ -240,20 +263,24 @@ export const Balance: React.FC<BalanceProps> = ({
       setIsSyncing(true);
 
       try {
-          // Check for token
-          const tokenToUse = accessToken || ''; 
+          const tokenToUse = overrideToken || oauthToken;
+          
           if (!tokenToUse) {
-              // Usually we would get from auth, but here we might need manual input for this env
-              console.warn("Nenhum token de acesso fornecido. Tentando fetch público (pode falhar para dados privados).");
+              // Try to perform a public fetch first, but likely will need auth for private sheets or detailed data
+              // If we fail here with no token, we prompt auth
           }
 
+          const headers: any = {};
+          if (tokenToUse) headers['Authorization'] = `Bearer ${tokenToUse}`;
+
           const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true&ranges=A1:E100`, {
-              headers: tokenToUse ? { 'Authorization': `Bearer ${tokenToUse}` } : {}
+              headers
           });
 
           if (!response.ok) {
               if (response.status === 401 || response.status === 403) {
-                  throw new Error("Permissão negada. Verifique se o token está válido ou se você tem acesso à planilha.");
+                  setAuthError(true); // Trigger UI to show Auth Button
+                  throw new Error("Permissão necessária.");
               }
               throw new Error(`Erro na API Google Sheets: ${response.statusText}`);
           }
@@ -308,9 +335,9 @@ export const Balance: React.FC<BalanceProps> = ({
 
               if (!idVal || !hoursVal) continue;
 
-              // Check Hierarchy
+              // Check Hierarchy (Silently Ignore)
               if (!allowedIds.has(idVal)) {
-                  ignoredCount++;
+                  ignoredCount++; // Just for internal stats, no user error
                   continue;
               }
 
@@ -321,24 +348,18 @@ export const Balance: React.FC<BalanceProps> = ({
               // Green > 0.8 & Red < 0.5 => Positive
               else if ((color?.green || 0) > 0.8 && (color?.red || 0) < 0.5) sign = 1;
               
-              // If color logic fails, maybe fallback to text parsing? Prompt implied explicit color logic.
-              // Let's be lenient: if no color, try to parse text for negative sign? No, prompt was specific.
-              // "Exemplo: '01:30' vermelho -> -90". It implies the text doesn't have the sign.
-              if (sign === 0) {
-                  // Fallback: Check if text has '-'
-                  if (hoursVal.includes('-')) sign = -1;
-                  else sign = 1; // Default to positive if ambiguous but has value?
-              }
+              // Ignore if no color match (Sign 0)
+              if (sign === 0) continue;
 
+              // Parse Minutes
               const minutes = parseHourStringToMinutes(hoursVal);
               const totalMinutes = minutes * sign;
-              const totalHours = totalMinutes / 60; // Convert back to hours for storage
 
               // Find DB ID
               const targetColab = allowedCollaborators.find(c => c.colabId === idVal);
               if (targetColab) {
                   onUpdateCollaborator(targetColab.id, {
-                      bankBalance: totalHours,
+                      bankBalance: totalMinutes, // STORE AS MINUTES
                       lastBalanceImport: now
                   });
                   successCount++;
@@ -348,14 +369,16 @@ export const Balance: React.FC<BalanceProps> = ({
           setSyncResult({
               success: successCount,
               errors: ignoredCount,
-              message: `Sincronização concluída: ${successCount} atualizados. (${ignoredCount} fora da hierarquia)`
+              message: `Sincronização concluída: ${successCount} atualizados.`
           });
           showToast(`Sincronização: ${successCount} atualizados.`);
 
       } catch (error: any) {
-          console.error(error);
-          setSyncResult({ success: 0, errors: 0, message: error.message });
-          showToast(error.message, true);
+          if (error.message !== "Permissão necessária.") {
+             console.error(error);
+             setSyncResult({ success: 0, errors: 0, message: error.message });
+             showToast(error.message, true);
+          }
       } finally {
           setIsSyncing(false);
       }
@@ -615,38 +638,42 @@ export const Balance: React.FC<BalanceProps> = ({
 
               <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8 shadow-inner">
                   <div className="flex flex-col gap-4">
-                      <div className="flex flex-col md:flex-row gap-4">
+                      <div className="flex flex-col md:flex-row gap-4 items-center">
                           <input 
                               type="text" 
                               value={sheetUrl}
                               onChange={e => setSheetUrl(e.target.value)}
                               placeholder="Insira o Link da Planilha Google (Ex: https://docs.google.com/spreadsheets/d/...)"
-                              className="flex-1 border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                              className="flex-1 border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none w-full"
                           />
-                          <input 
-                              type="text" 
-                              value={accessToken}
-                              onChange={e => setAccessToken(e.target.value)}
-                              placeholder="Token de Acesso (Opcional - p/ Teste)"
-                              className="w-full md:w-64 border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                          />
-                          <button 
-                              onClick={handleSync}
-                              disabled={isSyncing || !sheetUrl}
-                              className="bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition-all active:scale-95 flex items-center gap-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                              {isSyncing ? (
-                                  <>
-                                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                      Sincronizando...
-                                  </>
-                              ) : (
-                                  <>
-                                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                      Sincronizar Agora
-                                  </>
-                              )}
-                          </button>
+                          
+                          {authError ? (
+                              <button 
+                                  onClick={grantPermission}
+                                  className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2 justify-center"
+                              >
+                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
+                                  Conceder Permissão
+                              </button>
+                          ) : (
+                              <button 
+                                  onClick={() => handleSync()}
+                                  disabled={isSyncing || !sheetUrl}
+                                  className="bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition-all active:scale-95 flex items-center gap-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                  {isSyncing ? (
+                                      <>
+                                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                          Sincronizando...
+                                      </>
+                                  ) : (
+                                      <>
+                                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                          Sincronizar Agora
+                                      </>
+                                  )}
+                              </button>
+                          )}
                       </div>
                       
                       {syncResult && (
@@ -692,7 +719,7 @@ export const Balance: React.FC<BalanceProps> = ({
                                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                                           <td className="px-3 py-2 font-mono text-gray-500 text-xs">{c.colabId}</td>
                                           <td className="px-3 py-2 font-bold text-gray-800 truncate max-w-[150px]">{c.name}</td>
-                                          <td className="px-3 py-2 text-right font-bold text-emerald-600">+{formatHoursToHHMM(c.bankBalance || 0)}</td>
+                                          <td className="px-3 py-2 text-right font-bold text-emerald-600">+{formatMinutesToHHMM(c.bankBalance || 0)}</td>
                                       </tr>
                                   ))}
                                   {importedPositive.length === 0 && (
@@ -734,7 +761,7 @@ export const Balance: React.FC<BalanceProps> = ({
                                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                                           <td className="px-3 py-2 font-mono text-gray-500 text-xs">{c.colabId}</td>
                                           <td className="px-3 py-2 font-bold text-gray-800 truncate max-w-[150px]">{c.name}</td>
-                                          <td className="px-3 py-2 text-right font-bold text-rose-600">{formatHoursToHHMM(c.bankBalance || 0)}</td>
+                                          <td className="px-3 py-2 text-right font-bold text-rose-600">{formatMinutesToHHMM(c.bankBalance || 0)}</td>
                                       </tr>
                                   ))}
                                   {importedNegative.length === 0 && (

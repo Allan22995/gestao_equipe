@@ -65,7 +65,7 @@ export interface Collaborator {
   active?: boolean;
   leaderId?: string;
   // NOVO: Controle de Saldo Importado
-  bankBalance?: number;
+  bankBalance?: number; // Armazena em MINUTOS inteiros
   lastBalanceImport?: string;
 }
 
