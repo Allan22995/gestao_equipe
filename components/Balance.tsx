@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
@@ -14,10 +13,19 @@ interface BalanceProps {
   logAction: (action: string, entity: string, details: string, user: string) => void;
   currentUserName: string;
   canCreate: boolean;
-  currentUserAllowedSectors: string[]; // Novo: Filtro de setor
+  currentUserAllowedSectors: string[];
   currentUserProfile: UserProfile;
   userColabId: string | null;
 }
+
+// --- GOOGLE SHEETS HELPER TYPES ---
+type GoogleCell = {
+  formattedValue?: string;
+  userEnteredFormat?: {
+    backgroundColor?: { red?: number; green?: number; blue?: number };
+  };
+};
+type GoogleRow = { values: GoogleCell[] };
 
 export const Balance: React.FC<BalanceProps> = ({ 
   collaborators, events, adjustments, onAddAdjustment, onUpdateCollaborator, showToast, logAction, currentUserName, 
@@ -37,14 +45,11 @@ export const Balance: React.FC<BalanceProps> = ({
   const [colabSearch, setColabSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // States para Importação CSV
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [csvContent, setCsvContent] = useState<string[][]>([]);
-  const [selectedIdColumn, setSelectedIdColumn] = useState('');
-  const [selectedBalanceColumn, setSelectedBalanceColumn] = useState('');
-  const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+  // --- GOOGLE SHEETS STATES ---
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [accessToken, setAccessToken] = useState(''); // Token manual (fallback)
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{success: number, errors: number, message: string} | null>(null);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -104,28 +109,23 @@ export const Balance: React.FC<BalanceProps> = ({
     setColabSearch('');
   };
 
-  // Filter Collaborators First based on Sector Restrictions and Profile
+  // Filter Collaborators
   const allowedCollaborators = useMemo(() => {
      let filtered = collaborators;
-
-     // 0. Filter Active
      filtered = filtered.filter(c => c.active !== false);
 
-     // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
         return filtered.filter(c => c.id === userColabId);
      }
 
-     // 2. Sector filtering
      if (currentUserAllowedSectors.length > 0) {
          filtered = filtered.filter(c => c.sector && currentUserAllowedSectors.includes(c.sector));
      }
 
-     // Ordenação Alfabética A-Z
      return filtered.sort((a, b) => a.name.localeCompare(b.name));
   }, [collaborators, currentUserAllowedSectors, currentUserProfile, userColabId]);
 
-  // Opções filtradas para o dropdown de busca
+  // Dropdown options
   const filteredDropdownOptions = useMemo(() => {
       return allowedCollaborators.filter(c => 
           c.name.toLowerCase().includes(colabSearch.toLowerCase()) ||
@@ -137,10 +137,9 @@ export const Balance: React.FC<BalanceProps> = ({
       return collaborators.find(c => c.id === adjForm.collaboratorId)?.name;
   }, [adjForm.collaboratorId, collaborators]);
 
-  // Then calculate balances for allowed collaborators
+  // --- BALANCE CALCULATIONS ---
   const balances = useMemo(() => {
     return allowedCollaborators.map(c => {
-        // IMPORTANTE: Filtrar apenas eventos APROVADOS ou LEGADOS (sem status)
         const userEvents = events.filter(e => 
             e.collaboratorId === c.id && 
             (e.status === 'aprovado' || e.status === undefined)
@@ -153,7 +152,7 @@ export const Balance: React.FC<BalanceProps> = ({
         
         const balance = (totalGained - totalUsed) + totalAdjusted;
         
-        return { ...c, balance, totalGained, totalUsed, totalAdjusted };
+        return { ...c, balance };
     });
   }, [allowedCollaborators, events, adjustments]);
 
@@ -164,140 +163,202 @@ export const Balance: React.FC<BalanceProps> = ({
     );
   }, [balances, searchTerm]);
 
-  // Grouping Logic for Top Cards (Calculated System Balance)
+  // System Balances (Cards Top)
   const positiveBalances = useMemo(() => filteredBalances.filter(c => c.balance > 0).sort((a,b) => b.balance - a.balance), [filteredBalances]);
   const zeroBalances = useMemo(() => filteredBalances.filter(c => c.balance === 0).sort((a,b) => a.name.localeCompare(b.name)), [filteredBalances]);
   const negativeBalances = useMemo(() => filteredBalances.filter(c => c.balance < 0).sort((a,b) => a.balance - b.balance), [filteredBalances]);
 
-  // Grouping Logic for Bottom Cards (Imported Balance)
+  // Imported Balances (Cards Bottom)
   const importedPositive = useMemo(() => filteredBalances.filter(c => (c.bankBalance || 0) > 0).sort((a,b) => (b.bankBalance || 0) - (a.bankBalance || 0)), [filteredBalances]);
   const importedNegative = useMemo(() => filteredBalances.filter(c => (c.bankBalance || 0) < 0).sort((a,b) => (a.bankBalance || 0) - (b.bankBalance || 0)), [filteredBalances]);
-  const totalImportedPositive = importedPositive.reduce((acc, c) => acc + (c.bankBalance || 0), 0);
-  const totalImportedNegative = importedNegative.reduce((acc, c) => acc + (c.bankBalance || 0), 0);
+  
+  // Totals for Imported (Minutes)
+  const totalImportedPositiveMinutes = importedPositive.reduce((acc, c) => acc + ((c.bankBalance || 0) * 60), 0);
+  const totalImportedNegativeMinutes = importedNegative.reduce((acc, c) => acc + ((c.bankBalance || 0) * 60), 0);
 
-  // Filter Log Items based on Sector, Search Term, and Profile
+  // Helper to format minutes to HH:MM
+  const formatMinutesToHHMM = (totalMinutes: number) => {
+      const sign = totalMinutes < 0 ? '-' : '';
+      const abs = Math.abs(totalMinutes);
+      const h = Math.floor(abs / 60);
+      const m = Math.round(abs % 60);
+      return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  // Helper to format hours (float) to HH:MM
+  const formatHoursToHHMM = (hours: number) => {
+      return formatMinutesToHHMM(hours * 60);
+  };
+
   const filteredLogItems = useMemo(() => {
      const allLogs = [
-        ...events
-            .filter(e => e.status === 'aprovado' || e.status === undefined)
-            .map(e => ({ ...e, logType: 'event', date: e.createdAt })),
+        ...events.filter(e => e.status === 'aprovado' || e.status === undefined).map(e => ({ ...e, logType: 'event', date: e.createdAt })),
         ...adjustments.map(a => ({ ...a, logType: 'adj', date: a.createdAt }))
      ];
-
      return allLogs
       .filter(item => {
           const colab = collaborators.find(c => c.id === item.collaboratorId);
           if (!colab) return false;
-
-          // 0. Active Check
           if (colab.active === false) return false;
-
-          // 1. Strict Privacy Check for Log
-          if (currentUserProfile === 'colaborador' && userColabId) {
-              if (colab.id !== userColabId) return false;
-          }
-          
-          // 2. Sector Check
-          if (currentUserAllowedSectors.length > 0) {
-             if (!colab.sector || !currentUserAllowedSectors.includes(colab.sector)) return false;
-          }
-
-          // 3. Search Term Check
+          if (currentUserProfile === 'colaborador' && userColabId && colab.id !== userColabId) return false;
+          if (currentUserAllowedSectors.length > 0 && (!colab.sector || !currentUserAllowedSectors.includes(colab.sector))) return false;
           if (searchTerm) {
              const term = searchTerm.toLowerCase();
              return colab.name.toLowerCase().includes(term) || colab.colabId.toLowerCase().includes(term);
           }
-          
           return true;
       })
       .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 50);
-
   }, [events, adjustments, collaborators, currentUserAllowedSectors, searchTerm, currentUserProfile, userColabId]);
 
-  // --- CSV Handling Functions ---
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-          setCsvFile(file);
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-              const text = evt.target?.result as string;
-              const rows = text.split('\n').map(row => row.trim()).filter(row => row);
-              if (rows.length > 0) {
-                  // Detect delimiter (comma or semicolon)
-                  const firstRow = rows[0];
-                  const delimiter = firstRow.includes(';') ? ';' : ',';
-                  
-                  const headers = rows[0].split(delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
-                  const content = rows.slice(1).map(r => r.split(delimiter).map(c => c.trim().replace(/^"|"$/g, '')));
-                  
-                  setCsvHeaders(headers);
-                  setCsvContent(content);
-                  setIsImportModalOpen(true);
-                  
-                  // Auto-detect columns
-                  const idCol = headers.find(h => h.toLowerCase().includes('id') || h.toLowerCase().includes('matricula') || h.toLowerCase().includes('matrícula'));
-                  if (idCol) setSelectedIdColumn(idCol);
-                  
-                  const balCol = headers.find(h => h.toLowerCase().includes('saldo') || h.toLowerCase().includes('horas') || h.toLowerCase().includes('banco'));
-                  if (balCol) setSelectedBalanceColumn(balCol);
-              }
-          };
-          reader.readAsText(file);
-      }
+  // --- GOOGLE SHEETS SYNC LOGIC ---
+
+  const parseHourStringToMinutes = (str: string): number => {
+    const parts = str.split(':');
+    if (parts.length < 2) return 0;
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(h) || isNaN(m)) return 0;
+    return h * 60 + m;
   };
 
-  const processImport = () => {
-      if (!selectedIdColumn || !selectedBalanceColumn) {
-          showToast('Selecione as colunas de ID e Saldo.', true);
+  const extractSpreadsheetId = (url: string) => {
+      const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      return match ? match[1] : null;
+  };
+
+  const handleSync = async () => {
+      setSyncResult(null);
+      
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) {
+          showToast("Link da planilha inválido. Verifique o formato.", true);
           return;
       }
 
-      setIsProcessingCsv(true);
-      const idIdx = csvHeaders.indexOf(selectedIdColumn);
-      const balIdx = csvHeaders.indexOf(selectedBalanceColumn);
-      let successCount = 0;
-      let skippedCount = 0;
-      const now = new Date().toISOString();
+      setIsSyncing(true);
 
-      const allowedIds = new Set(allowedCollaborators.map(c => c.colabId)); // ID (Matrícula) field
-
-      csvContent.forEach(row => {
-          if (row.length <= Math.max(idIdx, balIdx)) return;
-          const colabId = row[idIdx]; // Matrícula
-          let balanceValStr = row[balIdx];
-          
-          // Handle comma as decimal separator if needed
-          balanceValStr = balanceValStr.replace(',', '.');
-          const balanceVal = parseFloat(balanceValStr);
-
-          if (!colabId || isNaN(balanceVal)) {
-              skippedCount++;
-              return;
+      try {
+          // Check for token
+          const tokenToUse = accessToken || ''; 
+          if (!tokenToUse) {
+              // Usually we would get from auth, but here we might need manual input for this env
+              console.warn("Nenhum token de acesso fornecido. Tentando fetch público (pode falhar para dados privados).");
           }
 
-          // Check permissions/hierarchy via allowedCollaborators
-          if (allowedIds.has(colabId)) {
-              // Find the collaborator object to get the Firestore document ID (which is different from colabId/Matrícula)
-              const targetColab = allowedCollaborators.find(c => c.colabId === colabId);
+          const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true&ranges=A1:E100`, {
+              headers: tokenToUse ? { 'Authorization': `Bearer ${tokenToUse}` } : {}
+          });
+
+          if (!response.ok) {
+              if (response.status === 401 || response.status === 403) {
+                  throw new Error("Permissão negada. Verifique se o token está válido ou se você tem acesso à planilha.");
+              }
+              throw new Error(`Erro na API Google Sheets: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          const sheet = data.sheets?.[0];
+          if (!sheet) throw new Error("Nenhuma aba encontrada na planilha.");
+
+          const rowData = sheet.data?.[0]?.rowData as GoogleRow[];
+          if (!rowData || rowData.length === 0) throw new Error("Planilha vazia.");
+
+          // --- SMART PARSING (HEADER DETECTION) ---
+          let headerRowIndex = -1;
+          let idColIndex = -1;
+          let hoursColIndex = -1; // "Horas Acumuladas"
+
+          // Search in first 20 rows
+          for (let i = 0; i < Math.min(rowData.length, 20); i++) {
+              const row = rowData[i];
+              if (!row.values) continue;
+              
+              row.values.forEach((cell, colIdx) => {
+                  const val = cell.formattedValue?.toLowerCase().trim() || '';
+                  if (val === 'id' || val === 'matrícula' || val === 'matricula') idColIndex = colIdx;
+                  if (val.includes('horas acumuladas') || val.includes('saldo de horas') || val === 'saldo') hoursColIndex = colIdx;
+              });
+
+              if (idColIndex !== -1 && hoursColIndex !== -1) {
+                  headerRowIndex = i;
+                  break;
+              }
+          }
+
+          if (headerRowIndex === -1) {
+              throw new Error("Colunas obrigatórias ('ID' e 'Horas Acumuladas') não encontradas nas primeiras 20 linhas.");
+          }
+
+          // --- DATA PROCESSING ---
+          let successCount = 0;
+          let ignoredCount = 0;
+          const allowedIds = new Set(allowedCollaborators.map(c => c.colabId));
+          const now = new Date().toISOString();
+
+          // Iterate rows after header
+          for (let i = headerRowIndex + 1; i < rowData.length; i++) {
+              const row = rowData[i];
+              if (!row.values) continue;
+
+              const idVal = row.values[idColIndex]?.formattedValue?.trim();
+              const hoursVal = row.values[hoursColIndex]?.formattedValue?.trim();
+              const color = row.values[hoursColIndex]?.userEnteredFormat?.backgroundColor;
+
+              if (!idVal || !hoursVal) continue;
+
+              // Check Hierarchy
+              if (!allowedIds.has(idVal)) {
+                  ignoredCount++;
+                  continue;
+              }
+
+              // Determine Sign based on Color
+              let sign = 0;
+              // Red > 0.8 & Green < 0.5 => Negative
+              if ((color?.red || 0) > 0.8 && (color?.green || 0) < 0.5) sign = -1;
+              // Green > 0.8 & Red < 0.5 => Positive
+              else if ((color?.green || 0) > 0.8 && (color?.red || 0) < 0.5) sign = 1;
+              
+              // If color logic fails, maybe fallback to text parsing? Prompt implied explicit color logic.
+              // Let's be lenient: if no color, try to parse text for negative sign? No, prompt was specific.
+              // "Exemplo: '01:30' vermelho -> -90". It implies the text doesn't have the sign.
+              if (sign === 0) {
+                  // Fallback: Check if text has '-'
+                  if (hoursVal.includes('-')) sign = -1;
+                  else sign = 1; // Default to positive if ambiguous but has value?
+              }
+
+              const minutes = parseHourStringToMinutes(hoursVal);
+              const totalMinutes = minutes * sign;
+              const totalHours = totalMinutes / 60; // Convert back to hours for storage
+
+              // Find DB ID
+              const targetColab = allowedCollaborators.find(c => c.colabId === idVal);
               if (targetColab) {
                   onUpdateCollaborator(targetColab.id, {
-                      bankBalance: balanceVal,
+                      bankBalance: totalHours,
                       lastBalanceImport: now
                   });
                   successCount++;
               }
-          } else {
-              skippedCount++;
           }
-      });
 
-      logAction('update', 'ajuste_saldo', `Importação CSV de Banco de Horas: ${successCount} atualizados, ${skippedCount} ignorados.`, currentUserName);
-      showToast(`Importação concluída: ${successCount} atualizados.`);
-      setIsProcessingCsv(false);
-      setIsImportModalOpen(false);
-      setCsvFile(null);
+          setSyncResult({
+              success: successCount,
+              errors: ignoredCount,
+              message: `Sincronização concluída: ${successCount} atualizados. (${ignoredCount} fora da hierarquia)`
+          });
+          showToast(`Sincronização: ${successCount} atualizados.`);
+
+      } catch (error: any) {
+          console.error(error);
+          setSyncResult({ success: 0, errors: 0, message: error.message });
+          showToast(error.message, true);
+      } finally {
+          setIsSyncing(false);
+      }
   };
 
   return (
@@ -327,19 +388,14 @@ export const Balance: React.FC<BalanceProps> = ({
 
       {/* Top 3 Cards (Calculated) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-         
          {/* POSITIVE */}
          <div className="bg-gradient-to-b from-white to-emerald-50/50 border border-emerald-100 rounded-xl shadow-lg flex flex-col h-[350px] overflow-hidden">
             <div className="p-4 bg-emerald-100/80 border-b border-emerald-200 flex justify-between items-center">
                 <div>
-                    <h3 className="text-emerald-900 font-bold flex items-center gap-2 text-lg">
-                        🚀 Folguistas em Alta
-                    </h3>
+                    <h3 className="text-emerald-900 font-bold flex items-center gap-2 text-lg">🚀 Folguistas</h3>
                     <p className="text-emerald-700 text-xs">Saldo Calculado (Eventos)</p>
                 </div>
-                <span className="bg-white text-emerald-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                    {positiveBalances.length}
-                </span>
+                <span className="bg-white text-emerald-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">{positiveBalances.length}</span>
             </div>
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
                 {positiveBalances.map(c => (
@@ -348,12 +404,9 @@ export const Balance: React.FC<BalanceProps> = ({
                             <span className="font-bold text-gray-800 text-sm leading-tight mb-0.5">{c.name}</span>
                             <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
                         </div>
-                        <div className="text-right">
-                            <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold text-sm whitespace-nowrap">+{c.balance}</span>
-                        </div>
+                        <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold text-sm">+{c.balance}</span>
                     </div>
                 ))}
-                {positiveBalances.length === 0 && <div className="h-full flex flex-col items-center justify-center text-emerald-400 opacity-60"><span className="text-4xl mb-2">🍃</span><p className="text-sm">Ninguém por aqui.</p></div>}
             </div>
          </div>
 
@@ -361,14 +414,10 @@ export const Balance: React.FC<BalanceProps> = ({
          <div className="bg-gradient-to-b from-white to-slate-50/50 border border-slate-200 rounded-xl shadow-lg flex flex-col h-[350px] overflow-hidden">
             <div className="p-4 bg-slate-100/80 border-b border-slate-200 flex justify-between items-center">
                 <div>
-                    <h3 className="text-slate-800 font-bold flex items-center gap-2 text-lg">
-                        ⚖️ Zerados no Jogo
-                    </h3>
+                    <h3 className="text-slate-800 font-bold flex items-center gap-2 text-lg">⚖️ Zerados</h3>
                     <p className="text-slate-600 text-xs">Saldo Calculado (Eventos)</p>
                 </div>
-                <span className="bg-white text-slate-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                    {zeroBalances.length}
-                </span>
+                <span className="bg-white text-slate-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">{zeroBalances.length}</span>
             </div>
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
                 {zeroBalances.map(c => (
@@ -377,12 +426,9 @@ export const Balance: React.FC<BalanceProps> = ({
                             <span className="font-bold text-gray-700 text-sm leading-tight mb-0.5">{c.name}</span>
                             <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
                         </div>
-                        <div className="text-right">
-                            <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded font-bold text-sm border border-slate-200 whitespace-nowrap">0</span>
-                        </div>
+                        <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded font-bold text-sm">0</span>
                     </div>
                 ))}
-                {zeroBalances.length === 0 && <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60"><span className="text-4xl mb-2">⚖️</span><p className="text-sm">Ninguém zerado.</p></div>}
             </div>
          </div>
 
@@ -390,14 +436,10 @@ export const Balance: React.FC<BalanceProps> = ({
          <div className="bg-gradient-to-b from-white to-rose-50/50 border border-rose-100 rounded-xl shadow-lg flex flex-col h-[350px] overflow-hidden">
             <div className="p-4 bg-rose-100/80 border-b border-rose-200 flex justify-between items-center">
                 <div>
-                    <h3 className="text-rose-900 font-bold flex items-center gap-2 text-lg">
-                        📉 A Recuperar
-                    </h3>
+                    <h3 className="text-rose-900 font-bold flex items-center gap-2 text-lg">📉 A Recuperar</h3>
                     <p className="text-rose-700 text-xs">Saldo Calculado (Eventos)</p>
                 </div>
-                <span className="bg-white text-rose-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                    {negativeBalances.length}
-                </span>
+                <span className="bg-white text-rose-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">{negativeBalances.length}</span>
             </div>
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
                 {negativeBalances.map(c => (
@@ -406,12 +448,9 @@ export const Balance: React.FC<BalanceProps> = ({
                             <span className="font-bold text-gray-800 text-sm leading-tight mb-0.5">{c.name}</span>
                             <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
                         </div>
-                        <div className="text-right">
-                            <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold text-sm whitespace-nowrap">{c.balance}</span>
-                        </div>
+                        <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold text-sm">{c.balance}</span>
                     </div>
                 ))}
-                {negativeBalances.length === 0 && <div className="h-full flex flex-col items-center justify-center text-rose-400 opacity-60"><span className="text-4xl mb-2">🎉</span><p className="text-sm">Todos positivos!</p></div>}
             </div>
          </div>
       </div>
@@ -543,39 +582,16 @@ export const Balance: React.FC<BalanceProps> = ({
                 if (item.logType === 'event') {
                     const eventLabel = item.typeLabel || item.type;
                     const status = item.status || 'aprovado';
-                    
-                    if (item.daysGained > 0) {
-                        text = `registrou "${eventLabel}" (+${item.daysGained} dias).`;
-                        borderClass = 'border-emerald-400';
-                        bgClass = 'bg-emerald-50/50';
-                    } else if (item.daysUsed > 0) {
-                        text = `registrou "${eventLabel}" (-${item.daysUsed} dias).`;
-                        borderClass = 'border-rose-400';
-                        bgClass = 'bg-rose-50/50';
-                    } else {
-                        if (item.type === 'ferias' || eventLabel.toLowerCase().includes('férias')) {
-                            text = `entrou de férias.`;
-                        } else {
-                            text = `registrou evento: ${eventLabel}.`;
-                        }
-                        borderClass = 'border-blue-400';
-                        bgClass = 'bg-blue-50/50';
-                    }
-
-                    if (status !== 'aprovado') {
-                        text += ` (Status: ${status})`;
-                        borderClass = 'border-gray-300 border-dashed';
-                        bgClass = 'bg-gray-50 opacity-70';
-                    }
-
+                    if (item.daysGained > 0) { text = `registrou "${eventLabel}" (+${item.daysGained} dias).`; borderClass = 'border-emerald-400'; bgClass = 'bg-emerald-50/50'; } 
+                    else if (item.daysUsed > 0) { text = `registrou "${eventLabel}" (-${item.daysUsed} dias).`; borderClass = 'border-rose-400'; bgClass = 'bg-rose-50/50'; } 
+                    else { text = `registrou evento: ${eventLabel}.`; borderClass = 'border-blue-400'; bgClass = 'bg-blue-50/50'; }
+                    if (status !== 'aprovado') { text += ` (Status: ${status})`; borderClass = 'border-gray-300 border-dashed'; bgClass = 'bg-gray-50 opacity-70'; }
                 } else {
-                    text = `Ajuste Manual (${item.amount > 0 ? '+' : ''}${item.amount}): ${item.reason}`;
-                    borderClass = 'border-purple-400';
-                    bgClass = 'bg-purple-50/50';
+                    text = `Ajuste Manual (${item.amount > 0 ? '+' : ''}${item.amount}): ${item.reason}`; borderClass = 'border-purple-400'; bgClass = 'bg-purple-50/50';
                 }
 
                 return (
-                <div key={item.id} className={`text-sm p-3 border-l-4 ${borderClass} ${bgClass} rounded-r-lg transition-all hover:translate-x-1`}>
+                <div key={item.id} className={`text-sm p-3 border-l-4 ${borderClass} ${bgClass} rounded-r-lg transition-all`}>
                     <div className="flex justify-between items-center mb-1">
                         <span className="font-bold text-gray-800">{colab?.name || 'Desconhecido'}</span>
                         <div className="text-[10px] text-gray-500">{new Date(item.date).toLocaleDateString('pt-BR')}</div>
@@ -584,32 +600,66 @@ export const Balance: React.FC<BalanceProps> = ({
                     {item.createdBy && <div className="text-[9px] text-gray-400 mt-1 text-right">Por: {item.createdBy}</div>}
                 </div>
                 );
-            })
-            }
+            })}
             {filteredLogItems.length === 0 && <p className="text-center text-gray-400 py-10 italic">Nenhum registro encontrado.</p>}
             </div>
         </div>
       </div>
 
-      {/* --- NOVO FLUXO DE CONTROLE (IMPORTAÇÃO E CARDS) --- */}
+      {/* --- GOOGLE SHEETS IMPORT --- */}
       {canCreate && (
           <div className="border-t border-gray-200 pt-8">
-              <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                      📥 Controle de Saldo (Importação Oficial)
-                  </h2>
-                  
-                  <div className="relative">
-                      <input 
-                          type="file" 
-                          accept=".csv"
-                          onChange={handleFileChange}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                      <button className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2">
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                          Importar CSV
-                      </button>
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-6">
+                  <span className="text-green-600">📊</span> Controle de Saldo (Google Sheets)
+              </h2>
+
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8 shadow-inner">
+                  <div className="flex flex-col gap-4">
+                      <div className="flex flex-col md:flex-row gap-4">
+                          <input 
+                              type="text" 
+                              value={sheetUrl}
+                              onChange={e => setSheetUrl(e.target.value)}
+                              placeholder="Insira o Link da Planilha Google (Ex: https://docs.google.com/spreadsheets/d/...)"
+                              className="flex-1 border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                          />
+                          <input 
+                              type="text" 
+                              value={accessToken}
+                              onChange={e => setAccessToken(e.target.value)}
+                              placeholder="Token de Acesso (Opcional - p/ Teste)"
+                              className="w-full md:w-64 border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                          />
+                          <button 
+                              onClick={handleSync}
+                              disabled={isSyncing || !sheetUrl}
+                              className="bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition-all active:scale-95 flex items-center gap-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                              {isSyncing ? (
+                                  <>
+                                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                      Sincronizando...
+                                  </>
+                              ) : (
+                                  <>
+                                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                      Sincronizar Agora
+                                  </>
+                              )}
+                          </button>
+                      </div>
+                      
+                      {syncResult && (
+                          <div className={`p-3 rounded-lg text-sm border ${syncResult.errors > 0 ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-green-50 text-green-800 border-green-200'}`}>
+                              {syncResult.message}
+                          </div>
+                      )}
+                      
+                      <p className="text-xs text-gray-500">
+                          <strong>Smart Parsing:</strong> O sistema buscará as colunas "ID" e "Horas Acumuladas" nas primeiras 20 linhas.
+                          <br />
+                          <strong>Cores:</strong> Células <span className="text-red-500 font-bold">Vermelhas</span> são consideradas saldo negativo. <span className="text-green-600 font-bold">Verdes</span> são positivo.
+                      </p>
                   </div>
               </div>
 
@@ -619,12 +669,12 @@ export const Balance: React.FC<BalanceProps> = ({
                       <div className="p-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
                           <div>
                               <h3 className="text-emerald-800 font-bold flex items-center gap-2">
-                                  <span>📈</span> Saldo Positivo (Oficial)
+                                  <span>📈</span> Horas Positivas (Google)
                               </h3>
-                              <p className="text-[10px] text-emerald-600">Baseado na última importação</p>
+                              <p className="text-[10px] text-emerald-600">Saldo Oficial</p>
                           </div>
                           <span className="bg-emerald-600 text-white px-3 py-1 rounded-lg text-sm font-bold shadow-sm">
-                              Total: +{totalImportedPositive.toFixed(2)}h
+                              Total: +{formatMinutesToHHMM(totalImportedPositiveMinutes)}
                           </span>
                       </div>
                       
@@ -634,7 +684,7 @@ export const Balance: React.FC<BalanceProps> = ({
                                   <tr>
                                       <th className="px-3 py-2">ID</th>
                                       <th className="px-3 py-2">Nome</th>
-                                      <th className="px-3 py-2 text-right">Horas</th>
+                                      <th className="px-3 py-2 text-right">Saldo</th>
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
@@ -642,17 +692,17 @@ export const Balance: React.FC<BalanceProps> = ({
                                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                                           <td className="px-3 py-2 font-mono text-gray-500 text-xs">{c.colabId}</td>
                                           <td className="px-3 py-2 font-bold text-gray-800 truncate max-w-[150px]">{c.name}</td>
-                                          <td className="px-3 py-2 text-right font-bold text-emerald-600">+{c.bankBalance}</td>
+                                          <td className="px-3 py-2 text-right font-bold text-emerald-600">+{formatHoursToHHMM(c.bankBalance || 0)}</td>
                                       </tr>
                                   ))}
                                   {importedPositive.length === 0 && (
-                                      <tr><td colSpan={3} className="text-center py-4 text-gray-400 italic">Nenhum saldo positivo importado.</td></tr>
+                                      <tr><td colSpan={3} className="text-center py-4 text-gray-400 italic">Nenhum saldo positivo.</td></tr>
                                   )}
                               </tbody>
                           </table>
                       </div>
                       <div className="bg-gray-50 p-2 text-[10px] text-center text-gray-400 border-t border-gray-100">
-                          {importedPositive[0]?.lastBalanceImport ? `Última atualização: ${new Date(importedPositive[0].lastBalanceImport).toLocaleString()}` : 'Sem dados de importação'}
+                          {importedPositive[0]?.lastBalanceImport ? `Última sincronização: ${new Date(importedPositive[0].lastBalanceImport).toLocaleString()}` : 'Sem dados.'}
                       </div>
                   </div>
 
@@ -661,12 +711,12 @@ export const Balance: React.FC<BalanceProps> = ({
                       <div className="p-4 bg-rose-50 border-b border-rose-100 flex justify-between items-center">
                           <div>
                               <h3 className="text-rose-800 font-bold flex items-center gap-2">
-                                  <span>📉</span> Saldo Negativo (Oficial)
+                                  <span>📉</span> Horas Negativas (Google)
                               </h3>
-                              <p className="text-[10px] text-rose-600">Baseado na última importação</p>
+                              <p className="text-[10px] text-rose-600">Saldo Oficial</p>
                           </div>
                           <span className="bg-rose-600 text-white px-3 py-1 rounded-lg text-sm font-bold shadow-sm">
-                              Total: {totalImportedNegative.toFixed(2)}h
+                              Total: {formatMinutesToHHMM(totalImportedNegativeMinutes)}
                           </span>
                       </div>
                       
@@ -676,7 +726,7 @@ export const Balance: React.FC<BalanceProps> = ({
                                   <tr>
                                       <th className="px-3 py-2">ID</th>
                                       <th className="px-3 py-2">Nome</th>
-                                      <th className="px-3 py-2 text-right">Horas</th>
+                                      <th className="px-3 py-2 text-right">Saldo</th>
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
@@ -684,74 +734,22 @@ export const Balance: React.FC<BalanceProps> = ({
                                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                                           <td className="px-3 py-2 font-mono text-gray-500 text-xs">{c.colabId}</td>
                                           <td className="px-3 py-2 font-bold text-gray-800 truncate max-w-[150px]">{c.name}</td>
-                                          <td className="px-3 py-2 text-right font-bold text-rose-600">{c.bankBalance}</td>
+                                          <td className="px-3 py-2 text-right font-bold text-rose-600">{formatHoursToHHMM(c.bankBalance || 0)}</td>
                                       </tr>
                                   ))}
                                   {importedNegative.length === 0 && (
-                                      <tr><td colSpan={3} className="text-center py-4 text-gray-400 italic">Nenhum saldo negativo importado.</td></tr>
+                                      <tr><td colSpan={3} className="text-center py-4 text-gray-400 italic">Nenhum saldo negativo.</td></tr>
                                   )}
                               </tbody>
                           </table>
                       </div>
                       <div className="bg-gray-50 p-2 text-[10px] text-center text-gray-400 border-t border-gray-100">
-                          {importedNegative[0]?.lastBalanceImport ? `Última atualização: ${new Date(importedNegative[0].lastBalanceImport).toLocaleString()}` : 'Sem dados de importação'}
+                          {importedNegative[0]?.lastBalanceImport ? `Última sincronização: ${new Date(importedNegative[0].lastBalanceImport).toLocaleString()}` : 'Sem dados.'}
                       </div>
                   </div>
               </div>
           </div>
       )}
-
-      {/* CSV Mapping Modal */}
-      <Modal 
-        isOpen={isImportModalOpen} 
-        onClose={() => setIsImportModalOpen(false)} 
-        title="Mapeamento de Importação CSV"
-      >
-          <div className="space-y-6">
-              <p className="text-sm text-gray-600">Selecione quais colunas do seu arquivo correspondem aos dados necessários. Assegure-se de que a coluna ID corresponda à Matrícula do funcionário.</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Coluna ID (Matrícula)</label>
-                      <select 
-                        className="w-full border border-gray-300 rounded p-2"
-                        value={selectedIdColumn}
-                        onChange={e => setSelectedIdColumn(e.target.value)}
-                      >
-                          <option value="">Selecione...</option>
-                          {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                      </select>
-                  </div>
-                  <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Coluna Saldo/Horas</label>
-                      <select 
-                        className="w-full border border-gray-300 rounded p-2"
-                        value={selectedBalanceColumn}
-                        onChange={e => setSelectedBalanceColumn(e.target.value)}
-                      >
-                          <option value="">Selecione...</option>
-                          {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                      </select>
-                  </div>
-              </div>
-
-              <div className="bg-amber-50 p-4 rounded border border-amber-200 text-xs text-amber-800">
-                  ⚠️ <strong>Atenção:</strong> Esta ação substituirá o "Saldo Oficial" dos colaboradores listados. O saldo calculado via eventos permanecerá visível nos cards superiores, mas este valor importado será a referência oficial nestes novos cards. Apenas colaboradores sob sua gestão serão atualizados.
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                  <button onClick={() => setIsImportModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                  <button 
-                    onClick={processImport} 
-                    disabled={isProcessingCsv}
-                    className="bg-indigo-600 text-white px-6 py-2 rounded font-bold hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                      {isProcessingCsv ? 'Processando...' : 'Confirmar Importação'}
-                  </button>
-              </div>
-          </div>
-      </Modal>
-
     </div>
   );
 };
