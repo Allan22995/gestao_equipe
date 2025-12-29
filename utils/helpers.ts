@@ -135,3 +135,29 @@ export const buildApprovalChain = (startColabId: string, allCollaborators: Colla
 
   return chain;
 };
+
+// --- NOVOS HELPERS DE TEMPO ---
+
+// Converte string "HH:MM" para horas decimais (ex: "01:30" -> 1.5)
+export const timeToDecimal = (timeStr: string): number => {
+  if (!timeStr || !timeStr.includes(':')) return 0;
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes)) return 0;
+  return hours + (minutes / 60);
+};
+
+// Converte horas decimais para string "HH:MM" (ex: 1.5 -> "01:30")
+export const decimalToTime = (decimal: number): string => {
+  const sign = decimal < 0 ? '-' : '';
+  const absDecimal = Math.abs(decimal);
+  
+  const hours = Math.floor(absDecimal);
+  const minutes = Math.round((absDecimal - hours) * 60);
+  
+  // Ajuste se arredondamento der 60 min
+  if (minutes === 60) {
+    return `${sign}${String(hours + 1).padStart(2, '0')}:00`;
+  }
+  
+  return `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};

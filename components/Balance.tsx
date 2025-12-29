@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
-import { generateUUID } from '../utils/helpers';
+import { generateUUID, timeToDecimal, decimalToTime } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 
 interface BalanceProps {
@@ -45,6 +45,9 @@ export const Balance: React.FC<BalanceProps> = ({
   const [selectedIdColumn, setSelectedIdColumn] = useState('');
   const [selectedBalanceColumn, setSelectedBalanceColumn] = useState('');
   const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+
+  // States para Importação HTML
+  const [isProcessingHtml, setIsProcessingHtml] = useState(false);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -298,6 +301,122 @@ export const Balance: React.FC<BalanceProps> = ({
       setIsProcessingCsv(false);
       setIsImportModalOpen(false);
       setCsvFile(null);
+  };
+
+  // --- HTML IMPORT HANDLERS ---
+  const handleHtmlFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (!file.name.endsWith('.html') && !file.name.endsWith('.htm')) {
+          showToast('Por favor, selecione um arquivo HTML (.html)', true);
+          return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+          const content = evt.target?.result as string;
+          processHtmlContent(content);
+      };
+      reader.readAsText(file);
+      // Reset input
+      e.target.value = '';
+  };
+
+  const processHtmlContent = async (html: string) => {
+      setIsProcessingHtml(true);
+      try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          
+          // Tentar encontrar as colunas
+          const rows = Array.from(doc.querySelectorAll('tr'));
+          let idCol = -1;
+          let nameCol = -1; // Opcional, para validação
+          let hourCol = -1;
+
+          // Busca cabeçalho nas primeiras 30 linhas
+          for (const row of rows.slice(0, 30)) {
+              const cells = Array.from(row.querySelectorAll('td, th'));
+              cells.forEach((cell, idx) => {
+                  const text = cell.textContent?.toLowerCase() || '';
+                  if (text.includes('id') || text.includes('matrícula') || text.includes('matricula')) idCol = idx;
+                  if (text.includes('nome')) nameCol = idx;
+                  if (text.includes('horas acumuladas') || text.includes('banco de horas')) hourCol = idx;
+              });
+              if (idCol !== -1 && hourCol !== -1) break;
+          }
+
+          if (idCol === -1 || hourCol === -1) {
+              showToast('Colunas "ID/Matrícula" ou "Horas Acumuladas" não encontradas no arquivo.', true);
+              setIsProcessingHtml(false);
+              return;
+          }
+
+          let successCount = 0;
+          let skippedCount = 0;
+          const now = new Date().toISOString();
+          const allowedMap = new Map(allowedCollaborators.map(c => [c.colabId, c]));
+
+          // Processar linhas de dados
+          for (const row of rows) {
+              const cells = Array.from(row.querySelectorAll('td'));
+              if (cells.length <= Math.max(idCol, hourCol)) continue;
+
+              const id = cells[idCol].textContent?.trim() || '';
+              const hourStr = cells[hourCol].textContent?.trim() || '';
+              
+              if (!id || !hourStr) continue;
+
+              const targetColab = allowedMap.get(id);
+              if (!targetColab) {
+                  skippedCount++; // Fora da hierarquia ou não encontrado
+                  continue;
+              }
+
+              // Determinar sinal pela cor
+              const cell = cells[hourCol];
+              const style = cell.getAttribute('style') || '';
+              const className = cell.className || '';
+              
+              let sign = 0;
+              // Verde (Google Sheets export geralmente usa bg-color ou classe s6/similar)
+              if (style.includes('#b5f9b5') || style.includes('background-color: #b5f9b5') || className.includes('s6')) {
+                  sign = 1; 
+              }
+              // Vermelho
+              else if (style.includes('#ffb6c1') || style.includes('background-color: #ffb6c1') || className.includes('s7')) {
+                  sign = -1;
+              }
+
+              if (sign === 0) {
+                  // Tenta inferir pelo sinal no texto se a cor falhar (fallback)
+                  if (hourStr.startsWith('-')) sign = -1;
+                  else if (/\d/.test(hourStr)) sign = 1; // Tem numero, assume positivo se não tiver cor e não tiver sinal negativo explicito? Melhor ser estrito com a cor.
+                  else continue; // Ignora se não conseguir determinar
+              }
+
+              // Parse HH:MM
+              const decimalHours = timeToDecimal(hourStr.replace('-', '')); // Remove sinal textual se houver
+              const finalBalance = decimalHours * sign;
+
+              // Atualiza
+              onUpdateCollaborator(targetColab.id, {
+                  bankBalance: finalBalance,
+                  lastBalanceImport: now
+              });
+              successCount++;
+          }
+
+          logAction('update', 'ajuste_saldo', `Importação HTML: ${successCount} atualizados via planilha Google Sheets.`, currentUserName);
+          showToast(`Importação HTML concluída: ${successCount} registros atualizados.`);
+
+      } catch (error) {
+          console.error("Erro ao processar HTML", error);
+          showToast("Erro crítico ao processar o arquivo HTML.", true);
+      } finally {
+          setIsProcessingHtml(false);
+      }
   };
 
   return (
@@ -591,7 +710,7 @@ export const Balance: React.FC<BalanceProps> = ({
         </div>
       </div>
 
-      {/* --- NOVO FLUXO DE CONTROLE (IMPORTAÇÃO E CARDS) --- */}
+      {/* --- IMPORTAÇÃO OFICIAL (CSV ou HTML) --- */}
       {canCreate && (
           <div className="border-t border-gray-200 pt-8">
               <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -599,17 +718,37 @@ export const Balance: React.FC<BalanceProps> = ({
                       📥 Controle de Saldo (Importação Oficial)
                   </h2>
                   
-                  <div className="relative">
-                      <input 
-                          type="file" 
-                          accept=".csv"
-                          onChange={handleFileChange}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                      <button className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2">
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                          Importar CSV
-                      </button>
+                  <div className="flex gap-2">
+                      {/* Botão HTML (Sheets) */}
+                      <div className="relative">
+                          <input 
+                              type="file" 
+                              accept=".html,.htm"
+                              onChange={handleHtmlFileChange}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                              disabled={isProcessingHtml}
+                          />
+                          <button 
+                            className={`bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-all active:scale-95 flex items-center gap-2 ${isProcessingHtml ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                              {isProcessingHtml ? 'Processando...' : 'Google Sheets (.html)'}
+                          </button>
+                      </div>
+
+                      {/* Botão CSV (Legacy) */}
+                      <div className="relative">
+                          <input 
+                              type="file" 
+                              accept=".csv"
+                              onChange={handleFileChange}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                          <button className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2">
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              CSV
+                          </button>
+                      </div>
                   </div>
               </div>
 
@@ -624,7 +763,7 @@ export const Balance: React.FC<BalanceProps> = ({
                               <p className="text-[10px] text-emerald-600">Baseado na última importação</p>
                           </div>
                           <span className="bg-emerald-600 text-white px-3 py-1 rounded-lg text-sm font-bold shadow-sm">
-                              Total: +{totalImportedPositive.toFixed(2)}h
+                              Total: {decimalToTime(totalImportedPositive)}
                           </span>
                       </div>
                       
@@ -642,7 +781,7 @@ export const Balance: React.FC<BalanceProps> = ({
                                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                                           <td className="px-3 py-2 font-mono text-gray-500 text-xs">{c.colabId}</td>
                                           <td className="px-3 py-2 font-bold text-gray-800 truncate max-w-[150px]">{c.name}</td>
-                                          <td className="px-3 py-2 text-right font-bold text-emerald-600">+{c.bankBalance}</td>
+                                          <td className="px-3 py-2 text-right font-bold text-emerald-600">+{decimalToTime(c.bankBalance || 0)}</td>
                                       </tr>
                                   ))}
                                   {importedPositive.length === 0 && (
@@ -666,7 +805,7 @@ export const Balance: React.FC<BalanceProps> = ({
                               <p className="text-[10px] text-rose-600">Baseado na última importação</p>
                           </div>
                           <span className="bg-rose-600 text-white px-3 py-1 rounded-lg text-sm font-bold shadow-sm">
-                              Total: {totalImportedNegative.toFixed(2)}h
+                              Total: {decimalToTime(totalImportedNegative)}
                           </span>
                       </div>
                       
@@ -684,7 +823,7 @@ export const Balance: React.FC<BalanceProps> = ({
                                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                                           <td className="px-3 py-2 font-mono text-gray-500 text-xs">{c.colabId}</td>
                                           <td className="px-3 py-2 font-bold text-gray-800 truncate max-w-[150px]">{c.name}</td>
-                                          <td className="px-3 py-2 text-right font-bold text-rose-600">{c.bankBalance}</td>
+                                          <td className="px-3 py-2 text-right font-bold text-rose-600">{decimalToTime(c.bankBalance || 0)}</td>
                                       </tr>
                                   ))}
                                   {importedNegative.length === 0 && (
