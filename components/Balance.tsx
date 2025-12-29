@@ -181,7 +181,10 @@ export const Balance: React.FC<BalanceProps> = ({
 
   // Helper to format minutes to HH:MM
   const formatMinutesToHHMM = (totalMinutes: number) => {
-      const sign = totalMinutes < 0 ? '-' : '';
+      // Garante que -0 seja tratado como 0 visualmente
+      if (totalMinutes === 0) return "00:00";
+      
+      const sign = totalMinutes < 0 ? '-' : ''; // Check < 0 handles -0 correctly in JS
       const abs = Math.abs(totalMinutes);
       const h = Math.floor(abs / 60);
       const m = Math.round(abs % 60);
@@ -218,10 +221,18 @@ export const Balance: React.FC<BalanceProps> = ({
   };
 
   const parseHourStringToMinutes = (str: string): number => {
-    const parts = str.split(':');
+    if (!str) return 0;
+    
+    // VALIDATION POINT 3: Treating strings as absolute magnitude first
+    // Remove '-' to process purely the time duration, sign is applied later via Color
+    const cleanStr = str.replace('-', '');
+    
+    const parts = cleanStr.split(':');
     if (parts.length < 2) return 0;
+    
     const h = parseInt(parts[0], 10);
     const m = parseInt(parts[1], 10);
+    
     if (isNaN(h) || isNaN(m)) return 0;
     return h * 60 + m;
   };
@@ -233,20 +244,21 @@ export const Balance: React.FC<BalanceProps> = ({
           provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
           
           const result = await signInWithPopup(auth, provider);
+          // VALIDATION POINT 1: Extract Google Access Token, NOT Firebase ID Token
           const credential = GoogleAuthProvider.credentialFromResult(result);
           const token = credential?.accessToken;
           
           if (token) {
               setOauthToken(token);
               setAuthError(false);
-              // Retry Sync immediately
+              // Retry Sync immediately with the fresh token
               handleSync(token);
           } else {
-              showToast("Falha ao obter token de acesso.", true);
+              showToast("Falha ao obter token de acesso do Google.", true);
           }
       } catch (err) {
           console.error("Erro na autenticação:", err);
-          showToast("Erro na autenticação. Verifique o console.", true);
+          showToast("Erro na autenticação Google. Verifique o console.", true);
       }
   };
 
@@ -265,10 +277,8 @@ export const Balance: React.FC<BalanceProps> = ({
       try {
           const tokenToUse = overrideToken || oauthToken;
           
-          if (!tokenToUse) {
-              // Try to perform a public fetch first, but likely will need auth for private sheets or detailed data
-              // If we fail here with no token, we prompt auth
-          }
+          // Note: If no token is present, we attempt a public fetch first. 
+          // If the sheet is private, it will return 401/403 and trigger the Auth Flow.
 
           const headers: any = {};
           if (tokenToUse) headers['Authorization'] = `Bearer ${tokenToUse}`;
@@ -331,13 +341,16 @@ export const Balance: React.FC<BalanceProps> = ({
 
               const idVal = row.values[idColIndex]?.formattedValue?.trim();
               const hoursVal = row.values[hoursColIndex]?.formattedValue?.trim();
+              
+              // VALIDATION POINT 2: Google API Color Traps
+              // API omits property if value is 0. Access safely with `|| 0`.
               const color = row.values[hoursColIndex]?.userEnteredFormat?.backgroundColor;
 
               if (!idVal || !hoursVal) continue;
 
-              // Check Hierarchy (Silently Ignore)
+              // Check Hierarchy (Silently Ignore IDs not in user's scope)
               if (!allowedIds.has(idVal)) {
-                  ignoredCount++; // Just for internal stats, no user error
+                  ignoredCount++;
                   continue;
               }
 
@@ -348,18 +361,18 @@ export const Balance: React.FC<BalanceProps> = ({
               // Green > 0.8 & Red < 0.5 => Positive
               else if ((color?.green || 0) > 0.8 && (color?.red || 0) < 0.5) sign = 1;
               
-              // Ignore if no color match (Sign 0)
+              // Ignore if no color match (Sign 0) - "Ignore cells without color" requirement
               if (sign === 0) continue;
 
-              // Parse Minutes
+              // Parse Minutes (Absolute)
               const minutes = parseHourStringToMinutes(hoursVal);
               const totalMinutes = minutes * sign;
 
-              // Find DB ID
+              // Find DB ID and Update
               const targetColab = allowedCollaborators.find(c => c.colabId === idVal);
               if (targetColab) {
                   onUpdateCollaborator(targetColab.id, {
-                      bankBalance: totalMinutes, // STORE AS MINUTES
+                      bankBalance: totalMinutes, // STORE AS INTEGER MINUTES
                       lastBalanceImport: now
                   });
                   successCount++;
@@ -650,10 +663,10 @@ export const Balance: React.FC<BalanceProps> = ({
                           {authError ? (
                               <button 
                                   onClick={grantPermission}
-                                  className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2 justify-center"
+                                  className="bg-white border border-gray-300 text-gray-700 font-bold py-3 px-6 rounded-lg shadow-sm hover:bg-gray-50 hover:shadow-md transition-all active:scale-95 flex items-center gap-2 justify-center"
                               >
-                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
-                                  Conceder Permissão
+                                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" className="w-5 h-5" />
+                                  <span>Conectar Conta</span>
                               </button>
                           ) : (
                               <button 
