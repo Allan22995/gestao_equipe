@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule } from '../types';
+import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule, DaySchedule } from '../types';
 import { generateUUID } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 import { MultiSelect } from './ui/MultiSelect';
@@ -422,12 +422,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
            </div>
        )}
 
-       {/* ... (Roles content omitted for brevity, logic maintained) ... */}
-       {/* (This part was not requested to change, skipping to relevant sections) */}
        {/* --- CONTENT: ROLES --- */}
        {activeTab === 'roles' && (
            <div className="space-y-6 animate-fadeIn">
-               {/* ... (Roles content remains mostly the same, ensuring handlers are used) ... */}
                 {hasPermission('settings:view_roles_list') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                    <SectionHeader title="Funções e Cargos" description="Defina os cargos e suas permissões de visibilidade." />
@@ -1087,23 +1084,25 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                    </div>
                </div>
                <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar border border-gray-100 rounded-lg p-2">
-                   {daysOrder.map((day: keyof Schedule) => (
+                   {daysOrder.map((day: keyof Schedule) => {
+                       const daySchedule = tempSchedule[day] as DaySchedule;
+                       return (
                        <div key={day} className="flex flex-col md:flex-row md:items-center gap-4 p-2 bg-gray-50 rounded border border-gray-100">
                            <div className="w-24 font-bold capitalize text-sm flex items-center gap-2">
-                               <input type="checkbox" checked={tempSchedule[day].enabled} onChange={e => handleTempScheduleChange(day, 'enabled', e.target.checked)} disabled={!hasPermission('settings:edit_templates')} />
+                               <input type="checkbox" checked={daySchedule.enabled} onChange={e => handleTempScheduleChange(day, 'enabled', e.target.checked)} disabled={!hasPermission('settings:edit_templates')} />
                                {day}
                            </div>
-                           <div className={`flex items-center gap-2 flex-1 ${!tempSchedule[day].enabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                               <input type="time" value={tempSchedule[day].start} onChange={e => handleTempScheduleChange(day, 'start', e.target.value)} className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" disabled={!hasPermission('settings:edit_templates')} />
+                           <div className={`flex items-center gap-2 flex-1 ${!daySchedule.enabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                               <input type="time" value={daySchedule.start} onChange={e => handleTempScheduleChange(day, 'start', e.target.value)} className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" disabled={!hasPermission('settings:edit_templates')} />
                                <span className="text-xs text-gray-400">até</span>
-                               <input type="time" value={tempSchedule[day].end} onChange={e => handleTempScheduleChange(day, 'end', e.target.value)} className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" disabled={!hasPermission('settings:edit_templates')} />
+                               <input type="time" value={daySchedule.end} onChange={e => handleTempScheduleChange(day, 'end', e.target.value)} className="border rounded px-2 py-1 text-sm disabled:bg-gray-100" disabled={!hasPermission('settings:edit_templates')} />
                                <label className="flex items-center gap-1 ml-4 text-xs">
-                                   <input type="checkbox" checked={tempSchedule[day].startsPreviousDay} onChange={e => handleTempScheduleChange(day, 'startsPreviousDay', e.target.checked)} disabled={!hasPermission('settings:edit_templates')} /> 
+                                   <input type="checkbox" checked={daySchedule.startsPreviousDay} onChange={e => handleTempScheduleChange(day, 'startsPreviousDay', e.target.checked)} disabled={!hasPermission('settings:edit_templates')} /> 
                                    Inicia dia anterior
                                </label>
                            </div>
                        </div>
-                   ))}
+                   )})}
                </div>
                <div className="flex justify-end gap-3 pt-4 border-t"><button onClick={() => setIsTemplateModalOpen(false)} className="px-4 py-2 text-gray-600">Cancelar</button><button onClick={saveTemplate} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={!hasPermission('settings:edit_templates')}>Salvar Modelo</button></div>
            </div>

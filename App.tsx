@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, onAuthStateChanged, signOut } from './services/firebase';
 import { dbService } from './services/storage';
@@ -168,6 +169,8 @@ function App() {
       });
   };
 
+  const currentUserName = currentUserColab?.name || user?.email || 'Usuário';
+
   if (loading) return <div className="flex items-center justify-center h-screen">Carregando...</div>;
 
   if (!user) {
@@ -227,7 +230,7 @@ function App() {
       case 'eventos':
         return <Events 
             collaborators={collaborators} events={events}
-            onAdd={(e) => dbService.addEvent(e)}
+            onAdd={(e) => dbService.addEvent({ ...e, createdBy: currentUserName })}
             onUpdate={(e) => dbService.updateEvent(e.id, e)}
             onDelete={(id) => dbService.deleteEvent(id)}
             showToast={showToast}
@@ -243,7 +246,7 @@ function App() {
       case 'plantoes':
         return <OnCall 
             collaborators={collaborators} onCalls={onCalls}
-            onAdd={(o) => dbService.addOnCall(o)}
+            onAdd={(o) => dbService.addOnCall({ ...o, createdBy: currentUserName })}
             onUpdate={(o) => dbService.updateOnCall(o.id, o)}
             onDelete={(id) => dbService.deleteOnCall(id)}
             showToast={showToast}
@@ -259,9 +262,10 @@ function App() {
         return <Balance 
             collaborators={collaborators} events={events} adjustments={adjustments}
             onAddAdjustment={(a) => dbService.addAdjustment(a)}
+            onUpdateCollaborator={(id, data) => dbService.updateCollaborator(id, data)}
             showToast={showToast}
             logAction={logAction}
-            currentUserName={currentUserColab?.name || user.email}
+            currentUserName={currentUserName}
             canCreate={hasPermission('balance:create')}
             currentUserAllowedSectors={allowedSectors}
             currentUserProfile={userProfile}
@@ -270,13 +274,13 @@ function App() {
       case 'previsao_ferias':
         return <VacationForecast 
             collaborators={collaborators} requests={vacationRequests}
-            onAdd={(r) => dbService.addVacationRequest(r)}
+            onAdd={(r) => dbService.addVacationRequest({ ...r, createdBy: currentUserName })}
             onUpdate={(r) => dbService.updateVacationRequest(r.id, r)}
             onDelete={(id) => dbService.deleteVacationRequest(id)}
             showToast={showToast}
             logAction={logAction}
             currentUserProfile={userProfile}
-            currentUserName={currentUserColab?.name || user.email}
+            currentUserName={currentUserName}
             canCreate={hasPermission('vacation:create')}
             canUpdate={hasPermission('vacation:update')}
             canDelete={hasPermission('vacation:delete')}

@@ -1,12 +1,15 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Collaborator, EventRecord, BalanceAdjustment, UserProfile } from '../types';
 import { generateUUID } from '../utils/helpers';
+import { Modal } from './ui/Modal';
 
 interface BalanceProps {
   collaborators: Collaborator[];
   events: EventRecord[];
   adjustments: BalanceAdjustment[];
   onAddAdjustment: (adj: BalanceAdjustment) => void;
+  onUpdateCollaborator: (id: string, data: Partial<Collaborator>) => void;
   showToast: (msg: string, isError?: boolean) => void;
   logAction: (action: string, entity: string, details: string, user: string) => void;
   currentUserName: string;
@@ -17,7 +20,7 @@ interface BalanceProps {
 }
 
 export const Balance: React.FC<BalanceProps> = ({ 
-  collaborators, events, adjustments, onAddAdjustment, showToast, logAction, currentUserName, 
+  collaborators, events, adjustments, onAddAdjustment, onUpdateCollaborator, showToast, logAction, currentUserName, 
   canCreate, 
   currentUserAllowedSectors, currentUserProfile, userColabId
 }) => {
@@ -33,6 +36,15 @@ export const Balance: React.FC<BalanceProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [colabSearch, setColabSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // States para Importação CSV
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvContent, setCsvContent] = useState<string[][]>([]);
+  const [selectedIdColumn, setSelectedIdColumn] = useState('');
+  const [selectedBalanceColumn, setSelectedBalanceColumn] = useState('');
+  const [isProcessingCsv, setIsProcessingCsv] = useState(false);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -152,10 +164,16 @@ export const Balance: React.FC<BalanceProps> = ({
     );
   }, [balances, searchTerm]);
 
-  // Grouping Logic
+  // Grouping Logic for Top Cards (Calculated System Balance)
   const positiveBalances = useMemo(() => filteredBalances.filter(c => c.balance > 0).sort((a,b) => b.balance - a.balance), [filteredBalances]);
   const zeroBalances = useMemo(() => filteredBalances.filter(c => c.balance === 0).sort((a,b) => a.name.localeCompare(b.name)), [filteredBalances]);
   const negativeBalances = useMemo(() => filteredBalances.filter(c => c.balance < 0).sort((a,b) => a.balance - b.balance), [filteredBalances]);
+
+  // Grouping Logic for Bottom Cards (Imported Balance)
+  const importedPositive = useMemo(() => filteredBalances.filter(c => (c.bankBalance || 0) > 0).sort((a,b) => (b.bankBalance || 0) - (a.bankBalance || 0)), [filteredBalances]);
+  const importedNegative = useMemo(() => filteredBalances.filter(c => (c.bankBalance || 0) < 0).sort((a,b) => (a.bankBalance || 0) - (b.bankBalance || 0)), [filteredBalances]);
+  const totalImportedPositive = importedPositive.reduce((acc, c) => acc + (c.bankBalance || 0), 0);
+  const totalImportedNegative = importedNegative.reduce((acc, c) => acc + (c.bankBalance || 0), 0);
 
   // Filter Log Items based on Sector, Search Term, and Profile
   const filteredLogItems = useMemo(() => {
@@ -197,6 +215,91 @@ export const Balance: React.FC<BalanceProps> = ({
 
   }, [events, adjustments, collaborators, currentUserAllowedSectors, searchTerm, currentUserProfile, userColabId]);
 
+  // --- CSV Handling Functions ---
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setCsvFile(file);
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+              const text = evt.target?.result as string;
+              const rows = text.split('\n').map(row => row.trim()).filter(row => row);
+              if (rows.length > 0) {
+                  // Detect delimiter (comma or semicolon)
+                  const firstRow = rows[0];
+                  const delimiter = firstRow.includes(';') ? ';' : ',';
+                  
+                  const headers = rows[0].split(delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
+                  const content = rows.slice(1).map(r => r.split(delimiter).map(c => c.trim().replace(/^"|"$/g, '')));
+                  
+                  setCsvHeaders(headers);
+                  setCsvContent(content);
+                  setIsImportModalOpen(true);
+                  
+                  // Auto-detect columns
+                  const idCol = headers.find(h => h.toLowerCase().includes('id') || h.toLowerCase().includes('matricula') || h.toLowerCase().includes('matrícula'));
+                  if (idCol) setSelectedIdColumn(idCol);
+                  
+                  const balCol = headers.find(h => h.toLowerCase().includes('saldo') || h.toLowerCase().includes('horas') || h.toLowerCase().includes('banco'));
+                  if (balCol) setSelectedBalanceColumn(balCol);
+              }
+          };
+          reader.readAsText(file);
+      }
+  };
+
+  const processImport = () => {
+      if (!selectedIdColumn || !selectedBalanceColumn) {
+          showToast('Selecione as colunas de ID e Saldo.', true);
+          return;
+      }
+
+      setIsProcessingCsv(true);
+      const idIdx = csvHeaders.indexOf(selectedIdColumn);
+      const balIdx = csvHeaders.indexOf(selectedBalanceColumn);
+      let successCount = 0;
+      let skippedCount = 0;
+      const now = new Date().toISOString();
+
+      const allowedIds = new Set(allowedCollaborators.map(c => c.colabId)); // ID (Matrícula) field
+
+      csvContent.forEach(row => {
+          if (row.length <= Math.max(idIdx, balIdx)) return;
+          const colabId = row[idIdx]; // Matrícula
+          let balanceValStr = row[balIdx];
+          
+          // Handle comma as decimal separator if needed
+          balanceValStr = balanceValStr.replace(',', '.');
+          const balanceVal = parseFloat(balanceValStr);
+
+          if (!colabId || isNaN(balanceVal)) {
+              skippedCount++;
+              return;
+          }
+
+          // Check permissions/hierarchy via allowedCollaborators
+          if (allowedIds.has(colabId)) {
+              // Find the collaborator object to get the Firestore document ID (which is different from colabId/Matrícula)
+              const targetColab = allowedCollaborators.find(c => c.colabId === colabId);
+              if (targetColab) {
+                  onUpdateCollaborator(targetColab.id, {
+                      bankBalance: balanceVal,
+                      lastBalanceImport: now
+                  });
+                  successCount++;
+              }
+          } else {
+              skippedCount++;
+          }
+      });
+
+      logAction('update', 'ajuste_saldo', `Importação CSV de Banco de Horas: ${successCount} atualizados, ${skippedCount} ignorados.`, currentUserName);
+      showToast(`Importação concluída: ${successCount} atualizados.`);
+      setIsProcessingCsv(false);
+      setIsImportModalOpen(false);
+      setCsvFile(null);
+  };
+
   return (
     <div className="space-y-8 animate-fadeIn">
       
@@ -204,7 +307,7 @@ export const Balance: React.FC<BalanceProps> = ({
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                  🏦 Banco de Horas
+                  🏦 Banco de Horas (Sistema)
                   {currentUserAllowedSectors.length > 0 && <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded">(Setor Filtrado)</span>}
               </h2>
           </div>
@@ -222,17 +325,17 @@ export const Balance: React.FC<BalanceProps> = ({
           </div>
       </div>
 
-      {/* Top 3 Boxes */}
+      {/* Top 3 Cards (Calculated) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
          
          {/* POSITIVE */}
-         <div className="bg-gradient-to-b from-white to-emerald-50/50 border border-emerald-100 rounded-xl shadow-lg flex flex-col h-[450px] overflow-hidden">
+         <div className="bg-gradient-to-b from-white to-emerald-50/50 border border-emerald-100 rounded-xl shadow-lg flex flex-col h-[350px] overflow-hidden">
             <div className="p-4 bg-emerald-100/80 border-b border-emerald-200 flex justify-between items-center">
                 <div>
                     <h3 className="text-emerald-900 font-bold flex items-center gap-2 text-lg">
                         🚀 Folguistas em Alta
                     </h3>
-                    <p className="text-emerald-700 text-xs">Saldo Positivo</p>
+                    <p className="text-emerald-700 text-xs">Saldo Calculado (Eventos)</p>
                 </div>
                 <span className="bg-white text-emerald-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
                     {positiveBalances.length}
@@ -244,9 +347,6 @@ export const Balance: React.FC<BalanceProps> = ({
                         <div className="flex flex-col flex-1 pr-2">
                             <span className="font-bold text-gray-800 text-sm leading-tight mb-0.5">{c.name}</span>
                             <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
-                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
-                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
-                            </span>
                         </div>
                         <div className="text-right">
                             <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold text-sm whitespace-nowrap">+{c.balance}</span>
@@ -258,13 +358,13 @@ export const Balance: React.FC<BalanceProps> = ({
          </div>
 
          {/* ZERO */}
-         <div className="bg-gradient-to-b from-white to-slate-50/50 border border-slate-200 rounded-xl shadow-lg flex flex-col h-[450px] overflow-hidden">
+         <div className="bg-gradient-to-b from-white to-slate-50/50 border border-slate-200 rounded-xl shadow-lg flex flex-col h-[350px] overflow-hidden">
             <div className="p-4 bg-slate-100/80 border-b border-slate-200 flex justify-between items-center">
                 <div>
                     <h3 className="text-slate-800 font-bold flex items-center gap-2 text-lg">
                         ⚖️ Zerados no Jogo
                     </h3>
-                    <p className="text-slate-600 text-xs">Saldo Neutro</p>
+                    <p className="text-slate-600 text-xs">Saldo Calculado (Eventos)</p>
                 </div>
                 <span className="bg-white text-slate-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
                     {zeroBalances.length}
@@ -276,9 +376,6 @@ export const Balance: React.FC<BalanceProps> = ({
                         <div className="flex flex-col flex-1 pr-2">
                             <span className="font-bold text-gray-700 text-sm leading-tight mb-0.5">{c.name}</span>
                             <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
-                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
-                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
-                            </span>
                         </div>
                         <div className="text-right">
                             <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded font-bold text-sm border border-slate-200 whitespace-nowrap">0</span>
@@ -290,13 +387,13 @@ export const Balance: React.FC<BalanceProps> = ({
          </div>
 
          {/* NEGATIVE */}
-         <div className="bg-gradient-to-b from-white to-rose-50/50 border border-rose-100 rounded-xl shadow-lg flex flex-col h-[450px] overflow-hidden">
+         <div className="bg-gradient-to-b from-white to-rose-50/50 border border-rose-100 rounded-xl shadow-lg flex flex-col h-[350px] overflow-hidden">
             <div className="p-4 bg-rose-100/80 border-b border-rose-200 flex justify-between items-center">
                 <div>
                     <h3 className="text-rose-900 font-bold flex items-center gap-2 text-lg">
                         📉 A Recuperar
                     </h3>
-                    <p className="text-rose-700 text-xs">Saldo Negativo</p>
+                    <p className="text-rose-700 text-xs">Saldo Calculado (Eventos)</p>
                 </div>
                 <span className="bg-white text-rose-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
                     {negativeBalances.length}
@@ -308,9 +405,6 @@ export const Balance: React.FC<BalanceProps> = ({
                         <div className="flex flex-col flex-1 pr-2">
                             <span className="font-bold text-gray-800 text-sm leading-tight mb-0.5">{c.name}</span>
                             <span className="text-[10px] text-gray-400 font-mono mb-1">ID: {c.colabId}</span>
-                            <span className="text-[10px] text-gray-500 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 inline-block w-fit">
-                                Ganho: {c.totalGained} | Usado: {c.totalUsed} | Ajustes: {c.totalAdjusted}
-                            </span>
                         </div>
                         <div className="text-right">
                             <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold text-sm whitespace-nowrap">{c.balance}</span>
@@ -326,7 +420,7 @@ export const Balance: React.FC<BalanceProps> = ({
         {/* Card Lançamento Manual */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col">
            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-               📝 Lançamento Manual
+               📝 Lançamento Manual (Ajuste)
            </h2>
            {canCreate ? (
            <form onSubmit={handleAdjustmentSubmit} className="space-y-4 flex-1">
@@ -496,6 +590,168 @@ export const Balance: React.FC<BalanceProps> = ({
             </div>
         </div>
       </div>
+
+      {/* --- NOVO FLUXO DE CONTROLE (IMPORTAÇÃO E CARDS) --- */}
+      {canCreate && (
+          <div className="border-t border-gray-200 pt-8">
+              <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                      📥 Controle de Saldo (Importação Oficial)
+                  </h2>
+                  
+                  <div className="relative">
+                      <input 
+                          type="file" 
+                          accept=".csv"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <button className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                          Importar CSV
+                      </button>
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Imported Positive Balance Card */}
+                  <div className="bg-white rounded-xl shadow-lg border border-emerald-100 flex flex-col h-[400px] overflow-hidden">
+                      <div className="p-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
+                          <div>
+                              <h3 className="text-emerald-800 font-bold flex items-center gap-2">
+                                  <span>📈</span> Saldo Positivo (Oficial)
+                              </h3>
+                              <p className="text-[10px] text-emerald-600">Baseado na última importação</p>
+                          </div>
+                          <span className="bg-emerald-600 text-white px-3 py-1 rounded-lg text-sm font-bold shadow-sm">
+                              Total: +{totalImportedPositive.toFixed(2)}h
+                          </span>
+                      </div>
+                      
+                      <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                          <table className="w-full text-sm text-left">
+                              <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0">
+                                  <tr>
+                                      <th className="px-3 py-2">ID</th>
+                                      <th className="px-3 py-2">Nome</th>
+                                      <th className="px-3 py-2 text-right">Horas</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                  {importedPositive.map(c => (
+                                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                                          <td className="px-3 py-2 font-mono text-gray-500 text-xs">{c.colabId}</td>
+                                          <td className="px-3 py-2 font-bold text-gray-800 truncate max-w-[150px]">{c.name}</td>
+                                          <td className="px-3 py-2 text-right font-bold text-emerald-600">+{c.bankBalance}</td>
+                                      </tr>
+                                  ))}
+                                  {importedPositive.length === 0 && (
+                                      <tr><td colSpan={3} className="text-center py-4 text-gray-400 italic">Nenhum saldo positivo importado.</td></tr>
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>
+                      <div className="bg-gray-50 p-2 text-[10px] text-center text-gray-400 border-t border-gray-100">
+                          {importedPositive[0]?.lastBalanceImport ? `Última atualização: ${new Date(importedPositive[0].lastBalanceImport).toLocaleString()}` : 'Sem dados de importação'}
+                      </div>
+                  </div>
+
+                  {/* Imported Negative Balance Card */}
+                  <div className="bg-white rounded-xl shadow-lg border border-rose-100 flex flex-col h-[400px] overflow-hidden">
+                      <div className="p-4 bg-rose-50 border-b border-rose-100 flex justify-between items-center">
+                          <div>
+                              <h3 className="text-rose-800 font-bold flex items-center gap-2">
+                                  <span>📉</span> Saldo Negativo (Oficial)
+                              </h3>
+                              <p className="text-[10px] text-rose-600">Baseado na última importação</p>
+                          </div>
+                          <span className="bg-rose-600 text-white px-3 py-1 rounded-lg text-sm font-bold shadow-sm">
+                              Total: {totalImportedNegative.toFixed(2)}h
+                          </span>
+                      </div>
+                      
+                      <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                          <table className="w-full text-sm text-left">
+                              <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0">
+                                  <tr>
+                                      <th className="px-3 py-2">ID</th>
+                                      <th className="px-3 py-2">Nome</th>
+                                      <th className="px-3 py-2 text-right">Horas</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                  {importedNegative.map(c => (
+                                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                                          <td className="px-3 py-2 font-mono text-gray-500 text-xs">{c.colabId}</td>
+                                          <td className="px-3 py-2 font-bold text-gray-800 truncate max-w-[150px]">{c.name}</td>
+                                          <td className="px-3 py-2 text-right font-bold text-rose-600">{c.bankBalance}</td>
+                                      </tr>
+                                  ))}
+                                  {importedNegative.length === 0 && (
+                                      <tr><td colSpan={3} className="text-center py-4 text-gray-400 italic">Nenhum saldo negativo importado.</td></tr>
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>
+                      <div className="bg-gray-50 p-2 text-[10px] text-center text-gray-400 border-t border-gray-100">
+                          {importedNegative[0]?.lastBalanceImport ? `Última atualização: ${new Date(importedNegative[0].lastBalanceImport).toLocaleString()}` : 'Sem dados de importação'}
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* CSV Mapping Modal */}
+      <Modal 
+        isOpen={isImportModalOpen} 
+        onClose={() => setIsImportModalOpen(false)} 
+        title="Mapeamento de Importação CSV"
+      >
+          <div className="space-y-6">
+              <p className="text-sm text-gray-600">Selecione quais colunas do seu arquivo correspondem aos dados necessários. Assegure-se de que a coluna ID corresponda à Matrícula do funcionário.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Coluna ID (Matrícula)</label>
+                      <select 
+                        className="w-full border border-gray-300 rounded p-2"
+                        value={selectedIdColumn}
+                        onChange={e => setSelectedIdColumn(e.target.value)}
+                      >
+                          <option value="">Selecione...</option>
+                          {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                  </div>
+                  <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Coluna Saldo/Horas</label>
+                      <select 
+                        className="w-full border border-gray-300 rounded p-2"
+                        value={selectedBalanceColumn}
+                        onChange={e => setSelectedBalanceColumn(e.target.value)}
+                      >
+                          <option value="">Selecione...</option>
+                          {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                  </div>
+              </div>
+
+              <div className="bg-amber-50 p-4 rounded border border-amber-200 text-xs text-amber-800">
+                  ⚠️ <strong>Atenção:</strong> Esta ação substituirá o "Saldo Oficial" dos colaboradores listados. O saldo calculado via eventos permanecerá visível nos cards superiores, mas este valor importado será a referência oficial nestes novos cards. Apenas colaboradores sob sua gestão serão atualizados.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                  <button onClick={() => setIsImportModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+                  <button 
+                    onClick={processImport} 
+                    disabled={isProcessingCsv}
+                    className="bg-indigo-600 text-white px-6 py-2 rounded font-bold hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                      {isProcessingCsv ? 'Processando...' : 'Confirmar Importação'}
+                  </button>
+              </div>
+          </div>
+      </Modal>
+
     </div>
   );
 };

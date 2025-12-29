@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus, Schedule, DaySchedule } from '../types';
 import { generateUUID, calculateDaysBetween, formatDate, promptForUser, buildApprovalChain } from '../utils/helpers';
@@ -509,6 +510,7 @@ export const Events: React.FC<EventsProps> = ({
                         status: formData.status, // Admin defines status directly
                         schedule: finalSchedule, 
                         createdAt: new Date().toISOString()
+                        // createdBy is handled by App.tsx
                     };
                     count++;
                     return Promise.resolve(onAdd(newEvent));
@@ -563,6 +565,7 @@ export const Events: React.FC<EventsProps> = ({
                 approverChain,
                 currentApproverId,
                 createdAt: new Date().toISOString()
+                // createdBy is handled by App.tsx
             };
             
             await Promise.resolve(onAdd(newEvent));
@@ -1116,7 +1119,11 @@ export const Events: React.FC<EventsProps> = ({
                         )}
                     </div>
                     {e.observation && <div className="text-xs text-gray-500 italic mt-1 bg-white/50 p-1 rounded inline-block">Obs: {e.observation}</div>}
-                    {e.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Modificado por: {e.updatedBy}</div>}
+                    
+                    <div className="flex flex-wrap gap-2 mt-1">
+                        {e.updatedBy && <div className="text-[10px] text-gray-400">Modificado por: {e.updatedBy}</div>}
+                        {e.createdBy && <div className="text-[10px] text-gray-400 border-l pl-2 ml-1">Lançado por: {e.createdBy} em {new Date(e.createdAt).toLocaleDateString()} {new Date(e.createdAt).toLocaleTimeString()}</div>}
+                    </div>
                 </div>
                 
                 <div className="flex gap-2 mt-3 md:mt-0">

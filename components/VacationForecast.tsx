@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Collaborator, VacationRequest, VacationStatus, UserProfile } from '../types';
 import { generateUUID, formatDate } from '../utils/helpers';
@@ -195,6 +196,7 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
         notes: formData.notes,
         createdAt: new Date().toISOString(),
         updatedBy: user
+        // createdBy handled in App.tsx
       };
       onAdd(newReq);
       
@@ -383,7 +385,10 @@ export const VacationForecast: React.FC<VacationForecastProps> = ({
                     {formatDate(r.startDate)} até {formatDate(r.endDate)}
                   </div>
                   {r.notes && <div className="text-xs text-gray-500 italic mt-1">Obs: {r.notes}</div>}
-                  {r.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Atualizado por: {r.updatedBy}</div>}
+                  <div className="flex flex-wrap gap-2 mt-1">
+                      {r.updatedBy && <div className="text-[10px] text-gray-400">Atualizado por: {r.updatedBy}</div>}
+                      {r.createdBy && <div className="text-[10px] text-gray-400 border-l pl-2 ml-1">Lançado por: {r.createdBy} em {new Date(r.createdAt).toLocaleDateString()} {new Date(r.createdAt).toLocaleTimeString()}</div>}
+                  </div>
                 </div>
                 
                 <div className="flex gap-2 mt-3 md:mt-0">

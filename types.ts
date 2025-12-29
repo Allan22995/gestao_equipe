@@ -64,6 +64,9 @@ export interface Collaborator {
   createdAt: string;
   active?: boolean;
   leaderId?: string;
+  // NOVO: Controle de Saldo Importado
+  bankBalance?: number;
+  lastBalanceImport?: string;
 }
 
 export type EventBehavior = 'neutral' | 'debit' | 'credit_1x' | 'credit_2x';
@@ -141,6 +144,7 @@ export interface EventRecord {
   collaboratorAcceptedProposal?: boolean;
   schedule?: Schedule; // NOVO: Escala temporária para este evento
   createdAt: string;
+  createdBy?: string; // NOVO: Quem criou
   updatedBy?: string;
   lastUpdatedAt?: string;
   
@@ -159,6 +163,7 @@ export interface OnCallRecord {
   endTime: string;
   observation: string;
   createdAt: string;
+  createdBy?: string; // NOVO
   updatedBy?: string;
   lastUpdatedAt?: string;
 }
@@ -183,6 +188,7 @@ export interface VacationRequest {
   notes: string;
   collaboratorAcceptedProposal?: boolean;
   createdAt: string;
+  createdBy?: string; // NOVO
   updatedBy?: string;
   lastUpdatedAt?: string;
 }

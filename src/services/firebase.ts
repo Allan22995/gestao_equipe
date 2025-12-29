@@ -1,1 +1,0 @@
-// Este arquivo deve ser removido. O firebase.ts correto está em services/firebase.ts na raiz.

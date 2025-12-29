@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Collaborator, OnCallRecord, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatDate, promptForUser } from '../utils/helpers';
@@ -109,6 +110,7 @@ export const OnCall: React.FC<OnCallProps> = ({
         id: generateUUID(),
         ...formData,
         createdAt: new Date().toISOString()
+        // createdBy injected by App.tsx
       };
       onAdd(newRecord);
       showToast('Plantão registrado!');
@@ -300,7 +302,10 @@ export const OnCall: React.FC<OnCallProps> = ({
                     {formatDate(o.startDate)} - {formatDate(o.endDate)} | {o.startTime} às {o.endTime}
                   </div>
                   {o.observation && <div className="text-xs text-gray-400 italic mt-1">{o.observation}</div>}
-                  {o.updatedBy && <div className="text-[10px] text-gray-400 mt-1">Modificado por: {o.updatedBy}</div>}
+                  <div className="flex flex-wrap gap-2 mt-1">
+                      {o.updatedBy && <div className="text-[10px] text-gray-400">Modificado por: {o.updatedBy}</div>}
+                      {o.createdBy && <div className="text-[10px] text-gray-400 border-l pl-2 ml-1">Lançado por: {o.createdBy} em {new Date(o.createdAt).toLocaleDateString()} {new Date(o.createdAt).toLocaleTimeString()}</div>}
+                  </div>
                </div>
                
                <div className="flex gap-2 mt-3 md:mt-0">
