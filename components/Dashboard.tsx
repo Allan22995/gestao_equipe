@@ -652,66 +652,71 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const sortOrderWeek = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
 
-  // --- COMPONENTE VISUAL DO CARD DE HORAS (Donut Chart) ---
+  // --- COMPONENTE VISUAL DO CARD DE HORAS (Design Melhorado) ---
   const HoursCard = ({ positive, negative }: { positive: number, negative: number }) => {
       const balance = positive - negative;
       const totalVolume = positive + negative;
       
-      // Calculate percentages for the chart
-      // We want to show the ratio of positive to negative hours in the ring if there is data.
+      // Porcentagem para o gráfico
       const posPercent = totalVolume > 0 ? (positive / totalVolume) * 100 : 0;
       
-      // Gradient: Green segment, then Red segment
-      // conic-gradient(green 0% X%, red X% 100%)
+      // Cores e Gradiente
       const gradient = totalVolume > 0 
           ? `conic-gradient(#10b981 0% ${posPercent}%, #f43f5e ${posPercent}% 100%)`
-          : '#e5e7eb'; // gray-200 if empty
+          : '#e5e7eb'; // cinza se zerado
 
       const balanceColor = balance > 0 ? 'text-emerald-600' : balance < 0 ? 'text-rose-600' : 'text-gray-500';
       const balanceSign = balance > 0 ? '+' : '';
 
       return (
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 flex flex-col justify-between h-full relative overflow-hidden group hover:shadow-xl transition-shadow">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-5 flex flex-col justify-between h-full relative overflow-hidden group hover:shadow-xl transition-shadow w-full">
               
               {/* Header */}
-              <div className="flex justify-between items-start z-10 mb-2">
-                  <div>
-                      <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Banco de Horas</h3>
-                      <div className="flex items-center gap-1 group/info cursor-help" title="Dados importados de planilha oficial">
-                        <p className="text-[10px] text-gray-400">Saldo acumulado (Time)</p>
-                        <svg className="w-3 h-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <div className="flex justify-between items-center z-10 mb-3">
+                  <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-gray-50 rounded-lg">
+                        <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                       </div>
+                      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Banco de Horas</h3>
+                  </div>
+                  <div className="cursor-help group/info" title="Dados importados da planilha oficial">
+                      <svg className="w-4 h-4 text-gray-300 hover:text-indigo-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </div>
               </div>
 
-              {/* Chart & Center Value */}
-              <div className="flex items-center justify-center py-2 relative z-10 flex-1">
-                  {/* Outer Circle (Chart) */}
-                  <div className="w-28 h-28 rounded-full relative shadow-sm transition-all duration-500" style={{ background: gradient }}>
-                      {/* Inner Circle (Hole) */}
-                      <div className="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
-                          <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Saldo</span>
-                          <span className={`text-xl font-extrabold ${balanceColor} tracking-tight`}>
+              <div className="flex items-center gap-4 flex-1">
+                  {/* Left: Donut Chart */}
+                  <div className="relative w-24 h-24 shrink-0">
+                      {/* Ring */}
+                      <div className="w-full h-full rounded-full shadow-sm" style={{ background: gradient }}></div>
+                      {/* Center Hole & Value */}
+                      <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
+                          <span className={`text-sm font-extrabold ${balanceColor}`}>
                               {balanceSign}{decimalToTime(balance)}
                           </span>
+                          <span className="text-[9px] text-gray-400 font-bold uppercase mt-[-2px]">Saldo</span>
                       </div>
                   </div>
-              </div>
 
-              {/* Footer Badges */}
-              <div className="grid grid-cols-2 gap-2 mt-2 z-10">
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2 flex flex-col items-center justify-center">
-                      <span className="text-[10px] uppercase font-bold text-emerald-800 opacity-70">Créditos</span>
-                      <span className="text-sm font-bold text-emerald-600">+{decimalToTime(positive)}</span>
-                  </div>
-                  <div className="bg-rose-50 border border-rose-100 rounded-lg p-2 flex flex-col items-center justify-center">
-                      <span className="text-[10px] uppercase font-bold text-rose-800 opacity-70">Débitos</span>
-                      <span className="text-sm font-bold text-rose-600">-{decimalToTime(negative)}</span>
+                  {/* Right: Breakdown Badges */}
+                  <div className="flex flex-col gap-2 flex-1">
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-1.5 flex justify-between items-center group/badge">
+                          <div className="flex flex-col">
+                              <span className="text-[9px] uppercase font-bold text-emerald-800 opacity-70">Créditos</span>
+                              <span className="text-sm font-bold text-emerald-600">+{decimalToTime(positive)}</span>
+                          </div>
+                      </div>
+                      <div className="bg-rose-50 border border-rose-100 rounded-lg px-3 py-1.5 flex justify-between items-center group/badge">
+                          <div className="flex flex-col">
+                              <span className="text-[9px] uppercase font-bold text-rose-800 opacity-70">Débitos</span>
+                              <span className="text-sm font-bold text-rose-600">-{decimalToTime(negative)}</span>
+                          </div>
+                      </div>
                   </div>
               </div>
               
-              {/* Decorative Background */}
-              <div className="absolute -top-6 -right-6 w-24 h-24 bg-gray-50 rounded-full opacity-50 z-0 pointer-events-none"></div>
+              {/* Background Glow */}
+              <div className={`absolute -bottom-10 -right-10 w-32 h-32 rounded-full opacity-10 blur-2xl z-0 pointer-events-none ${balance >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}></div>
           </div>
       );
   };
@@ -772,42 +777,42 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Cards de Status (Clickable) + Hours Card */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${showHoursCard ? '4' : '3'} gap-6`}>
+      {/* Cards de Status (Clickable) + Hours Card - SIDE BY SIDE LAYOUT */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-${showHoursCard ? '4' : '3'} gap-6`}>
         <button 
           onClick={() => setActiveStatFilter('total')}
-          className={`text-left w-full bg-emerald-500 rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none ${activeStatFilter === 'total' ? 'ring-4 ring-offset-2 ring-emerald-500' : ''}`}
+          className={`text-left w-full bg-emerald-500 rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[160px] flex flex-col justify-between ${activeStatFilter === 'total' ? 'ring-4 ring-offset-2 ring-emerald-500' : ''}`}
         >
           <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
             <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
           </div>
-          <p className="text-emerald-100 font-bold uppercase text-xs tracking-wider">TOTAL (FILTRADO)</p>
-          <p className="text-5xl font-bold mt-2">{stats.total}</p>
+          <p className="text-emerald-100 font-bold uppercase text-xs tracking-wider z-10">TOTAL (FILTRADO)</p>
+          <p className="text-5xl font-bold mt-2 z-10">{stats.total}</p>
         </button>
 
         <button 
           onClick={() => setActiveStatFilter('active')}
-          className={`text-left w-full bg-[#667eea] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none ${activeStatFilter === 'active' ? 'ring-4 ring-offset-2 ring-[#667eea]' : ''}`}
+          className={`text-left w-full bg-[#667eea] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[160px] flex flex-col justify-between ${activeStatFilter === 'active' ? 'ring-4 ring-offset-2 ring-[#667eea]' : ''}`}
         >
            <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
             <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path></svg>
           </div>
-          <p className="text-blue-100 font-bold uppercase text-xs tracking-wider">TRABALHANDO AGORA</p>
-          <p className="text-5xl font-bold mt-2">{stats.active}</p>
+          <p className="text-blue-100 font-bold uppercase text-xs tracking-wider z-10">TRABALHANDO AGORA</p>
+          <p className="text-5xl font-bold mt-2 z-10">{stats.active}</p>
         </button>
 
         <button 
           onClick={() => setActiveStatFilter('inactive')}
-          className={`text-left w-full bg-[#ff8c00] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none ${activeStatFilter === 'inactive' ? 'ring-4 ring-offset-2 ring-[#ff8c00]' : ''}`}
+          className={`text-left w-full bg-[#ff8c00] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[160px] flex flex-col justify-between ${activeStatFilter === 'inactive' ? 'ring-4 ring-offset-2 ring-[#ff8c00]' : ''}`}
         >
            <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
              <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd"></path></svg>
           </div>
-          <p className="text-orange-100 font-bold uppercase text-xs tracking-wider">AUSENTES / FOLGA / FÉRIAS</p>
-          <p className="text-5xl font-bold mt-2">{stats.inactive}</p>
+          <p className="text-orange-100 font-bold uppercase text-xs tracking-wider z-10">AUSENTES / FOLGA / FÉRIAS</p>
+          <p className="text-5xl font-bold mt-2 z-10">{stats.inactive}</p>
         </button>
 
-        {/* HOURS CARD - Conditional Render */}
+        {/* HOURS CARD - Conditional Render - Fits in the grid row */}
         {showHoursCard && (
             <HoursCard positive={teamHours.positive} negative={teamHours.negative} />
         )}
