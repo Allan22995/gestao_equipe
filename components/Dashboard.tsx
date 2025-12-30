@@ -654,49 +654,64 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // --- COMPONENTE VISUAL DO CARD DE HORAS (Donut Chart) ---
   const HoursCard = ({ positive, negative }: { positive: number, negative: number }) => {
-      const total = positive + negative;
-      // Prevent division by zero
-      const posPercent = total > 0 ? (positive / total) * 100 : 50; 
+      const balance = positive - negative;
+      const totalVolume = positive + negative;
       
-      // Conic Gradient for Donut Chart
-      const gradient = `conic-gradient(#10b981 0% ${posPercent}%, #f43f5e ${posPercent}% 100%)`;
+      // Calculate percentages for the chart
+      // We want to show the ratio of positive to negative hours in the ring if there is data.
+      const posPercent = totalVolume > 0 ? (positive / totalVolume) * 100 : 0;
+      
+      // Gradient: Green segment, then Red segment
+      // conic-gradient(green 0% X%, red X% 100%)
+      const gradient = totalVolume > 0 
+          ? `conic-gradient(#10b981 0% ${posPercent}%, #f43f5e ${posPercent}% 100%)`
+          : '#e5e7eb'; // gray-200 if empty
+
+      const balanceColor = balance > 0 ? 'text-emerald-600' : balance < 0 ? 'text-rose-600' : 'text-gray-500';
+      const balanceSign = balance > 0 ? '+' : '';
 
       return (
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col justify-between h-full relative overflow-hidden group">
-              <div className="flex justify-between items-start z-10">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 flex flex-col justify-between h-full relative overflow-hidden group hover:shadow-xl transition-shadow">
+              
+              {/* Header */}
+              <div className="flex justify-between items-start z-10 mb-2">
                   <div>
-                      <h3 className="text-lg font-bold text-gray-800">Banco de Horas</h3>
-                      <p className="text-xs text-gray-500">Saldo acumulado do time (Importado)</p>
-                  </div>
-                  <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  </div>
-              </div>
-
-              <div className="flex items-center justify-center py-4 relative z-10">
-                  {/* Outer Circle (Chart) */}
-                  <div className="w-32 h-32 rounded-full relative shadow-inner" style={{ background: total > 0 ? gradient : '#e5e7eb' }}>
-                      {/* Inner Circle (Hole) */}
-                      <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
-                          <span className="text-[10px] uppercase font-bold text-gray-400">Total</span>
-                          <span className="text-lg font-bold text-gray-800">{decimalToTime(positive - negative)}</span>
+                      <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Banco de Horas</h3>
+                      <div className="flex items-center gap-1 group/info cursor-help" title="Dados importados de planilha oficial">
+                        <p className="text-[10px] text-gray-400">Saldo acumulado (Time)</p>
+                        <svg className="w-3 h-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                       </div>
                   </div>
               </div>
 
-              <div className="flex justify-between items-end gap-2 text-xs z-10">
-                  <div className="bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-lg border border-emerald-100 flex-1 text-center">
-                      <div className="font-bold text-lg text-emerald-600">+{decimalToTime(positive)}</div>
-                      <div className="uppercase tracking-wider text-[9px] font-bold">Positivas</div>
+              {/* Chart & Center Value */}
+              <div className="flex items-center justify-center py-2 relative z-10 flex-1">
+                  {/* Outer Circle (Chart) */}
+                  <div className="w-28 h-28 rounded-full relative shadow-sm transition-all duration-500" style={{ background: gradient }}>
+                      {/* Inner Circle (Hole) */}
+                      <div className="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Saldo</span>
+                          <span className={`text-xl font-extrabold ${balanceColor} tracking-tight`}>
+                              {balanceSign}{decimalToTime(balance)}
+                          </span>
+                      </div>
                   </div>
-                  <div className="bg-rose-50 text-rose-800 px-3 py-1.5 rounded-lg border border-rose-100 flex-1 text-center">
-                      <div className="font-bold text-lg text-rose-600">-{decimalToTime(negative)}</div>
-                      <div className="uppercase tracking-wider text-[9px] font-bold">Negativas</div>
+              </div>
+
+              {/* Footer Badges */}
+              <div className="grid grid-cols-2 gap-2 mt-2 z-10">
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2 flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold text-emerald-800 opacity-70">Créditos</span>
+                      <span className="text-sm font-bold text-emerald-600">+{decimalToTime(positive)}</span>
+                  </div>
+                  <div className="bg-rose-50 border border-rose-100 rounded-lg p-2 flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold text-rose-800 opacity-70">Débitos</span>
+                      <span className="text-sm font-bold text-rose-600">-{decimalToTime(negative)}</span>
                   </div>
               </div>
               
-              {/* Background Decoration */}
-              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-50 rounded-full opacity-50 z-0 pointer-events-none"></div>
+              {/* Decorative Background */}
+              <div className="absolute -top-6 -right-6 w-24 h-24 bg-gray-50 rounded-full opacity-50 z-0 pointer-events-none"></div>
           </div>
       );
   };
