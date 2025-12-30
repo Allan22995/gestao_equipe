@@ -652,75 +652,62 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const sortOrderWeek = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
 
-  // --- COMPONENTE VISUAL DO CARD DE HORAS (Design Melhorado) ---
+  // --- COMPONENTE VISUAL DO CARD DE HORAS (Design Melhorado e Compacto) ---
   const HoursCard = ({ positive, negative }: { positive: number, negative: number }) => {
       const balance = positive - negative;
       const totalVolume = positive + negative;
       
-      // Porcentagem para o gráfico
       const posPercent = totalVolume > 0 ? (positive / totalVolume) * 100 : 0;
       
-      // Cores e Gradiente
       const gradient = totalVolume > 0 
           ? `conic-gradient(#10b981 0% ${posPercent}%, #f43f5e ${posPercent}% 100%)`
-          : '#e5e7eb'; // cinza se zerado
+          : '#e5e7eb';
 
       const balanceColor = balance > 0 ? 'text-emerald-600' : balance < 0 ? 'text-rose-600' : 'text-gray-500';
       const balanceSign = balance > 0 ? '+' : '';
 
       return (
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-5 flex flex-col justify-between h-full relative overflow-hidden group hover:shadow-xl transition-shadow w-full">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 flex flex-col justify-between h-full relative overflow-hidden group hover:shadow-xl transition-shadow w-full min-h-[130px]">
               
-              {/* Header */}
-              <div className="flex justify-between items-center z-10 mb-3">
+              <div className="flex justify-between items-center z-10 mb-2">
                   <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-gray-50 rounded-lg">
-                        <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      </div>
-                      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Banco de Horas</h3>
+                      <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Banco de Horas</h3>
                   </div>
                   <div className="cursor-help group/info relative">
-                      <svg className="w-4 h-4 text-gray-300 hover:text-indigo-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      {/* Tooltip */}
-                      <div className="absolute right-0 top-6 w-48 bg-gray-800 text-white text-[10px] p-2 rounded shadow-lg opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none z-20">
-                          Saldo acumulado importado do sistema de ponto oficial.
+                      <svg className="w-3 h-3 text-gray-300 hover:text-indigo-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <div className="absolute right-0 top-6 w-40 bg-gray-800 text-white text-[9px] p-2 rounded shadow-lg opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none z-20">
+                          Saldo importado do sistema.
                       </div>
                   </div>
               </div>
 
-              <div className="flex items-center gap-4 flex-1">
-                  {/* Left: Donut Chart */}
-                  <div className="relative w-24 h-24 shrink-0">
-                      {/* Ring */}
+              <div className="flex items-center gap-3 flex-1">
+                  {/* Smaller Donut */}
+                  <div className="relative w-20 h-20 shrink-0">
                       <div className="w-full h-full rounded-full shadow-sm" style={{ background: gradient }}></div>
-                      {/* Center Hole & Value */}
-                      <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
-                          <span className={`text-sm font-extrabold ${balanceColor}`}>
+                      <div className="absolute inset-1.5 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
+                          <span className={`text-sm font-extrabold ${balanceColor} leading-none`}>
                               {balanceSign}{decimalToTime(balance)}
                           </span>
-                          <span className="text-[9px] text-gray-400 font-bold uppercase mt-[-2px]">Saldo</span>
                       </div>
                   </div>
 
                   {/* Right: Breakdown Badges */}
-                  <div className="flex flex-col gap-2 flex-1">
-                      <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-1.5 flex justify-between items-center group/badge">
+                  <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                      <div className="bg-emerald-50 border border-emerald-100 rounded px-2 py-1 flex justify-between items-center">
                           <div className="flex flex-col">
-                              <span className="text-[9px] uppercase font-bold text-emerald-800 opacity-70">Créditos</span>
-                              <span className="text-sm font-bold text-emerald-600">+{decimalToTime(positive)}</span>
+                              <span className="text-[8px] uppercase font-bold text-emerald-800 opacity-70">Créditos</span>
+                              <span className="text-xs font-bold text-emerald-600">+{decimalToTime(positive)}</span>
                           </div>
                       </div>
-                      <div className="bg-rose-50 border border-rose-100 rounded-lg px-3 py-1.5 flex justify-between items-center group/badge">
+                      <div className="bg-rose-50 border border-rose-100 rounded px-2 py-1 flex justify-between items-center">
                           <div className="flex flex-col">
-                              <span className="text-[9px] uppercase font-bold text-rose-800 opacity-70">Débitos</span>
-                              <span className="text-sm font-bold text-rose-600">-{decimalToTime(negative)}</span>
+                              <span className="text-[8px] uppercase font-bold text-rose-800 opacity-70">Débitos</span>
+                              <span className="text-xs font-bold text-rose-600">-{decimalToTime(negative)}</span>
                           </div>
                       </div>
                   </div>
               </div>
-              
-              {/* Background Glow */}
-              <div className={`absolute -bottom-10 -right-10 w-32 h-32 rounded-full opacity-10 blur-2xl z-0 pointer-events-none ${balance >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}></div>
           </div>
       );
   };
@@ -781,39 +768,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Cards de Status (Clickable) + Hours Card - SIDE BY SIDE LAYOUT */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-${showHoursCard ? '4' : '3'} gap-6`}>
+      {/* Cards de Status (Clickable) + Hours Card - Compact Grid */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${showHoursCard ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
         <button 
           onClick={() => setActiveStatFilter('total')}
-          className={`text-left w-full bg-emerald-500 rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[160px] flex flex-col justify-between ${activeStatFilter === 'total' ? 'ring-4 ring-offset-2 ring-emerald-500' : ''}`}
+          className={`text-left w-full bg-emerald-500 rounded-xl shadow-lg p-4 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[130px] flex flex-col justify-between ${activeStatFilter === 'total' ? 'ring-4 ring-offset-2 ring-emerald-500' : ''}`}
         >
           <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
-            <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+            <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
           </div>
-          <p className="text-emerald-100 font-bold uppercase text-xs tracking-wider z-10">TOTAL (FILTRADO)</p>
-          <p className="text-5xl font-bold mt-2 z-10">{stats.total}</p>
+          <p className="text-emerald-100 font-bold uppercase text-[10px] tracking-wider z-10">TOTAL (FILTRADO)</p>
+          <p className="text-4xl font-bold mt-1 z-10">{stats.total}</p>
         </button>
 
         <button 
           onClick={() => setActiveStatFilter('active')}
-          className={`text-left w-full bg-[#667eea] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[160px] flex flex-col justify-between ${activeStatFilter === 'active' ? 'ring-4 ring-offset-2 ring-[#667eea]' : ''}`}
+          className={`text-left w-full bg-[#667eea] rounded-xl shadow-lg p-4 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[130px] flex flex-col justify-between ${activeStatFilter === 'active' ? 'ring-4 ring-offset-2 ring-[#667eea]' : ''}`}
         >
            <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
-            <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path></svg>
+            <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path></svg>
           </div>
-          <p className="text-blue-100 font-bold uppercase text-xs tracking-wider z-10">TRABALHANDO AGORA</p>
-          <p className="text-5xl font-bold mt-2 z-10">{stats.active}</p>
+          <p className="text-blue-100 font-bold uppercase text-[10px] tracking-wider z-10">TRABALHANDO AGORA</p>
+          <p className="text-4xl font-bold mt-1 z-10">{stats.active}</p>
         </button>
 
         <button 
           onClick={() => setActiveStatFilter('inactive')}
-          className={`text-left w-full bg-[#ff8c00] rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[160px] flex flex-col justify-between ${activeStatFilter === 'inactive' ? 'ring-4 ring-offset-2 ring-[#ff8c00]' : ''}`}
+          className={`text-left w-full bg-[#ff8c00] rounded-xl shadow-lg p-4 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none h-full min-h-[130px] flex flex-col justify-between ${activeStatFilter === 'inactive' ? 'ring-4 ring-offset-2 ring-[#ff8c00]' : ''}`}
         >
            <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
-             <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd"></path></svg>
+             <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd"></path></svg>
           </div>
-          <p className="text-orange-100 font-bold uppercase text-xs tracking-wider z-10">AUSENTES / FOLGA / FÉRIAS</p>
-          <p className="text-5xl font-bold mt-2 z-10">{stats.inactive}</p>
+          <p className="text-orange-100 font-bold uppercase text-[10px] tracking-wider z-10">AUSENTES / FOLGA / FÉRIAS</p>
+          <p className="text-4xl font-bold mt-1 z-10">{stats.inactive}</p>
         </button>
 
         {/* HOURS CARD - Conditional Render - Fits in the grid row */}
