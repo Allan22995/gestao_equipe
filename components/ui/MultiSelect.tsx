@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 
 interface MultiSelectProps {
@@ -61,19 +60,19 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
   };
 
   return (
-    <div className="relative w-full" ref={dropdownRef}>
+    <div className="relative" ref={dropdownRef}>
       <label className="text-xs font-semibold text-gray-500 block mb-1">{label}</label>
       <button
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`w-full border rounded-md p-2 text-sm bg-white text-left flex justify-between items-center focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all ${
+        className={`w-full border rounded-md p-1.5 text-sm bg-white text-left flex justify-between items-center focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all ${
           disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'border-gray-300 text-gray-700'
         } ${isOpen ? 'ring-2 ring-indigo-500 border-transparent' : ''}`}
       >
-        <span className="truncate block mr-2 flex-1">{getButtonLabel()}</span>
+        <span className="truncate block mr-2">{getButtonLabel()}</span>
         <svg 
-          className={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} 
+          className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -83,12 +82,12 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
       </button>
 
       {isOpen && !disabled && (
-        <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 rounded-md shadow-2xl max-h-[40vh] overflow-hidden animate-fadeIn flex flex-col">
-          <div className="p-2 border-b border-gray-100 bg-gray-50 shrink-0">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-hidden animate-fadeIn flex flex-col">
+          <div className="p-2 border-b border-gray-100 bg-gray-50">
             <input 
               type="text" 
               placeholder="Buscar..." 
-              className="w-full border border-gray-300 rounded px-2 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs outline-none focus:border-indigo-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               autoFocus

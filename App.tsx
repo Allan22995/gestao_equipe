@@ -53,7 +53,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   
   // Controle do Menu Lateral
-  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   // Data States
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -72,19 +72,6 @@ function App() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
-
-  // Responsive Sidebar: Close on resize if small screen
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Data Subscriptions
@@ -168,14 +155,6 @@ function App() {
 
   const handleLogout = async () => {
     await signOut(auth);
-  };
-
-  const handleTabChange = (tab: TabType) => {
-      setActiveTab(tab);
-      // No mobile, fecha o menu ao selecionar
-      if (window.innerWidth < 1024) {
-          setIsSidebarOpen(false);
-      }
   };
 
   const showToast = (msg: string, isError = false) => {
@@ -347,21 +326,12 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-900 flex overflow-hidden">
-       {/* MENU LATERAL - Responsivo */}
-       {/* Overlay para Mobile */}
-       {isSidebarOpen && (
-         <div 
-           className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
-           onClick={() => setIsSidebarOpen(false)}
-         ></div>
-       )}
-
+       {/* MENU LATERAL */}
        <aside 
          className={`
            bg-indigo-900 text-white flex flex-col fixed h-full z-30 shadow-2xl
-           transition-transform duration-300 ease-in-out
-           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-           w-64
+           transition-all duration-300 ease-in-out
+           ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full'}
          `}
        >
           <div className="p-6 text-center border-b border-indigo-800 flex justify-between items-center">
@@ -369,6 +339,7 @@ function App() {
                <h1 className="text-xl font-bold tracking-wider">Nexo</h1>
                <p className="text-xs text-indigo-300 mt-1">Gestão de Equipes</p>
              </div>
+             {/* Botão de Fechar no Mobile ou Desktop se desejar */}
              <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-indigo-300 hover:text-white">
                 ✕
              </button>
@@ -380,23 +351,23 @@ function App() {
                  {currentUserColab?.name ? currentUserColab.name.charAt(0) : user.email?.charAt(0).toUpperCase()}
              </div>
              <div className="overflow-hidden">
-                 <p className="text-sm font-bold truncate w-32">{currentUserColab?.name || 'Usuário'}</p>
+                 <p className="text-sm font-bold truncate">{currentUserColab?.name || 'Usuário'}</p>
                  <p className="text-[10px] text-indigo-300 truncate uppercase font-medium tracking-wide">{userProfile}</p>
              </div>
           </div>
 
           <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
-             <SidebarItem label="Dashboard" icon="📊" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} visible={hasPermission('dashboard:view')} />
-             <SidebarItem label="Calendário" icon="📅" active={activeTab === 'calendario'} onClick={() => handleTabChange('calendario')} visible={hasPermission('calendar:view')} />
-             <SidebarItem label="Colaboradores" icon="👥" active={activeTab === 'colaboradores'} onClick={() => handleTabChange('colaboradores')} visible={hasPermission('collaborators:view')} />
-             <SidebarItem label="Eventos / Folgas" icon="📝" active={activeTab === 'eventos'} onClick={() => handleTabChange('eventos')} visible={hasPermission('events:view')} />
-             <SidebarItem label="Plantões" icon="🌙" active={activeTab === 'plantoes'} onClick={() => handleTabChange('plantoes')} visible={hasPermission('on_calls:view')} />
-             <SidebarItem label="Férias" icon="✈️" active={activeTab === 'previsao_ferias'} onClick={() => handleTabChange('previsao_ferias')} visible={hasPermission('vacation:view')} />
-             <SidebarItem label="Banco de Horas" icon="💰" active={activeTab === 'saldo'} onClick={() => handleTabChange('saldo')} visible={hasPermission('balance:view')} />
-             <SidebarItem label="Simulador" icon="🧪" active={activeTab === 'simulador'} onClick={() => handleTabChange('simulador')} visible={hasPermission('simulator:view')} />
-             <SidebarItem label="Matrix de Skills" icon="🧩" active={activeTab === 'skills_matrix'} onClick={() => handleTabChange('skills_matrix')} visible={hasPermission('skills_matrix:view')} />
-             <SidebarItem label="Gerador Comunicados" icon="📢" active={activeTab === 'comunicados'} onClick={() => handleTabChange('comunicados')} visible={hasPermission('comms:view')} />
-             <SidebarItem label="Configurações" icon="⚙️" active={activeTab === 'configuracoes'} onClick={() => handleTabChange('configuracoes')} visible={hasPermission('settings:view')} />
+             <SidebarItem label="Dashboard" icon="📊" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} visible={hasPermission('dashboard:view')} />
+             <SidebarItem label="Calendário" icon="📅" active={activeTab === 'calendario'} onClick={() => setActiveTab('calendario')} visible={hasPermission('calendar:view')} />
+             <SidebarItem label="Colaboradores" icon="👥" active={activeTab === 'colaboradores'} onClick={() => setActiveTab('colaboradores')} visible={hasPermission('collaborators:view')} />
+             <SidebarItem label="Eventos / Folgas" icon="📝" active={activeTab === 'eventos'} onClick={() => setActiveTab('eventos')} visible={hasPermission('events:view')} />
+             <SidebarItem label="Plantões" icon="🌙" active={activeTab === 'plantoes'} onClick={() => setActiveTab('plantoes')} visible={hasPermission('on_calls:view')} />
+             <SidebarItem label="Férias" icon="✈️" active={activeTab === 'previsao_ferias'} onClick={() => setActiveTab('previsao_ferias')} visible={hasPermission('vacation:view')} />
+             <SidebarItem label="Banco de Horas" icon="💰" active={activeTab === 'saldo'} onClick={() => setActiveTab('saldo')} visible={hasPermission('balance:view')} />
+             <SidebarItem label="Simulador" icon="🧪" active={activeTab === 'simulador'} onClick={() => setActiveTab('simulador')} visible={hasPermission('simulator:view')} />
+             <SidebarItem label="Matrix de Skills" icon="🧩" active={activeTab === 'skills_matrix'} onClick={() => setActiveTab('skills_matrix')} visible={hasPermission('skills_matrix:view')} />
+             <SidebarItem label="Gerador Comunicados" icon="📢" active={activeTab === 'comunicados'} onClick={() => setActiveTab('comunicados')} visible={hasPermission('comms:view')} />
+             <SidebarItem label="Configurações" icon="⚙️" active={activeTab === 'configuracoes'} onClick={() => setActiveTab('configuracoes')} visible={hasPermission('settings:view')} />
           </nav>
           
           {/* Rodapé / Assinatura */}
@@ -422,10 +393,9 @@ function App() {
        {/* ÁREA PRINCIPAL */}
        <main 
          className={`
-           flex-1 p-4 md:p-8 min-h-screen
+           flex-1 p-8 min-h-screen
            transition-all duration-300 ease-in-out
-           ${isSidebarOpen ? 'lg:ml-64' : 'ml-0'} 
-           w-full
+           ${isSidebarOpen ? 'ml-64' : 'ml-0'}
          `}
        >
           {/* Header da Área Principal (Toggle Button) */}
@@ -468,9 +438,7 @@ function App() {
           )}
 
           {/* Conteúdo da Aba */}
-          <div className="w-full max-w-full overflow-x-hidden">
-            {renderContent()}
-          </div>
+          {renderContent()}
        </main>
     </div>
   );
