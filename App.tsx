@@ -13,6 +13,7 @@ import { VacationForecast } from './components/VacationForecast';
 import { Settings } from './components/Settings';
 import { Simulator } from './components/Simulator';
 import { CommunicationGenerator } from './components/CommunicationGenerator';
+import { SkillsMatrix } from './components/SkillsMatrix';
 import { 
   Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, 
   VacationRequest, SystemSettings, TabType, UserProfile 
@@ -28,7 +29,8 @@ const defaultSettings: SystemSettings = {
   scheduleTemplates: [],
   shiftRotations: [],
   companyBranches: {},
-  companies: []
+  companies: [],
+  skills: []
 };
 
 // Mapeamento de Permissões por Aba
@@ -42,6 +44,7 @@ const TAB_PERMISSIONS: Record<TabType, string> = {
   'saldo': 'balance:view',
   'simulador': 'simulator:view',
   'comunicados': 'comms:view',
+  'skills_matrix': 'skills_matrix:view',
   'configuracoes': 'settings:view'
 };
 
@@ -298,6 +301,17 @@ function App() {
         />;
       case 'comunicados':
           return <CommunicationGenerator />;
+      case 'skills_matrix':
+          return <SkillsMatrix 
+              collaborators={collaborators}
+              settings={settings}
+              onUpdateCollaborator={(id, data) => dbService.updateCollaborator(id, data)}
+              showToast={showToast}
+              currentUserProfile={userProfile}
+              currentUserAllowedSectors={allowedSectors}
+              canManageSkills={hasPermission('skills_matrix:manage')}
+              availableBranches={availableBranches}
+          />;
       case 'configuracoes':
         return <Settings 
             settings={settings} 
@@ -351,6 +365,7 @@ function App() {
              <SidebarItem label="Férias" icon="✈️" active={activeTab === 'previsao_ferias'} onClick={() => setActiveTab('previsao_ferias')} visible={hasPermission('vacation:view')} />
              <SidebarItem label="Banco de Horas" icon="💰" active={activeTab === 'saldo'} onClick={() => setActiveTab('saldo')} visible={hasPermission('balance:view')} />
              <SidebarItem label="Simulador" icon="🧪" active={activeTab === 'simulador'} onClick={() => setActiveTab('simulador')} visible={hasPermission('simulator:view')} />
+             <SidebarItem label="Matrix de Skills" icon="🧩" active={activeTab === 'skills_matrix'} onClick={() => setActiveTab('skills_matrix')} visible={hasPermission('skills_matrix:view')} />
              <SidebarItem label="Gerador Comunicados" icon="📢" active={activeTab === 'comunicados'} onClick={() => setActiveTab('comunicados')} visible={hasPermission('comms:view')} />
              <SidebarItem label="Configurações" icon="⚙️" active={activeTab === 'configuracoes'} onClick={() => setActiveTab('configuracoes')} visible={hasPermission('settings:view')} />
           </nav>

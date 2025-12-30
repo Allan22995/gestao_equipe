@@ -1,8 +1,12 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Collaborator, EventRecord, OnCallRecord, Schedule, SystemSettings, VacationRequest, UserProfile } from '../types';
-import { weekDayMap, getWeekOfMonth, checkRotationDay } from '../utils/helpers';
+import { weekDayMap, getWeekOfMonth, checkRotationDay, decimalToTime } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 import { MultiSelect } from './ui/MultiSelect';
+
+// Configuração das filiais que podem ver o Card de Horas
+const ALLOWED_BRANCHES_FOR_HOURS = ['6901', '6991', 'CD300'];
 
 interface DashboardProps {
   collaborators: Collaborator[];
@@ -56,6 +60,43 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setFilterBranches([availableBranches[0]]);
     }
   }, [availableBranches]);
+
+  // Determine if the Hours Card should be shown
+  const showHoursCard = useMemo(() => {
+      // Show if ANY of the user's available branches are in the allowed list
+      if (availableBranches.length === 0) return false;
+      return availableBranches.some(b => ALLOWED_BRANCHES_FOR_HOURS.includes(b));
+  }, [availableBranches]);
+
+  // Calculate Total Hours for the Team (Positive/Negative) based on Filtered List
+  const teamHours = useMemo(() => {
+      let positive = 0;
+      let negative = 0;
+
+      // We use the same 'filteredDashboardList' logic implicitly by iterating over activeCollaborators
+      // but applying the same filters as the dashboard list
+      const filteredForHours = activeCollaborators.filter(c => {
+        if (currentUserAllowedSectors.length > 0) {
+            if (!c.sector || !currentUserAllowedSectors.includes(c.sector)) return false;
+        }
+        if (availableBranches.length > 0 && !availableBranches.includes(c.branch)) return false;
+
+        const matchesBranch = filterBranches.length > 0 ? filterBranches.includes(c.branch) : true;
+        const matchesRole = filterRoles.length > 0 ? filterRoles.includes(c.role) : true;
+        const matchesSector = filterSectors.length > 0 ? (c.sector && filterSectors.includes(c.sector)) : true;
+
+        return matchesBranch && matchesRole && matchesSector;
+      });
+
+      filteredForHours.forEach(c => {
+          const balance = c.bankBalance || 0;
+          if (balance > 0) positive += balance;
+          if (balance < 0) negative += Math.abs(balance);
+      });
+
+      return { positive, negative };
+  }, [activeCollaborators, currentUserAllowedSectors, availableBranches, filterBranches, filterRoles, filterSectors]);
+
 
   // Available sectors for filter dropdown (Dynamic based on branch + Global)
   const availableSectors = useMemo(() => {
@@ -613,6 +654,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const sortOrderWeek = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
 
+  // --- COMPONENTE VISUAL DO CARD DE HORAS (Donut Chart) ---
+  const HoursCard = ({ positive, negative }: { positive: number, negative: number }) => {
+      const total = positive + negative;
+      // Prevent division by zero
+      const posPercent = total > 0 ? (positive / total) * 100 : 50; 
+      
+      // Conic Gradient for Donut Chart
+      const gradient = `conic-gradient(#10b981 0% ${posPercent}%, #f43f5e ${posPercent}% 100%)`;
+
+      return (
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col justify-between h-full relative overflow-hidden group">
+              <div className="flex justify-between items-start z-10">
+                  <div>
+                      <h3 className="text-lg font-bold text-gray-800">Banco de Horas</h3>
+                      <p className="text-xs text-gray-500">Saldo acumulado do time (Importado)</p>
+                  </div>
+                  <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg">
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+              </div>
+
+              <div className="flex items-center justify-center py-4 relative z-10">
+                  {/* Outer Circle (Chart) */}
+                  <div className="w-32 h-32 rounded-full relative shadow-inner" style={{ background: total > 0 ? gradient : '#e5e7eb' }}>
+                      {/* Inner Circle (Hole) */}
+                      <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
+                          <span className="text-[10px] uppercase font-bold text-gray-400">Total</span>
+                          <span className="text-lg font-bold text-gray-800">{decimalToTime(positive - negative)}</span>
+                      </div>
+                  </div>
+              </div>
+
+              <div className="flex justify-between items-end gap-2 text-xs z-10">
+                  <div className="bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-lg border border-emerald-100 flex-1 text-center">
+                      <div className="font-bold text-lg text-emerald-600">+{decimalToTime(positive)}</div>
+                      <div className="uppercase tracking-wider text-[9px] font-bold">Positivas</div>
+                  </div>
+                  <div className="bg-rose-50 text-rose-800 px-3 py-1.5 rounded-lg border border-rose-100 flex-1 text-center">
+                      <div className="font-bold text-lg text-rose-600">-{decimalToTime(negative)}</div>
+                      <div className="uppercase tracking-wider text-[9px] font-bold">Negativas</div>
+                  </div>
+              </div>
+              
+              {/* Background Decoration */}
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-50 rounded-full opacity-50 z-0 pointer-events-none"></div>
+          </div>
+      );
+  };
+
   return (
     <div className="space-y-6">
       {/* Filtros */}
@@ -669,8 +759,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Cards de Status (Clickable) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Cards de Status (Clickable) + Hours Card */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${showHoursCard ? '4' : '3'} gap-6`}>
         <button 
           onClick={() => setActiveStatFilter('total')}
           className={`text-left w-full bg-emerald-500 rounded-xl shadow-lg p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-all focus:outline-none ${activeStatFilter === 'total' ? 'ring-4 ring-offset-2 ring-emerald-500' : ''}`}
@@ -703,6 +793,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-orange-100 font-bold uppercase text-xs tracking-wider">AUSENTES / FOLGA / FÉRIAS</p>
           <p className="text-5xl font-bold mt-2">{stats.inactive}</p>
         </button>
+
+        {/* HOURS CARD - Conditional Render */}
+        {showHoursCard && (
+            <HoursCard positive={teamHours.positive} negative={teamHours.negative} />
+        )}
       </div>
 
       {/* --- NOVOS GRÁFICOS DE DISTRIBUIÇÃO --- */}

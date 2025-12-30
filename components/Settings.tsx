@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule, DaySchedule } from '../types';
+import { SystemSettings, RoleConfig, EventTypeConfig, SeasonalEvent, PERMISSION_MODULES, ScheduleTemplate, Schedule, RotationRule, DaySchedule, SkillDefinition } from '../types';
 import { generateUUID } from '../utils/helpers';
 import { Modal } from './ui/Modal';
 import { MultiSelect } from './ui/MultiSelect';
@@ -83,6 +84,7 @@ const SETTINGS_TABS = [
   { id: 'integrations', label: '🔗 Integrações', reqPerms: ['settings:view_integrations'] },
   { id: 'seasonal', label: '🎉 Sazonais', reqPerms: ['settings:view_seasonal'] },
   { id: 'system', label: '📢 Avisos', reqPerms: ['settings:view_system_msg'] },
+  { id: 'skills', label: '🧩 Skills', reqPerms: ['settings:view_skills'] },
 ];
 
 export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showToast, hasPermission }) => {
@@ -133,6 +135,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       level: settings.systemMessage?.level || 'info',
       message: settings.systemMessage?.message || ''
   });
+
+  // --- SKILLS STATES ---
+  const [newSkillName, setNewSkillName] = useState('');
+  const [newSkillDesc, setNewSkillDesc] = useState('');
+  const [newSkillBranches, setNewSkillBranches] = useState<string[]>([]);
+  const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
 
   // Filter Tabs based on Permissions (Show if has AT LEAST ONE of the required perms)
   const allowedTabs = useMemo(() => {
@@ -273,6 +281,50 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const updateAllowedSectors = (newSelected: string[]) => {
       setSelectedAllowedSectors(newSelected);
       updateSettings({ ...settings, sectorsWithEventTypeSelection: newSelected });
+  };
+
+  // --- SKILLS HANDLERS ---
+  const saveSkill = () => {
+      if (!newSkillName.trim()) { showToast('Nome da Skill obrigatório', true); return; }
+      if (newSkillBranches.length === 0) { showToast('Selecione pelo menos uma filial.', true); return; }
+
+      const newSkill: SkillDefinition = {
+          id: editingSkillId || generateUUID(),
+          name: newSkillName.trim(),
+          description: newSkillDesc.trim(),
+          branches: newSkillBranches
+      };
+
+      let currentSkills = settings.skills || [];
+      
+      if (editingSkillId) {
+          currentSkills = currentSkills.map(s => s.id === editingSkillId ? newSkill : s);
+      } else {
+          currentSkills = [...currentSkills, newSkill];
+      }
+
+      updateSettings({ ...settings, skills: currentSkills });
+      resetSkillForm();
+  };
+
+  const editSkill = (skill: SkillDefinition) => {
+      setEditingSkillId(skill.id);
+      setNewSkillName(skill.name);
+      setNewSkillDesc(skill.description || '');
+      setNewSkillBranches(skill.branches);
+  };
+
+  const removeSkill = (id: string) => {
+      if (window.confirm('Excluir esta skill?')) {
+          updateSettings({ ...settings, skills: (settings.skills || []).filter(s => s.id !== id) });
+      }
+  };
+
+  const resetSkillForm = () => {
+      setEditingSkillId(null);
+      setNewSkillName('');
+      setNewSkillDesc('');
+      setNewSkillBranches([]);
   };
 
   const currentModuleDef = PERMISSION_MODULES.find(m => m.id === selectedModule);
@@ -982,6 +1034,85 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                            )}
                        </div>
                    </div>
+               </div>
+           </div>
+       )}
+
+       {/* --- CONTENT: SKILLS --- */}
+       {activeTab === 'skills' && (
+           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-fadeIn">
+               <SectionHeader title="Gestão de Skills" description="Defina as competências técnicas e sistemas que serão avaliados na Matrix de Skills." />
+               
+               <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-8">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome da Skill *</label>
+                            <input 
+                                type="text"
+                                className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
+                                placeholder="Ex: WMS, SQL, React..."
+                                value={newSkillName}
+                                onChange={e => setNewSkillName(e.target.value)}
+                                disabled={!hasPermission('settings:manage_skills')}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Descrição (Opcional)</label>
+                            <input 
+                                type="text"
+                                className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
+                                placeholder="Breve descrição..."
+                                value={newSkillDesc}
+                                onChange={e => setNewSkillDesc(e.target.value)}
+                                disabled={!hasPermission('settings:manage_skills')}
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <MultiSelect 
+                                label="Vincular a Filiais *"
+                                options={settings.branches}
+                                selected={newSkillBranches}
+                                onChange={setNewSkillBranches}
+                                placeholder="Selecione as filiais..."
+                                disabled={!hasPermission('settings:manage_skills')}
+                            />
+                            <p className="text-[10px] text-gray-400 mt-1">Esta skill aparecerá apenas na Matrix de Skills destas filiais.</p>
+                        </div>
+                   </div>
+                   
+                   <div className="mt-4 flex justify-end gap-2">
+                       {editingSkillId && (
+                           <button onClick={resetSkillForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+                       )}
+                       <button 
+                           onClick={saveSkill}
+                           disabled={!hasPermission('settings:manage_skills')}
+                           className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm disabled:opacity-50"
+                       >
+                           {editingSkillId ? 'Atualizar Skill' : 'Adicionar Skill'}
+                       </button>
+                   </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                   {(settings.skills || []).map(skill => (
+                       <div key={skill.id} className="p-4 border border-gray-200 rounded-xl bg-white shadow-sm hover:border-indigo-300 transition-all flex flex-col group">
+                           <div className="flex justify-between items-start mb-2">
+                               <h4 className="font-bold text-gray-800">{skill.name}</h4>
+                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                   <IconButton disabled={!hasPermission('settings:manage_skills')} onClick={() => editSkill(skill)} icon={Icons.Edit} colorClass="text-blue-500 hover:bg-blue-50" />
+                                   <IconButton disabled={!hasPermission('settings:manage_skills')} onClick={() => removeSkill(skill.id)} icon={Icons.Trash} colorClass="text-red-500 hover:bg-red-50" />
+                               </div>
+                           </div>
+                           <p className="text-xs text-gray-500 mb-3 line-clamp-2 min-h-[2.5em]">{skill.description || 'Sem descrição.'}</p>
+                           <div className="mt-auto flex flex-wrap gap-1">
+                               {skill.branches.map(b => (
+                                   <span key={b} className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100">{b}</span>
+                               ))}
+                           </div>
+                       </div>
+                   ))}
+                   {(settings.skills || []).length === 0 && <p className="text-center text-gray-400 py-8 italic col-span-full border-2 border-dashed border-gray-100 rounded-xl">Nenhuma skill cadastrada.</p>}
                </div>
            </div>
        )}

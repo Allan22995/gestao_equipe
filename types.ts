@@ -43,6 +43,9 @@ export interface AccessProfileConfig {
 
 export type UserProfile = string;
 
+// NOVO: Níveis de Skill
+export type SkillLevel = 'Aprendiz' | 'Praticante' | 'Proficiente' | 'Referência';
+
 export interface Collaborator {
   id: string;
   colabId: string;
@@ -67,6 +70,8 @@ export interface Collaborator {
   // NOVO: Controle de Saldo Importado
   bankBalance?: number;
   lastBalanceImport?: string;
+  // NOVO: Skills do Colaborador (SkillID -> Level)
+  skills?: Record<string, SkillLevel>;
 }
 
 export type EventBehavior = 'neutral' | 'debit' | 'credit_1x' | 'credit_2x';
@@ -100,6 +105,14 @@ export interface CoverageRule {
   shift?: string;  // NOVO: Regra específica por turno
 }
 
+// NOVO: Definição de Skill (Configuração)
+export interface SkillDefinition {
+  id: string;
+  name: string;
+  description?: string;
+  branches: string[]; // Filiais onde essa skill é relevante
+}
+
 export interface SystemSettings {
   companies?: string[]; // NOVO: Lista de Empresas
   companyBranches?: Record<string, string[]>; // NOVO: Mapeamento Empresa -> Filiais
@@ -118,6 +131,7 @@ export interface SystemSettings {
   coverageRules?: CoverageRule[]; 
   approvalEscalationDelay?: number; // NOVO: Prazo em horas para escalonamento automático
   sectorsWithEventTypeSelection?: string[]; // NOVO: Setores que podem selecionar o tipo de evento
+  skills?: SkillDefinition[]; // NOVO: Lista de Skills cadastradas no sistema
 }
 
 export type EventType = string; 
@@ -196,13 +210,13 @@ export interface VacationRequest {
 export interface AuditLog {
   id: string;
   action: 'create' | 'update' | 'delete';
-  entity: 'evento' | 'plantao' | 'colaborador' | 'ajuste_saldo' | 'previsao_ferias' | 'configuracao';
+  entity: 'evento' | 'plantao' | 'colaborador' | 'ajuste_saldo' | 'previsao_ferias' | 'configuracao' | 'skill';
   details: string;
   performedBy: string;
   timestamp: string;
 }
 
-export type TabType = 'calendario' | 'dashboard' | 'simulador' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados';
+export type TabType = 'calendario' | 'dashboard' | 'simulador' | 'colaboradores' | 'eventos' | 'plantoes' | 'saldo' | 'previsao_ferias' | 'configuracoes' | 'comunicados' | 'skills_matrix';
 
 // --- NOVA DEFINIÇÃO DE PERMISSÕES GRANULARES ---
 
@@ -321,6 +335,16 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     ]
   },
   {
+    id: 'skills_matrix',
+    label: 'Matrix de Skills',
+    description: 'Gestão de competências e níveis técnicos.',
+    icon: '🧩',
+    actions: [
+      { id: 'skills_matrix:view', label: 'Visualizar Matriz', type: 'view' },
+      { id: 'skills_matrix:manage', label: 'Avaliar Colaboradores', type: 'update' }
+    ]
+  },
+  {
     id: 'settings',
     label: 'Configurações',
     description: 'Administração granular do sistema.',
@@ -362,7 +386,11 @@ export const PERMISSION_MODULES: PermissionModule[] = [
 
       // 8. Avisos
       { id: 'settings:view_system_msg', label: 'Ver Config de Avisos', type: 'view' },
-      { id: 'settings:manage_system_msg', label: 'Editar Avisos', type: 'special' }
+      { id: 'settings:manage_system_msg', label: 'Editar Avisos', type: 'special' },
+
+      // 9. Skills (Gestão)
+      { id: 'settings:view_skills', label: 'Ver Lista de Skills', type: 'view' },
+      { id: 'settings:manage_skills', label: 'Criar/Editar Skills', type: 'special' }
     ]
   }
 ];
