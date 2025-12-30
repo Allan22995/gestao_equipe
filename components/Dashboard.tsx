@@ -679,8 +679,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </div>
                       <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Banco de Horas</h3>
                   </div>
-                  <div className="cursor-help group/info" title="Dados importados da planilha oficial">
+                  <div className="cursor-help group/info relative">
                       <svg className="w-4 h-4 text-gray-300 hover:text-indigo-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      {/* Tooltip */}
+                      <div className="absolute right-0 top-6 w-48 bg-gray-800 text-white text-[10px] p-2 rounded shadow-lg opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none z-20">
+                          Saldo acumulado importado do sistema de ponto oficial.
+                      </div>
                   </div>
               </div>
 
