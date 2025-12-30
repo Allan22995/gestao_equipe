@@ -95,6 +95,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newBranch, setNewBranch] = useState('');
   const [newSector, setNewSector] = useState('');
   const [escalationDelay, setEscalationDelay] = useState(settings.approvalEscalationDelay || 0);
+  const [selectedBranchesForHours, setSelectedBranchesForHours] = useState<string[]>(settings.branchesWithHoursCard || []);
   
   // --- ROLES STATES ---
   const [newRole, setNewRole] = useState('');
@@ -158,6 +159,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       setSelectedAllowedSectors(settings.sectorsWithEventTypeSelection || []);
   }, [settings.sectorsWithEventTypeSelection]);
 
+  useEffect(() => {
+      setSelectedBranchesForHours(settings.branchesWithHoursCard || []);
+  }, [settings.branchesWithHoursCard]);
+
   // Helper to update settings
   const updateSettings = async (newSettings: SystemSettings) => {
     try {
@@ -203,6 +208,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   };
   const saveEscalationDelay = () => {
       updateSettings({ ...settings, approvalEscalationDelay: escalationDelay });
+  };
+  const updateHoursCardBranches = (selected: string[]) => {
+      setSelectedBranchesForHours(selected);
+      updateSettings({ ...settings, branchesWithHoursCard: selected });
   };
 
   // Re-declare Handlers for missing context in XML replacement
@@ -350,6 +359,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* --- CONTENT: GENERAL (STRUCTURE) --- */}
        {activeTab === 'general' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
+               
                {/* Fluxo de Aprovação - NOVO */}
                {hasPermission('settings:edit_branches') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col md:col-span-2">
@@ -374,6 +384,26 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        >
                            Salvar Configuração
                        </button>
+                   </div>
+               </div>
+               )}
+
+               {/* NOVO: Visibilidade do Card de Horas */}
+               {hasPermission('settings:edit_branches') && (
+               <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col md:col-span-2">
+                   <SectionHeader title="Visibilidade do Card de Horas" description="Defina quais filiais podem visualizar o gráfico de Banco de Horas no Dashboard." />
+                   
+                   <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                       <MultiSelect 
+                           label="Filiais com Acesso ao Card de Horas"
+                           options={settings.branches}
+                           selected={selectedBranchesForHours}
+                           onChange={updateHoursCardBranches}
+                           placeholder="Selecione as filiais..."
+                       />
+                       <p className="text-xs text-indigo-600 mt-2">
+                           Usuários com acesso a estas filiais verão o gráfico "Banco de Horas" no Dashboard.
+                       </p>
                    </div>
                </div>
                )}

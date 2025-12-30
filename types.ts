@@ -132,6 +132,7 @@ export interface SystemSettings {
   approvalEscalationDelay?: number; // NOVO: Prazo em horas para escalonamento automático
   sectorsWithEventTypeSelection?: string[]; // NOVO: Setores que podem selecionar o tipo de evento
   skills?: SkillDefinition[]; // NOVO: Lista de Skills cadastradas no sistema
+  branchesWithHoursCard?: string[]; // NOVO: Filiais permitidas a ver o Card de Horas
 }
 
 export type EventType = string; 

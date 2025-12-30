@@ -5,9 +5,6 @@ import { weekDayMap, getWeekOfMonth, checkRotationDay, decimalToTime } from '../
 import { Modal } from './ui/Modal';
 import { MultiSelect } from './ui/MultiSelect';
 
-// Configuração das filiais que podem ver o Card de Horas
-const ALLOWED_BRANCHES_FOR_HOURS = ['6901', '6991', 'CD300'];
-
 interface DashboardProps {
   collaborators: Collaborator[];
   events: EventRecord[];
@@ -61,12 +58,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   }, [availableBranches]);
 
-  // Determine if the Hours Card should be shown
+  // Determine if the Hours Card should be shown based on dynamic settings
   const showHoursCard = useMemo(() => {
-      // Show if ANY of the user's available branches are in the allowed list
+      // Show if ANY of the user's available branches are in the allowed list defined in settings
       if (availableBranches.length === 0) return false;
-      return availableBranches.some(b => ALLOWED_BRANCHES_FOR_HOURS.includes(b));
-  }, [availableBranches]);
+      const allowedBranches = settings.branchesWithHoursCard || [];
+      return availableBranches.some(b => allowedBranches.includes(b));
+  }, [availableBranches, settings.branchesWithHoursCard]);
 
   // Calculate Total Hours for the Team (Positive/Negative) based on Filtered List
   const teamHours = useMemo(() => {
