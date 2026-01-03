@@ -624,7 +624,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                 label="FILTRAR POR FILIAL"
                                 options={availableBranches}
                                 selected={filterBranches}
-                                onChange={(val) => setFilterBranches(val)}
+                                onChange={(val: string[]) => setFilterBranches(val)}
                                 placeholder={availableBranches.length > 1 ? 'Todas' : 'Sua Filial'}
                                 disabled={availableBranches.length === 1}
                               />
@@ -635,7 +635,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                 label="FILTRAR POR SETOR"
                                 options={availableSectors}
                                 selected={filterSectors}
-                                onChange={(val) => setFilterSectors(val)}
+                                onChange={(val: string[]) => setFilterSectors(val)}
                                 placeholder="Todos os Setores"
                                 disabled={currentUserAllowedSectors.length === 1}
                               />
@@ -646,7 +646,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                 label="FILTRAR POR FUNÇÃO"
                                 options={availableRolesOptions}
                                 selected={filterRoles}
-                                onChange={(val) => setFilterRoles(val)}
+                                onChange={(val: string[]) => setFilterRoles(val)}
                                 placeholder="Todas as Funções"
                               />
                           </div>
@@ -656,7 +656,7 @@ export const Simulator: React.FC<SimulatorProps> = ({
                                 label="FILTRAR POR JORNADA/ESCALA"
                                 options={availableScalesOptions}
                                 selected={filterScales}
-                                onChange={(val) => setFilterScales(val)}
+                                onChange={(val: string[]) => setFilterScales(val)}
                                 placeholder="Todas as Jornadas"
                               />
                           </div>
