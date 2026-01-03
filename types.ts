@@ -54,6 +54,7 @@ export interface Collaborator {
   phone: string;
   otherContact?: string;
   profile: UserProfile;
+  company?: string; // NOVO: Hierarquia Empresa
   branch: string;
   role: string;
   sector?: string;
