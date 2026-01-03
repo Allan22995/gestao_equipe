@@ -465,6 +465,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const sectorOptions = useMemo(() => {
       if (!formData.branch) return [];
       
+      // Prioridade: Setores vinculados à Filial
       const specific = settings.branchSectors?.[formData.branch] || [];
       const global = settings.sectors || [];
       

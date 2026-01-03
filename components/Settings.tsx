@@ -95,7 +95,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   const [newCompany, setNewCompany] = useState('');
   const [newBranch, setNewBranch] = useState('');
   const [selectedCompanyForBranch, setSelectedCompanyForBranch] = useState('');
+  
+  // Sectors States
   const [newSector, setNewSector] = useState('');
+  const [sectorCompanyFilter, setSectorCompanyFilter] = useState('');
+  const [sectorBranchFilter, setSectorBranchFilter] = useState('');
+
   const [escalationDelay, setEscalationDelay] = useState(settings.approvalEscalationDelay || 0);
   const [selectedBranchesForHours, setSelectedBranchesForHours] = useState<string[]>(settings.branchesWithHoursCard || []);
   
@@ -245,21 +250,45 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
           newSettings.companyBranches = updatedCB;
       }
       
+      // Remover de branchSectors (vínculo com setores)
+      if (newSettings.branchSectors && newSettings.branchSectors[branch]) {
+          const updatedBS = { ...newSettings.branchSectors };
+          delete updatedBS[branch];
+          newSettings.branchSectors = updatedBS;
+      }
+      
       updateSettings(newSettings);
     }
   };
 
+  // Setores (Hierarquia Empresa -> Filial -> Setor)
   const addSector = () => {
+    if (!sectorBranchFilter) { showToast('Selecione a Filial para adicionar o setor.', true); return; }
     if (!validate('newSector', newSector)) return;
-    if (settings.sectors.includes(newSector.trim())) { showToast('Setor já existe.', true); return; }
-    updateSettings({ ...settings, sectors: [...settings.sectors, newSector.trim()] });
+    
+    const currentSectors = settings.branchSectors?.[sectorBranchFilter] || [];
+    if (currentSectors.includes(newSector.trim())) { showToast('Setor já existe nesta filial.', true); return; }
+    
+    const newBranchSectors = { 
+        ...(settings.branchSectors || {}),
+        [sectorBranchFilter]: [...currentSectors, newSector.trim()]
+    };
+
+    updateSettings({ ...settings, branchSectors: newBranchSectors });
     setNewSector('');
   };
-  const removeSector = (sector: string) => {
-    if (window.confirm(`Remover setor ${sector}?`)) {
-      updateSettings({ ...settings, sectors: settings.sectors.filter(s => s !== sector) });
+
+  const removeSector = (branch: string, sector: string) => {
+    if (window.confirm(`Remover setor ${sector} da filial ${branch}?`)) {
+        const currentSectors = settings.branchSectors?.[branch] || [];
+        const newBranchSectors = {
+            ...(settings.branchSectors || {}),
+            [branch]: currentSectors.filter(s => s !== sector)
+        };
+        updateSettings({ ...settings, branchSectors: newBranchSectors });
     }
   };
+
   const saveEscalationDelay = () => {
       updateSettings({ ...settings, approvalEscalationDelay: escalationDelay });
   };
@@ -273,6 +302,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
       return [...settings.roles].sort((a, b) => a.name.localeCompare(b.name));
   }, [settings.roles]);
 
+  // Branch Options for Sectors
+  const branchOptionsForSector = useMemo(() => {
+      if (!sectorCompanyFilter) return settings.branches;
+      return settings.companyBranches?.[sectorCompanyFilter] || [];
+  }, [settings.branches, settings.companyBranches, sectorCompanyFilter]);
+
+  // Roles, Permissions, etc. (omitted for brevity, assume standard handlers)
+  // ... (keeping all other handlers intact) ...
   const addRole = () => {
     if (!validate('newRole', newRole)) return;
     if (settings.roles.some(r => r.name === newRole.trim())) { showToast('Função já existe.', true); return; }
@@ -419,7 +456,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* --- CONTENT: GENERAL (STRUCTURE) --- */}
        {activeTab === 'general' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
-               {/* ... (Other general sections) ... */}
                
                {/* Fluxo de Aprovação - NOVO */}
                {hasPermission('settings:edit_branches') && (
@@ -580,55 +616,114 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                </div>
                )}
 
-               {/* Sectors Card */}
+               {/* Sectors Card - ATUALIZADO (HIERARQUIA) */}
                {hasPermission('settings:view_sectors') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col md:col-span-2">
-                   <SectionHeader title="Setores Globais" description="Departamentos disponíveis em todas as filiais." />
+                   <SectionHeader title="Setores por Filial" description="Departamentos vinculados especificamente a uma filial." />
                    
-                   <div className="flex gap-2 mb-6">
-                       <div className="relative flex-1">
+                   <div className="flex flex-col md:flex-row gap-4 mb-6 items-end bg-gray-50 p-4 rounded-xl border border-gray-200">
+                       {/* Seletor de Empresa (Opcional - Filtro) */}
+                       {(settings.companies || []).length > 0 && (
+                           <div className="w-full md:w-1/4">
+                               <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Empresa (Filtro)</label>
+                               <select 
+                                   className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white"
+                                   value={sectorCompanyFilter}
+                                   onChange={e => {
+                                       setSectorCompanyFilter(e.target.value);
+                                       setSectorBranchFilter('');
+                                   }}
+                               >
+                                   <option value="">Todas</option>
+                                   {settings.companies?.map(c => <option key={c} value={c}>{c}</option>)}
+                               </select>
+                           </div>
+                       )}
+
+                       {/* Seletor de Filial (Obrigatório) */}
+                       <div className="w-full md:w-1/3">
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Selecione a Filial *</label>
+                           <select 
+                               className="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none bg-white"
+                               value={sectorBranchFilter}
+                               onChange={e => setSectorBranchFilter(e.target.value)}
+                           >
+                               <option value="">Selecione...</option>
+                               {branchOptionsForSector.map(b => (
+                                   <option key={b} value={b}>{b}</option>
+                               ))}
+                           </select>
+                       </div>
+
+                       {/* Input Setor */}
+                       <div className="relative flex-1 w-full">
+                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Novo Setor</label>
                            <input 
                             type="text" 
-                            disabled={!hasPermission('settings:edit_sectors')}
+                            disabled={!hasPermission('settings:edit_sectors') || !sectorBranchFilter}
                             value={newSector} 
                             onChange={e => { setNewSector(e.target.value); validate('newSector', e.target.value); }}
                             onKeyDown={e => e.key === 'Enter' && addSector()}
-                            placeholder="Novo Setor..." 
-                            className={`w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${errors.newSector ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-300'} disabled:bg-gray-100 disabled:text-gray-500`} 
+                            placeholder={!sectorBranchFilter ? "Selecione uma filial..." : "Nome do Setor..."}
+                            className={`w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${errors.newSector ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-300'} disabled:bg-gray-100 disabled:text-gray-500`} 
                            />
-                           {errors.newSector && <span className="absolute -bottom-5 left-1 text-[10px] text-red-500 font-medium">{errors.newSector}</span>}
                        </div>
+                       
                        <button 
-                        disabled={!hasPermission('settings:edit_sectors')}
+                        disabled={!hasPermission('settings:edit_sectors') || !sectorBranchFilter}
                         onClick={addSector} 
-                        className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[42px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-                        title={!hasPermission('settings:edit_sectors') ? "Sem permissão para adicionar" : ""}
+                        className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 shadow-sm transition-transform active:scale-95 h-[38px] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        title={!hasPermission('settings:edit_sectors') ? "Sem permissão" : (!sectorBranchFilter ? "Selecione uma filial" : "Adicionar")}
                        >
                            {Icons.Plus}
                        </button>
                    </div>
                    
-                   <div className="flex flex-wrap gap-2 overflow-y-auto max-h-[300px] p-1">
-                       {settings.sectors.map(s => (
-                           <div key={s} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
-                               <span className="font-medium">{s}</span> 
-                               <button 
-                                disabled={!hasPermission('settings:edit_sectors')}
-                                onClick={() => removeSector(s)} 
-                                className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                                title={!hasPermission('settings:edit_sectors') ? "Sem permissão para remover" : "Remover"}
-                               >
-                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                               </button>
+                   {/* Lista de Setores da Filial Selecionada */}
+                   <div className="flex flex-wrap gap-2 overflow-y-auto max-h-[300px] p-1 min-h-[50px]">
+                       {sectorBranchFilter ? (
+                           <>
+                               {(settings.branchSectors?.[sectorBranchFilter] || []).map(s => (
+                                   <div key={s} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
+                                       <span className="font-medium">{s}</span> 
+                                       <button 
+                                        disabled={!hasPermission('settings:edit_sectors')}
+                                        onClick={() => removeSector(sectorBranchFilter, s)} 
+                                        className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
+                                       >
+                                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                       </button>
+                                   </div>
+                               ))}
+                               {(!settings.branchSectors?.[sectorBranchFilter] || settings.branchSectors[sectorBranchFilter].length === 0) && (
+                                   <p className="text-gray-400 italic text-sm w-full text-center py-4">Nenhum setor vinculado a esta filial.</p>
+                               )}
+                           </>
+                       ) : (
+                           <div className="flex flex-col items-center justify-center w-full text-gray-400 italic py-6 border-2 border-dashed border-gray-100 rounded-lg">
+                               <span>🏢</span>
+                               <p className="text-xs mt-1">Selecione uma filial para gerenciar seus setores.</p>
                            </div>
-                       ))}
-                       {settings.sectors.length === 0 && <p className="text-gray-400 italic text-sm w-full text-center py-4">Nenhum setor cadastrado.</p>}
+                       )}
                    </div>
+                   
+                   {/* Fallback para visualização de Setores "Globais" Legados se existirem */}
+                   {settings.sectors && settings.sectors.length > 0 && (
+                       <div className="mt-6 pt-4 border-t border-gray-100 opacity-60">
+                           <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Setores Globais (Legado)</h4>
+                           <div className="flex flex-wrap gap-2">
+                               {settings.sectors.map(s => (
+                                   <span key={s} className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs border border-gray-200">{s}</span>
+                               ))}
+                           </div>
+                       </div>
+                   )}
                </div>
                )}
            </div>
        )}
 
+       {/* ... REST OF THE FILE UNCHANGED ... */}
        {/* --- CONTENT: ROLES --- */}
        {activeTab === 'roles' && (
            <div className="space-y-6 animate-fadeIn">
@@ -636,7 +731,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                    <SectionHeader title="Funções e Cargos" description="Defina os cargos e suas permissões de visibilidade." />
                    
-                   {/* ... (Roles content - addRole etc.) ... */}
                    <div className="flex flex-col md:flex-row gap-4 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200 items-start">
                        <div className="flex-1 w-full">
                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome da Função</label>
