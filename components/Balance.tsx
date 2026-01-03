@@ -188,7 +188,7 @@ export const Balance: React.FC<BalanceProps> = ({
 
   // Filter Log Items based on Sector, Search Term, and Profile
   const filteredLogItems = useMemo(() => {
-     const allLogs: any[] = [
+     const allLogs = [
         ...events
             .filter(e => e.status === 'aprovado' || e.status === undefined)
             .map(e => ({ ...e, logType: 'event', date: e.createdAt })),
@@ -196,7 +196,7 @@ export const Balance: React.FC<BalanceProps> = ({
      ];
 
      return allLogs
-      .filter((item: any) => {
+      .filter(item => {
           const colab = collaborators.find(c => c.id === item.collaboratorId);
           if (!colab) return false;
 
