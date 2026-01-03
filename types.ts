@@ -54,6 +54,7 @@ export interface Collaborator {
   phone: string;
   otherContact?: string;
   profile: UserProfile;
+  company?: string; // NOVO: Hierarquia Empresa
   branch: string;
   role: string;
   sector?: string;
@@ -391,7 +392,10 @@ export const PERMISSION_MODULES: PermissionModule[] = [
 
       // 9. Skills (Gestão)
       { id: 'settings:view_skills', label: 'Ver Lista de Skills', type: 'view' },
-      { id: 'settings:manage_skills', label: 'Criar/Editar Skills', type: 'special' }
+      { id: 'settings:manage_skills', label: 'Criar/Editar Skills', type: 'special' },
+
+      // 10. Backup
+      { id: 'settings:manage_backup', label: 'Gerenciar Backup/Importação', type: 'special' }
     ]
   }
 ];

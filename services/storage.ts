@@ -10,7 +10,8 @@ import {
   query,
   setDoc,
   where,
-  getDocs
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
 import { Collaborator, EventRecord, OnCallRecord, BalanceAdjustment, VacationRequest, AuditLog, SystemSettings } from '../types';
 
@@ -212,5 +213,112 @@ export const dbService = {
     const { id, ...rest } = log;
     const cleanData = sanitizePayload(rest);
     await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), cleanData);
+  },
+
+  // --- BACKUP & RESTORE FUNCTIONS ---
+
+  // Exportar todos os dados
+  exportSystemData: async () => {
+    const backupData: any = {
+      meta: {
+        timestamp: new Date().toISOString(),
+        version: '1.0'
+      }
+    };
+
+    // Lista de coleções para backup (exceto Audit Logs para reduzir tamanho, opcional)
+    const collectionsToBackup = [
+      COLLECTIONS.COLLABORATORS,
+      COLLECTIONS.EVENTS,
+      COLLECTIONS.ON_CALLS,
+      COLLECTIONS.ADJUSTMENTS,
+      COLLECTIONS.VACATION_REQUESTS,
+      COLLECTIONS.SETTINGS
+    ];
+
+    for (const colName of collectionsToBackup) {
+      const snap = await getDocs(collection(db, colName));
+      backupData[colName] = snap.docs.map(d => ({ ...d.data(), __id__: d.id }));
+    }
+
+    return backupData;
+  },
+
+  // Restaurar dados (Importação)
+  importSystemData: async (jsonData: any) => {
+    // Validação básica
+    if (!jsonData.meta || !jsonData[COLLECTIONS.COLLABORATORS]) {
+      throw new Error("Formato de arquivo inválido.");
+    }
+
+    const collectionsToRestore = [
+      COLLECTIONS.COLLABORATORS,
+      COLLECTIONS.EVENTS,
+      COLLECTIONS.ON_CALLS,
+      COLLECTIONS.ADJUSTMENTS,
+      COLLECTIONS.VACATION_REQUESTS,
+      COLLECTIONS.SETTINGS
+    ];
+
+    // Passo 1: Limpar coleções existentes
+    // Nota: Em Firestore, deletar coleção inteira requer Cloud Functions ou delete recursivo.
+    // Aqui faremos fetch + delete batch para simplicidade no front.
+    
+    for (const colName of collectionsToRestore) {
+      const snap = await getDocs(collection(db, colName));
+      // Firestore batch limit is 500 ops
+      const batchSize = 400; 
+      let batch = writeBatch(db);
+      let count = 0;
+
+      for (const docSnap of snap.docs) {
+        batch.delete(doc(db, colName, docSnap.id));
+        count++;
+        if (count >= batchSize) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
+      }
+      if (count > 0) await batch.commit(); // Commit remaining
+    }
+
+    // Passo 2: Inserir novos dados
+    for (const colName of collectionsToRestore) {
+      const items = jsonData[colName];
+      if (!items || !Array.isArray(items)) continue;
+
+      let batch = writeBatch(db);
+      let count = 0;
+      const batchSize = 400;
+
+      for (const item of items) {
+        const { __id__, ...data } = item;
+        // Usa o ID original se existir, senão gera novo
+        const docRef = __id__ ? doc(db, colName, __id__) : doc(collection(db, colName));
+        
+        // Se for Settings, garantir que usa o ID fixo
+        if (colName === COLLECTIONS.SETTINGS) {
+           // Settings é geralmente um único doc, mas se houver múltiplos no backup,
+           // a lógica abaixo funciona. Se for o doc principal:
+           if (__id__ === SETTINGS_DOC_ID) {
+               batch.set(doc(db, colName, SETTINGS_DOC_ID), sanitizePayload(data));
+           } else {
+               // Caso tenha backup antigo ou diferente
+               batch.set(docRef, sanitizePayload(data));
+           }
+        } else {
+           batch.set(docRef, sanitizePayload(data));
+        }
+
+        count++;
+        if (count >= batchSize) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
+      }
+      if (count > 0) await batch.commit();
+    }
   }
 };
