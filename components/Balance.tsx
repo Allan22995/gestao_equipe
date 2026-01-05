@@ -188,15 +188,19 @@ export const Balance: React.FC<BalanceProps> = ({
 
   // Filter Log Items based on Sector, Search Term, and Profile
   const filteredLogItems = useMemo(() => {
-     const allLogs = [
+     type EnhancedEvent = EventRecord & { logType: 'event', date: string };
+     type EnhancedAdj = BalanceAdjustment & { logType: 'adj', date: string };
+     type LogItem = EnhancedEvent | EnhancedAdj;
+
+     const allLogs: LogItem[] = [
         ...events
             .filter(e => e.status === 'aprovado' || e.status === undefined)
-            .map(e => ({ ...e, logType: 'event', date: e.createdAt })),
-        ...adjustments.map(a => ({ ...a, logType: 'adj', date: a.createdAt }))
+            .map(e => ({ ...e, logType: 'event' as const, date: e.createdAt })),
+        ...adjustments.map(a => ({ ...a, logType: 'adj' as const, date: a.createdAt }))
      ];
 
      return allLogs
-      .filter((item: any) => {
+      .filter((item) => {
           const colab = collaborators.find(c => c.id === item.collaboratorId);
           if (!colab) return false;
 
@@ -651,13 +655,14 @@ export const Balance: React.FC<BalanceProps> = ({
                 📜 Log de Movimentações
             </h2>
             <div className="space-y-3 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-            {filteredLogItems.map((item: any) => {
+            {filteredLogItems.map((item) => {
                 const colab = collaborators.find(c => c.id === item.collaboratorId);
                 let text = '';
                 let borderClass = 'border-gray-400';
                 let bgClass = 'bg-gray-50';
 
                 if (item.logType === 'event') {
+                    // item is implicitly EventRecord based on logType check
                     const eventLabel = item.typeLabel || item.type;
                     const status = item.status || 'aprovado';
                     
@@ -686,6 +691,7 @@ export const Balance: React.FC<BalanceProps> = ({
                     }
 
                 } else {
+                    // item is implicitly BalanceAdjustment
                     text = `Ajuste Manual (${item.amount > 0 ? '+' : ''}${item.amount}): ${item.reason}`;
                     borderClass = 'border-purple-400';
                     bgClass = 'bg-purple-50/50';
