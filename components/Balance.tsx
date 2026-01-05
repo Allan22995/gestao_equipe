@@ -196,7 +196,7 @@ export const Balance: React.FC<BalanceProps> = ({
      ];
 
      return allLogs
-      .filter(item => {
+      .filter((item: any) => {
           const colab = collaborators.find(c => c.id === item.collaboratorId);
           if (!colab) return false;
 
