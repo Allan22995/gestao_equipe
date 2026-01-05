@@ -72,7 +72,9 @@ const Icons = {
   Create: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
   Update: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
   Delete: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
-  Special: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+  Special: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
+  Check: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+  Close: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
 };
 
 // --- CONFIGURAÇÃO DAS ABAS (COM PERMISSÕES MÚLTIPLAS) ---
@@ -95,6 +97,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
   
   // --- GENERAL STATES ---
   const [newCompany, setNewCompany] = useState('');
+  const [editingCompanyOriginalName, setEditingCompanyOriginalName] = useState<string | null>(null);
+  const [editingCompanyNewName, setEditingCompanyNewName] = useState('');
+
   const [newBranch, setNewBranch] = useState('');
   const [selectedCompanyForBranch, setSelectedCompanyForBranch] = useState('');
   
@@ -214,6 +219,49 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
           delete companyBranches[company]; // Remove vínculo
           updateSettings({ ...settings, companies, companyBranches });
       }
+  };
+
+  const startEditingCompany = (name: string) => {
+      setEditingCompanyOriginalName(name);
+      setEditingCompanyNewName(name);
+  };
+
+  const cancelEditCompany = () => {
+      setEditingCompanyOriginalName(null);
+      setEditingCompanyNewName('');
+  };
+
+  const saveCompanyEdit = () => {
+      if (!editingCompanyOriginalName) return;
+      const newName = editingCompanyNewName.trim();
+      
+      if (!newName) {
+          showToast('Nome da empresa não pode ser vazio.', true);
+          return;
+      }
+      
+      if (newName !== editingCompanyOriginalName && settings.companies?.includes(newName)) {
+          showToast('Já existe uma empresa com este nome.', true);
+          return;
+      }
+
+      // Atualizar lista de empresas
+      const updatedCompanies = (settings.companies || []).map(c => c === editingCompanyOriginalName ? newName : c);
+      
+      // Atualizar mapeamento de filiais
+      const updatedCompanyBranches = { ...(settings.companyBranches || {}) };
+      if (updatedCompanyBranches[editingCompanyOriginalName]) {
+          updatedCompanyBranches[newName] = updatedCompanyBranches[editingCompanyOriginalName];
+          delete updatedCompanyBranches[editingCompanyOriginalName];
+      }
+
+      updateSettings({
+          ...settings,
+          companies: updatedCompanies,
+          companyBranches: updatedCompanyBranches
+      });
+      
+      cancelEditCompany();
   };
 
   // Filiais
@@ -563,12 +611,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                </div>
                )}
 
-               {/* Empresas Card (NOVO) */}
+               {/* Empresas Card (REFATORADO) */}
                {hasPermission('settings:view_branches') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col md:col-span-2">
                    <SectionHeader title="Empresas (Holding)" description="Nível hierárquico superior (Agrupa filiais)." />
                    
-                   <div className="flex gap-2 mb-6">
+                   {/* Add New Company */}
+                   <div className="flex gap-2 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
                        <div className="relative flex-1">
                            <input 
                             type="text" 
@@ -589,20 +638,72 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        </button>
                    </div>
                    
-                   <div className="flex flex-wrap gap-2 overflow-y-auto max-h-[300px] p-1">
-                       {(settings.companies || []).map(comp => (
-                           <div key={comp} className="bg-white text-gray-700 pl-3 pr-2 py-1.5 rounded-full flex items-center gap-2 text-sm border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors group">
-                               <span className="font-medium">{comp}</span> 
-                               <button 
-                                disabled={!hasPermission('settings:edit_branches')}
-                                onClick={() => removeCompany(comp)} 
-                                className="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-full p-1 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                               >
-                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                               </button>
-                           </div>
-                       ))}
-                       {(!settings.companies || settings.companies.length === 0) && <p className="text-gray-400 italic text-sm w-full text-center py-2">Nenhuma empresa cadastrada.</p>}
+                   {/* Company List with Hierarchy */}
+                   <div className="space-y-4">
+                       {(settings.companies || []).map(comp => {
+                           const linkedBranches = settings.companyBranches?.[comp] || [];
+                           const isEditing = editingCompanyOriginalName === comp;
+
+                           return (
+                               <div key={comp} className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+                                   <div className="flex justify-between items-start mb-3">
+                                       {isEditing ? (
+                                           <div className="flex items-center gap-2 flex-1 mr-4">
+                                               <input 
+                                                   type="text" 
+                                                   autoFocus
+                                                   className="flex-1 border border-indigo-300 rounded px-2 py-1 text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                                                   value={editingCompanyNewName}
+                                                   onChange={e => setEditingCompanyNewName(e.target.value)}
+                                                   onKeyDown={e => e.key === 'Enter' && saveCompanyEdit()}
+                                               />
+                                               <button onClick={saveCompanyEdit} className="p-1.5 text-green-600 hover:bg-green-50 rounded">{Icons.Check}</button>
+                                               <button onClick={cancelEditCompany} className="p-1.5 text-red-500 hover:bg-red-50 rounded">{Icons.Close}</button>
+                                           </div>
+                                       ) : (
+                                           <h4 className="text-base font-bold text-gray-800 flex-1">{comp}</h4>
+                                       )}
+                                       
+                                       <div className="flex gap-1">
+                                           <IconButton 
+                                               disabled={!hasPermission('settings:edit_branches') || isEditing} 
+                                               onClick={() => startEditingCompany(comp)} 
+                                               icon={Icons.Edit} 
+                                               title="Renomear Empresa" 
+                                               colorClass="text-blue-500 hover:bg-blue-50"
+                                           />
+                                           <IconButton 
+                                               disabled={!hasPermission('settings:edit_branches') || isEditing} 
+                                               onClick={() => removeCompany(comp)} 
+                                               icon={Icons.Trash} 
+                                               title="Excluir Empresa" 
+                                               colorClass="text-red-500 hover:bg-red-50"
+                                           />
+                                       </div>
+                                   </div>
+
+                                   {/* Linked Branches Badges */}
+                                   <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                       <p className="text-[10px] uppercase font-bold text-gray-400 mb-2 flex items-center gap-1">
+                                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                                           Filiais Vinculadas ({linkedBranches.length})
+                                       </p>
+                                       <div className="flex flex-wrap gap-2">
+                                           {linkedBranches.length > 0 ? (
+                                               linkedBranches.map(branch => (
+                                                   <span key={branch} className="text-xs bg-white border border-gray-200 text-gray-600 px-2 py-1 rounded shadow-sm">
+                                                       {branch}
+                                                   </span>
+                                               ))
+                                           ) : (
+                                               <span className="text-xs text-gray-400 italic">Nenhuma filial vinculada.</span>
+                                           )}
+                                       </div>
+                                   </div>
+                               </div>
+                           );
+                       })}
+                       {(!settings.companies || settings.companies.length === 0) && <p className="text-gray-400 italic text-sm w-full text-center py-4">Nenhuma empresa cadastrada.</p>}
                    </div>
                </div>
                )}
@@ -612,7 +713,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col md:col-span-2">
                    <SectionHeader title="Filiais / Unidades" description="Gerencie as unidades físicas e vincule à empresa." />
                    
-                   <div className="flex flex-col md:flex-row gap-2 mb-6 items-end">
+                   <div className="flex flex-col md:flex-row gap-2 mb-6 items-end bg-gray-50 p-4 rounded-xl border border-gray-200">
                        {(settings.companies || []).length > 0 && (
                            <div className="w-full md:w-1/3">
                                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Vincular a Empresa</label>
@@ -674,7 +775,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                </div>
                )}
 
-               {/* Sectors Card - ATUALIZADO (HIERARQUIA) */}
+               {/* Sectors Card - REFORÇADO (HIERARQUIA) */}
                {hasPermission('settings:view_sectors') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 flex flex-col md:col-span-2">
                    <SectionHeader title="Setores por Filial" description="Departamentos vinculados especificamente a uma filial." />
@@ -760,22 +861,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
                        ) : (
                            <div className="flex flex-col items-center justify-center w-full text-gray-400 italic py-6 border-2 border-dashed border-gray-100 rounded-lg">
                                <span>🏢</span>
-                               <p className="text-xs mt-1">Selecione uma filial para gerenciar seus setores.</p>
+                               <p className="text-xs mt-1">Selecione uma filial acima para gerenciar seus setores.</p>
                            </div>
                        )}
                    </div>
-                   
-                   {/* Fallback para visualização de Setores "Globais" Legados se existirem */}
-                   {settings.sectors && settings.sectors.length > 0 && (
-                       <div className="mt-6 pt-4 border-t border-gray-100 opacity-60">
-                           <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Setores Globais (Legado)</h4>
-                           <div className="flex flex-wrap gap-2">
-                               {settings.sectors.map(s => (
-                                   <span key={s} className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs border border-gray-200">{s}</span>
-                               ))}
-                           </div>
-                       </div>
-                   )}
                </div>
                )}
            </div>
@@ -785,8 +874,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, setSettings, showT
        {/* --- CONTENT: ROLES --- */}
        {activeTab === 'roles' && (
            <div className="space-y-6 animate-fadeIn">
-               {/* ... Roles logic ... */}
-               {/* (Mesmo código anterior para Roles) */}
                 {hasPermission('settings:view_roles_list') && (
                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
                    <SectionHeader title="Funções e Cargos" description="Defina os cargos e suas permissões de visibilidade." />

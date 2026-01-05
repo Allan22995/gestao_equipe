@@ -329,7 +329,7 @@ export const Balance: React.FC<BalanceProps> = ({
           let successCount = 0;
           let skippedCount = 0;
           const now = new Date().toISOString();
-          const allowedMap = new Map(allowedCollaborators.map(c => [c.colabId, c]));
+          const allowedMap = new Map(allowedCollaborators.map(c => [c.colabId, c] as [string, Collaborator]));
 
           // Processar linhas de dados
           for (const row of rows) {
