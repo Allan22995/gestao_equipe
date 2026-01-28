@@ -467,19 +467,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
       }
 
-      // Check Lunch Break (Only if active and has lunchStart defined)
-      if (isActive && c.lunchStart) {
-          const [lh, lm] = c.lunchStart.split(':').map(Number);
-          const lunchStartMins = lh * 60 + lm;
-          const lunchEndMins = lunchStartMins + 60; // Duração fixa de 1 hora
-
-          if (currentMinutes >= lunchStartMins && currentMinutes < lunchEndMins) {
-              status = 'Em Almoço';
-              statusColor = 'bg-amber-100 text-amber-800 border border-amber-200';
-              isActive = false; // Considerado inativo para o card "TRABALHANDO AGORA"
-          }
-      }
-
       if (isActive) activeCount++;
       else inactiveCount++;
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -43,7 +42,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     phone: '',
     otherContact: '',
     profile: 'colaborador' as UserProfile,
-    company: '', // NOVO
     branch: '',
     role: '',
     sector: '',
@@ -51,7 +49,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     allowedSectors: [] as string[],
     login: '',
     shiftType: '',
-    lunchStart: '', // NOVO
     hasRotation: false,
     rotationGroup: '',
     rotationStartDate: '',
@@ -116,7 +113,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
         setFormData(prev => ({
             ...prev,
             shiftType: sourceColab.shiftType,
-            lunchStart: sourceColab.lunchStart || '',
             hasRotation: sourceColab.hasRotation || false,
             rotationGroup: sourceColab.rotationGroup || '',
             rotationStartDate: sourceColab.rotationStartDate || ''
@@ -140,65 +136,18 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
   const selectedRoleConfig = settings.roles.find(r => r.name === formData.role);
   const isRoleRestricted = selectedRoleConfig ? !selectedRoleConfig.canViewAllSectors : false;
 
-  // --- HIERARCHY LOGIC FOR FORM ---
-  
-  // 1. Available Companies based on User's Branch Permissions
-  const availableCompanies = useMemo(() => {
-      // Se não há empresas cadastradas, retorna vazio (comportamento legado)
-      if (!settings.companies || settings.companies.length === 0) return [];
-
-      // Se usuário tem acesso a todas as filiais (Admin/SuperUser)
-      if (currentUserProfile === 'admin') return settings.companies;
-
-      // Se usuário é restrito, filtrar empresas que contêm as filiais permitidas
-      const allowedCompanies = new Set<string>();
-      if (settings.companyBranches) {
-          Object.keys(settings.companyBranches).forEach(comp => {
-              const branchesInComp = settings.companyBranches![comp] || [];
-              // Se alguma filial da empresa estiver na lista de permitidas do usuário
-              if (branchesInComp.some(b => availableBranches.includes(b))) {
-                  allowedCompanies.add(comp);
-              }
-          });
-      }
-      return Array.from(allowedCompanies).sort();
-  }, [settings.companies, settings.companyBranches, availableBranches, currentUserProfile]);
-
-  // 2. Available Branches based on Selected Company AND User Permissions
-  const formBranchOptions = useMemo(() => {
-      let options = availableBranches; // Start with user permissions
-
-      // If a company is selected, filter branches belonging to that company
-      if (formData.company && settings.companyBranches) {
-          const branchesInCompany = settings.companyBranches[formData.company] || [];
-          options = options.filter(b => branchesInCompany.includes(b));
-      } else if ((settings.companies || []).length > 0 && !formData.company) {
-          // Se o sistema tem empresas mas nenhuma selecionada, não mostra filiais para evitar erro
-          if (editingId && !formData.company) {
-              // Editando legado sem empresa: mostra tudo permitido
-          } else {
-              return []; // Force select company
-          }
-      }
-
-      return options.sort();
-  }, [availableBranches, formData.company, settings.companyBranches, settings.companies, editingId]);
-
-
   const handleAddNew = () => {
     if (!canCreate) return;
     setShowForm(true);
     setEditingId(null);
     
-    // Auto-select company if only one available
-    const initialCompany = availableCompanies.length === 1 ? availableCompanies[0] : '';
-    
+    // Auto-select branch if restricted
+    const initialBranch = availableBranches.length === 1 ? availableBranches[0] : '';
+
     setFormData({ 
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', 
-      company: initialCompany,
-      branch: '', // Will be filtered by company later
+      branch: initialBranch,
       role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
-      lunchStart: '',
       hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
@@ -210,14 +159,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     if (!canUpdate) return;
     setEditingId(colab.id);
     setShowForm(true);
-    
-    // Tenta inferir a empresa se não estiver salva (legado), baseado na filial
-    let inferredCompany = colab.company || '';
-    if (!inferredCompany && settings.companyBranches) {
-        const found = Object.keys(settings.companyBranches).find(comp => settings.companyBranches![comp].includes(colab.branch));
-        if (found) inferredCompany = found;
-    }
-
     setFormData({
       colabId: colab.colabId,
       name: colab.name,
@@ -225,7 +166,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       phone: colab.phone || '',
       otherContact: colab.otherContact || '',
       profile: colab.profile || 'colaborador',
-      company: inferredCompany,
       branch: colab.branch,
       role: colab.role,
       sector: colab.sector || '',
@@ -233,7 +173,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       allowedSectors: colab.allowedSectors || [],
       login: colab.login,
       shiftType: colab.shiftType,
-      lunchStart: colab.lunchStart || '',
       hasRotation: colab.hasRotation || false,
       rotationGroup: colab.rotationGroup || '',
       rotationStartDate: colab.rotationStartDate || '',
@@ -257,8 +196,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     setEditingId(null);
     setShowForm(false);
     setFormData({ 
-      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', company: '', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
-      lunchStart: '',
+      colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
       hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
@@ -310,12 +248,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
             showToast('Informe a data da última folga de escala para cálculo.', true);
             return;
         }
-    }
-
-    // Se tem empresas cadastradas, Company é obrigatório
-    if (availableCompanies.length > 0 && !formData.company) {
-        showToast('Selecione a Empresa.', true);
-        return;
     }
 
     const finalAllowedSectors = isRoleRestricted ? formData.allowedSectors : [];
@@ -634,33 +566,11 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
               </select>
             </div>
 
-            {/* COMPANY DROPDOWN (NOVO) */}
-            {availableCompanies.length > 0 && (
-                <div className="flex flex-col">
-                    <label className="text-xs font-semibold text-gray-600 mb-1">Empresa *</label>
-                    <select 
-                        required 
-                        className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
-                        value={formData.company} 
-                        onChange={e => {
-                            const newComp = e.target.value;
-                            setFormData({...formData, company: newComp, branch: '', leaderId: '', sector: ''});
-                            setSelectedTemplateId('');
-                        }}
-                    >
-                        <option value="">Selecione...</option>
-                        {availableCompanies.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
-
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-gray-600 mb-1">Filial Principal *</label>
               <select 
                 required 
-                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-gray-100" 
+                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
                 value={formData.branch} 
                 onChange={e => {
                     const newBranch = e.target.value;
@@ -668,10 +578,9 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                     // Reset template selection if branch changes (to force re-selection from valid list)
                     setSelectedTemplateId('');
                 }}
-                disabled={availableCompanies.length > 0 && !formData.company}
               >
-                 <option value="">{availableCompanies.length > 0 && !formData.company ? 'Selecione a Empresa...' : 'Selecione...'}</option>
-                 {formBranchOptions.map(b => (
+                 <option value="">Selecione...</option>
+                 {availableBranches.map(b => (
                    <option key={b} value={b}>{b}</option>
                  ))}
               </select>
@@ -712,17 +621,6 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                  <option value="4º Turno">4º Turno</option>
                  <option value="ADM">ADM</option>
               </select>
-            </div>
-
-            <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Início Almoço</label>
-              <input 
-                type="time" 
-                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
-                value={formData.lunchStart} 
-                onChange={e => setFormData({...formData, lunchStart: e.target.value})} 
-              />
-              <span className="text-[10px] text-gray-400">O intervalo tem duração fixa de 1 hora a partir do horário definido.</span>
             </div>
 
             <div className="flex flex-col md:col-span-1">
