@@ -60,6 +60,7 @@ export interface Collaborator {
   allowedSectors?: string[];
   login: string;
   shiftType: string;
+  lunchStart?: string; // NOVO: Horário de início do almoço
   schedule: Schedule;
   hasRotation?: boolean;
   rotationGroup?: string;
