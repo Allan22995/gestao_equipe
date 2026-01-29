@@ -366,7 +366,7 @@ export const Events: React.FC<EventsProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // --- CÁLCULO INTELIGENTE DE DIAS ÚTEIS (CORREÇÃO DEFENITIVA) ---
+  // --- CÁLCULO INTELIGENTE DE DIAS ÚTEIS (CORREÇÃO DEFENITIVA v2) ---
   const calculateEffect = (typeId: string, startStr: string, endStr: string, collaboratorId: string) => {
       if (!startStr || !endStr || !typeId || !collaboratorId) return { gained: 0, used: 0 };
       
@@ -374,38 +374,51 @@ export const Events: React.FC<EventsProps> = ({
       if (!colab) return { gained: 0, used: 0 };
 
       const typeConfig = settings.eventTypes.find(t => t.id === typeId);
-      let behavior = typeConfig?.behavior || 'neutral';
-      
-      if (typeId === 'ferias') behavior = 'neutral';
-      if (typeId === 'folga') behavior = 'debit';
-      if (typeId === 'trabalhado') behavior = 'credit_2x';
+      const behavior = typeConfig?.behavior || 'neutral';
+
+      // Lógica de Identificação
+      const isCredit = behavior.startsWith('credit'); // credit_1x, credit_2x
+      const isDebit = behavior === 'debit';
+      const isNeutral = behavior === 'neutral';
+
+      // Se for neutro, não precisamos iterar, retorna 0
+      if (isNeutral) {
+          return { gained: 0, used: 0, label: typeConfig?.label };
+      }
 
       // Iteração dia a dia para verificar escala
       let effectiveDays = 0;
       const start = new Date(startStr + 'T00:00:00');
       const end = new Date(endStr + 'T00:00:00');
-      
-      // Cria uma cópia para iterar sem alterar a data original de start
       const loopDate = new Date(start);
       
       while (loopDate <= end) {
-          const dayIndex = loopDate.getDay();
-          const dayKey = weekDayMap[dayIndex] as keyof Schedule;
-          
-          // 1. Verifica se o dia está habilitado na escala fixa
-          let isWorkingDay = colab.schedule[dayKey]?.enabled;
-
-          // 2. Se for Domingo e tiver rotação, verifica a regra de revezamento 3x1
-          if (dayIndex === 0 && colab.hasRotation && colab.rotationGroup) {
-              const isRotationOff = checkRotationDay(loopDate, colab.rotationStartDate);
-              if (isRotationOff) {
-                  // É domingo de folga na escala, então não conta como dia trabalhado
-                  isWorkingDay = false; 
-              }
-          }
-
-          if (isWorkingDay) {
+          if (isCredit) {
+              // SE FOR CRÉDITO: O colaborador trabalhou. Conta o dia INDEPENDENTE da escala.
+              // Ex: Trabalhou domingo (folga) -> Ganha crédito. Trabalhou segunda (dia útil) -> Ganha crédito (extra?).
+              // (Normalmente 'Trabalhado' é usado para dias extras fora da escala padrão)
               effectiveDays++;
+          } 
+          else if (isDebit) {
+              // SE FOR DÉBITO (Folga/Falta): Só desconta se ele DEVERIA trabalhar.
+              const dayIndex = loopDate.getDay();
+              const dayKey = weekDayMap[dayIndex] as keyof Schedule;
+              
+              // 1. Verifica se o dia está habilitado na escala fixa
+              let isWorkingDay = colab.schedule[dayKey]?.enabled;
+
+              // 2. Se for Domingo e tiver rotação, verifica a regra de revezamento 3x1
+              if (dayIndex === 0 && colab.hasRotation && colab.rotationGroup) {
+                  const isRotationOff = checkRotationDay(loopDate, colab.rotationStartDate);
+                  if (isRotationOff) {
+                      // É domingo de folga na escala, então não conta como dia trabalhado para débito
+                      isWorkingDay = false; 
+                  }
+              }
+
+              if (isWorkingDay) {
+                  effectiveDays++;
+              }
           }
 
           // Avança para o próximo dia
