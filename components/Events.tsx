@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus, Schedule, DaySchedule } from '../types';
-import { generateUUID, calculateDaysBetween, formatDate, promptForUser, buildApprovalChain } from '../utils/helpers';
+import { generateUUID, calculateDaysBetween, formatDate, promptForUser, buildApprovalChain, weekDayMap, checkRotationDay } from '../utils/helpers';
 
 interface EventsProps {
   collaborators: Collaborator[];
@@ -50,19 +50,14 @@ export const Events: React.FC<EventsProps> = ({
   const isManager = currentUserProfile !== 'colaborador';
 
   // Helper para identificar se o colaborador logado (ou selecionado) pode selecionar tipo de evento
-  // Se não estiver editando e for um colaborador (não manager), usa o ID do usuário logado.
   const currentUserContextId = userColabId;
   const currentContextColab = useMemo(() => collaborators.find(c => c.id === currentUserContextId), [collaborators, currentUserContextId]);
   
   const canSelectType = useMemo(() => {
-      // 1. Se for gerente/admin, sempre pode
       if (isManager) return true;
-      
-      // 2. Se for colaborador, verifica se o setor dele está na lista permitida
       if (currentContextColab && currentContextColab.sector && settings.sectorsWithEventTypeSelection) {
           return settings.sectorsWithEventTypeSelection.includes(currentContextColab.sector);
       }
-      
       return false;
   }, [isManager, currentContextColab, settings.sectorsWithEventTypeSelection]);
 
@@ -86,10 +81,10 @@ export const Events: React.FC<EventsProps> = ({
   const [copySearchTerm, setCopySearchTerm] = useState('');
   const copyDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Inicialização Lazy do Form Data para garantir que userColabId seja usado se disponível
+  // Inicialização Lazy do Form Data
   const [formData, setFormData] = useState(() => ({
     collaboratorId: (!isManager && userColabId) ? userColabId : '',
-    type: (!isManager && !canSelectType) ? 'folga' : '', // Inicializa vazio se puder selecionar
+    type: (!isManager && !canSelectType) ? 'folga' : '', 
     startDate: '',
     endDate: '',
     observation: '',
@@ -110,7 +105,7 @@ export const Events: React.FC<EventsProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Efeito para garantir atualização caso userColabId mude após montagem (ex: login lento)
+  // Efeito para garantir atualização caso userColabId mude após montagem
   useEffect(() => {
     if (!isManager && userColabId && !editingId) {
       setFormData(prev => ({
@@ -121,10 +116,9 @@ export const Events: React.FC<EventsProps> = ({
     }
   }, [isManager, userColabId, editingId, canSelectType]);
 
-  // --- AUTOMATIC ESCALATION CHECK (RUNS ONCE ON MOUNT) ---
+  // --- AUTOMATIC ESCALATION CHECK ---
   useEffect(() => {
     const runEscalationCheck = async () => {
-      // Only managers/admins should trigger updates to avoid conflicts, and only if configured
       if (!isManager || !settings.approvalEscalationDelay || settings.approvalEscalationDelay <= 0) return;
 
       const now = new Date();
@@ -135,13 +129,11 @@ export const Events: React.FC<EventsProps> = ({
         if (evt.status !== 'pendente') continue;
         if (!evt.approverChain || evt.approverChain.length === 0) continue;
         
-        // Find current approver index
         const currentIndex = evt.approverChain.indexOf(evt.currentApproverId || '');
-        if (currentIndex === -1 || currentIndex >= evt.approverChain.length - 1) continue; // Not found or already at top
+        if (currentIndex === -1 || currentIndex >= evt.approverChain.length - 1) continue; 
 
         const lastUpdate = new Date(evt.lastUpdatedAt || evt.createdAt);
         if ((now.getTime() - lastUpdate.getTime()) > delayMs) {
-           // Escalate!
            const nextApproverId = evt.approverChain[currentIndex + 1];
            const nextApprover = collaborators.find(c => c.id === nextApproverId);
            
@@ -170,14 +162,13 @@ export const Events: React.FC<EventsProps> = ({
       }
     };
 
-    // Small delay to ensure data is loaded
     if (events.length > 0 && collaborators.length > 0) {
        const timer = setTimeout(runEscalationCheck, 2000);
        return () => clearTimeout(timer);
     }
-  }, [events.length, settings.approvalEscalationDelay, isManager]); // Dependency on length to run when data loads, strictly constrained
+  }, [events.length, settings.approvalEscalationDelay, isManager]);
 
-  // Filtrar colaboradores ativos primeiro
+  // Filtrar colaboradores ativos
   const activeCollaborators = useMemo(() => {
      return collaborators.filter(c => c.active !== false);
   }, [collaborators]);
@@ -186,7 +177,6 @@ export const Events: React.FC<EventsProps> = ({
   const allowedCollaborators = useMemo(() => {
      let filtered = activeCollaborators;
      
-     // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
         return filtered.filter(c => c.id === userColabId);
      }
@@ -209,9 +199,7 @@ export const Events: React.FC<EventsProps> = ({
   // Filter for Copy Schedule Dropdown (Searchable)
   const filteredCopyOptions = useMemo(() => {
       return allowedCollaborators.filter(c => {
-          // Não permitir copiar do próprio usuário selecionado (opcional, mas boa prática)
           if (formData.collaboratorId && c.id === formData.collaboratorId) return false;
-          
           const term = copySearchTerm.toLowerCase();
           return c.name.toLowerCase().includes(term) || c.colabId.toLowerCase().includes(term);
       }).sort((a, b) => a.name.localeCompare(b.name));
@@ -226,17 +214,15 @@ export const Events: React.FC<EventsProps> = ({
       if (!settings.scheduleTemplates) return [];
       
       const targetColabId = formData.collaboratorId;
-      if (!targetColabId) return settings.scheduleTemplates; // Show all if no colab selected yet
+      if (!targetColabId) return settings.scheduleTemplates; 
 
       const targetColab = collaborators.find(c => c.id === targetColabId);
       const targetBranch = targetColab?.branch;
 
-      // Se não encontrou filial, mostra os globais
       if (!targetBranch) {
           return settings.scheduleTemplates.filter(t => !t.branches || t.branches.length === 0);
       }
 
-      // Se tem filial, mostra os vinculados à filial + globais
       return settings.scheduleTemplates.filter(t => {
           const isGlobal = !t.branches || t.branches.length === 0;
           const isLinked = t.branches?.includes(targetBranch);
@@ -244,40 +230,30 @@ export const Events: React.FC<EventsProps> = ({
       });
   }, [settings.scheduleTemplates, formData.collaboratorId, collaborators]);
 
-  // Filter Events History and Sort by Date Descending
+  // Filter Events History
   const allowedEvents = useMemo(() => {
      let filtered = events;
      
-     // Filter out inactive users events
      filtered = filtered.filter(e => {
         const colab = collaborators.find(c => c.id === e.collaboratorId);
         if (!colab) return isManager;
         return colab.active !== false;
      });
 
-     // 1. Strict Privacy for 'colaborador' profile
      if (currentUserProfile === 'colaborador' && userColabId) {
          filtered = filtered.filter(e => e.collaboratorId === userColabId);
      } else if (isManager && userColabId) {
-         // Manager Visibility Logic:
-         // 1. Sector Filter (Standard)
-         // 2. OR if I am the current approver (Escalation Override)
-         // 3. OR if I am in the approval chain (Hierarchy Override)
-         
          filtered = filtered.filter(e => {
-             // Check Hierarchy/Chain Visibility First
              const isApprover = e.currentApproverId === userColabId;
              const isInChain = e.approverChain?.includes(userColabId);
              if (isApprover || isInChain) return true;
 
-             // Fallback to Sector Logic
              const colab = collaborators.find(c => c.id === e.collaboratorId);
              if (!colab) return currentUserAllowedSectors.length === 0;
              return currentUserAllowedSectors.length === 0 || (colab.sector && currentUserAllowedSectors.includes(colab.sector));
          });
      }
 
-     // 2. Search Filtering (Histórico)
      if (historySearchTerm.trim()) {
         const term = historySearchTerm.toLowerCase();
         filtered = filtered.filter(e => {
@@ -286,19 +262,15 @@ export const Events: React.FC<EventsProps> = ({
             const typeStr = e.type.toLowerCase();
             const typeLabel = (e.typeLabel || '').toLowerCase();
             const obsStr = (e.observation || '').toLowerCase();
-            
             return colabName.includes(term) || typeStr.includes(term) || typeLabel.includes(term) || obsStr.includes(term);
         });
      }
 
-     // Sort by startDate descending (newest first), then by creation date
      return [...filtered].sort((a, b) => {
          const dateA = a.startDate || '';
          const dateB = b.startDate || '';
-         
          const dateComparison = dateB.localeCompare(dateA);
          if (dateComparison !== 0) return dateComparison;
-
          const createdA = a.createdAt || '';
          const createdB = b.createdAt || '';
          return createdB.localeCompare(createdA);
@@ -316,7 +288,7 @@ export const Events: React.FC<EventsProps> = ({
     setCopySearchTerm('');
     setFormData({
       collaboratorId: (!isManager && userColabId) ? userColabId : '',
-      type: (!isManager && !canSelectType) ? 'folga' : '', // Default to Folga for collaborator if no selection allowed
+      type: (!isManager && !canSelectType) ? 'folga' : '', 
       startDate: '',
       endDate: '',
       observation: '',
@@ -324,11 +296,9 @@ export const Events: React.FC<EventsProps> = ({
     });
   };
 
-  // Check if current event type allows scheduling (is a working event)
   const isWorkingType = useMemo(() => {
       const typeConfig = settings.eventTypes.find(t => t.id === formData.type);
       const label = typeConfig?.label || '';
-      // Verifica se o nome do evento é exatamente o solicitado (case insensitive)
       return label.toLowerCase() === 'trabalhando em outro turno';
   }, [formData.type, settings.eventTypes]);
 
@@ -377,7 +347,7 @@ export const Events: React.FC<EventsProps> = ({
     }
 
     setEditingId(evt.id);
-    setIsMultiMode(false); // Disable multi mode on edit
+    setIsMultiMode(false); 
     setFormData({
       collaboratorId: evt.collaboratorId,
       type: evt.type,
@@ -396,23 +366,58 @@ export const Events: React.FC<EventsProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const calculateEffect = (typeId: string, start: string, end: string) => {
-      if (!start || !end || !typeId) return { gained: 0, used: 0 };
+  // --- CÁLCULO INTELIGENTE DE DIAS ÚTEIS (CORREÇÃO DEFENITIVA) ---
+  const calculateEffect = (typeId: string, startStr: string, endStr: string, collaboratorId: string) => {
+      if (!startStr || !endStr || !typeId || !collaboratorId) return { gained: 0, used: 0 };
       
-      const days = calculateDaysBetween(start, end);
+      const colab = collaborators.find(c => c.id === collaboratorId);
+      if (!colab) return { gained: 0, used: 0 };
+
       const typeConfig = settings.eventTypes.find(t => t.id === typeId);
-      
       let behavior = typeConfig?.behavior || 'neutral';
+      
       if (typeId === 'ferias') behavior = 'neutral';
       if (typeId === 'folga') behavior = 'debit';
       if (typeId === 'trabalhado') behavior = 'credit_2x';
 
+      // Iteração dia a dia para verificar escala
+      let effectiveDays = 0;
+      const start = new Date(startStr + 'T00:00:00');
+      const end = new Date(endStr + 'T00:00:00');
+      
+      // Cria uma cópia para iterar sem alterar a data original de start
+      const loopDate = new Date(start);
+      
+      while (loopDate <= end) {
+          const dayIndex = loopDate.getDay();
+          const dayKey = weekDayMap[dayIndex] as keyof Schedule;
+          
+          // 1. Verifica se o dia está habilitado na escala fixa
+          let isWorkingDay = colab.schedule[dayKey]?.enabled;
+
+          // 2. Se for Domingo e tiver rotação, verifica a regra de revezamento 3x1
+          if (dayIndex === 0 && colab.hasRotation && colab.rotationGroup) {
+              const isRotationOff = checkRotationDay(loopDate, colab.rotationStartDate);
+              if (isRotationOff) {
+                  // É domingo de folga na escala, então não conta como dia trabalhado
+                  isWorkingDay = false; 
+              }
+          }
+
+          if (isWorkingDay) {
+              effectiveDays++;
+          }
+
+          // Avança para o próximo dia
+          loopDate.setDate(loopDate.getDate() + 1);
+      }
+
       let daysGained = 0;
       let daysUsed = 0;
 
-      if (behavior === 'credit_2x') daysGained = days * 2;
-      else if (behavior === 'credit_1x') daysGained = days;
-      else if (behavior === 'debit') daysUsed = days;
+      if (behavior === 'credit_2x') daysGained = effectiveDays * 2;
+      else if (behavior === 'credit_1x') daysGained = effectiveDays;
+      else if (behavior === 'debit') daysUsed = effectiveDays;
 
       return { gained: daysGained, used: daysUsed, label: typeConfig?.label };
   };
@@ -420,7 +425,6 @@ export const Events: React.FC<EventsProps> = ({
   const handleAcceptProposal = async (evt: EventRecord) => {
      const user = getColabName(userColabId || '') || 'Usuário';
      
-     // Reset approval flow if accepted
      const chain = evt.approverChain || [];
      const firstApprover = chain.length > 0 ? chain[0] : '';
 
@@ -428,7 +432,7 @@ export const Events: React.FC<EventsProps> = ({
         ...evt,
         status: 'pendente',
         collaboratorAcceptedProposal: true,
-        currentApproverId: firstApprover, // Send back to first approver
+        currentApproverId: firstApprover, 
         updatedBy: user,
         lastUpdatedAt: new Date().toISOString()
      }));
@@ -456,18 +460,15 @@ export const Events: React.FC<EventsProps> = ({
     setIsSubmitting(true);
     
     try {
-        // VALIDATION DATE
         if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
             showToast('Erro: A data final não pode ser anterior à data inicial.', true);
             return;
         }
 
         const user = isManager ? 'Gestor/Admin' : (getColabName(userColabId || '') || 'Colaborador');
-        
-        // Determina a escala a ser salva
         const finalSchedule = isWorkingType ? tempSchedule : undefined;
 
-        // --- LÓGICA DE CRIAÇÃO (ADD) ---
+        // --- ADD ---
         if (!editingId) {
             if (!canCreate) {
                 showToast('Você não tem permissão para criar eventos.', true);
@@ -475,10 +476,6 @@ export const Events: React.FC<EventsProps> = ({
             }
 
             let finalType = formData.type;
-            
-            // Lógica de Permissão de Tipo:
-            // Se NÃO é manager E NÃO tem permissão de seleção (baseado no setor), força 'folga'.
-            // Se tem permissão (canSelectType=true), usa o que foi selecionado no form.
             if (!isManager && !canSelectType) finalType = 'folga';
 
             if (!finalType) {
@@ -486,17 +483,21 @@ export const Events: React.FC<EventsProps> = ({
                 return;
             }
 
-            // --- LOTE (MULTI) ---
+            // --- MULTI ---
             if (isMultiMode && isManager) {
                 if (multiSelectedIds.length === 0) {
                     showToast("Selecione pelo menos um colaborador.", true);
                     return;
                 }
 
-                const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
                 let count = 0;
+                let batchLabel = '';
 
                 const promises = multiSelectedIds.map(colId => {
+                    // Cálculo individualizado para cada colaborador do lote
+                    const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate, colId);
+                    if (!batchLabel) batchLabel = label || '';
+
                     const newEvent: EventRecord = {
                         id: generateUUID(),
                         collaboratorId: colId,
@@ -507,10 +508,9 @@ export const Events: React.FC<EventsProps> = ({
                         observation: formData.observation,
                         daysGained: gained,
                         daysUsed: used,
-                        status: formData.status, // Admin defines status directly
+                        status: formData.status, 
                         schedule: finalSchedule, 
                         createdAt: new Date().toISOString()
-                        // createdBy is handled by App.tsx
                     };
                     count++;
                     return Promise.resolve(onAdd(newEvent));
@@ -518,13 +518,13 @@ export const Events: React.FC<EventsProps> = ({
 
                 await Promise.all(promises);
 
-                logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${label}`, user);
+                logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${batchLabel}`, user);
                 showToast(`${count} eventos registrados com sucesso!`);
                 resetForm();
                 return;
             }
 
-            // --- INDIVIDUAL (SINGLE) ---
+            // --- SINGLE ---
             let finalColabId = formData.collaboratorId;
             if (!isManager && userColabId) finalColabId = userColabId;
 
@@ -536,11 +536,9 @@ export const Events: React.FC<EventsProps> = ({
             let finalStatus: EventStatus = formData.status;
             if (!isManager) finalStatus = 'pendente';
 
-            // --- APPROVAL CHAIN BUILDING ---
             let approverChain: string[] = [];
             let currentApproverId = '';
 
-            // If pending (created by collab OR admin setting it as pending), build chain
             if (finalStatus === 'pendente') {
                 approverChain = buildApprovalChain(finalColabId, collaborators);
                 if (approverChain.length > 0) {
@@ -548,7 +546,8 @@ export const Events: React.FC<EventsProps> = ({
                 }
             }
 
-            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+            // Cálculo para o colaborador individual
+            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate, finalColabId);
 
             const newEvent: EventRecord = {
                 id: generateUUID(),
@@ -565,7 +564,6 @@ export const Events: React.FC<EventsProps> = ({
                 approverChain,
                 currentApproverId,
                 createdAt: new Date().toISOString()
-                // createdBy is handled by App.tsx
             };
             
             await Promise.resolve(onAdd(newEvent));
@@ -574,27 +572,15 @@ export const Events: React.FC<EventsProps> = ({
             resetForm();
 
         } else {
-            // --- EDIÇÃO (UPDATE) ---
+            // --- UPDATE ---
             if (!canUpdate) {
                 showToast('Você não tem permissão para editar eventos.', true);
                 return;
             }
 
-            // Validar se o usuário pode aprovar (se estiver tentando aprovar)
-            if (formData.status === 'aprovado' && isManager) {
-                const existing = events.find(e => e.id === editingId);
-                if (existing && existing.status === 'pendente' && existing.currentApproverId) {
-                    if (existing.currentApproverId !== userColabId && currentUserProfile !== 'admin') {
-                        // Allow if they are higher in the chain? 
-                    }
-                }
-            }
-
             let finalType = formData.type;
-            
-            // Mesma lógica de permissão no Update
             if (!isManager && !canSelectType) finalType = 'folga';
-            if (!finalType) finalType = 'folga'; // Fallback
+            if (!finalType) finalType = 'folga';
 
             let finalStatus: EventStatus = formData.status;
             let acceptedFlag = false;
@@ -606,9 +592,9 @@ export const Events: React.FC<EventsProps> = ({
                 if (formData.status === 'nova_opcao') acceptedFlag = false;
             }
 
-            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
+            // Recalcula ao editar
+            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate, formData.collaboratorId);
 
-            // Se for aprovado ou reprovado, limpa o currentApproverId (fluxo encerra)
             const isFinished = finalStatus === 'aprovado' || finalStatus === 'reprovado';
             
             const existingEvent = events.find(e => e.id === editingId);
@@ -714,7 +700,6 @@ export const Events: React.FC<EventsProps> = ({
           <div className="flex flex-col">
             <label className="text-xs font-semibold text-gray-600 mb-1">Colaborador(es) *</label>
             
-            {/* SINGLE SELECT MODE */}
             {!isMultiMode && (
                 <select
                 required
@@ -730,7 +715,6 @@ export const Events: React.FC<EventsProps> = ({
                 </select>
             )}
 
-            {/* MULTI SELECT MODE */}
             {isMultiMode && (
                 <div className="relative" ref={multiDropdownRef}>
                     <div 
@@ -798,7 +782,7 @@ export const Events: React.FC<EventsProps> = ({
               className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-700 disabled:bg-gray-100 disabled:text-gray-500"
               value={formData.type}
               onChange={e => setFormData({...formData, type: e.target.value})}
-              disabled={!canSelectType && !isManager} // Habilita se for manager OU se tiver permissão por setor
+              disabled={!canSelectType && !isManager}
             >
               <option value="">Selecione...</option>
               {(isManager || canSelectType) ? settings.eventTypes.map(t => (
@@ -811,7 +795,6 @@ export const Events: React.FC<EventsProps> = ({
             {(!isManager && canSelectType) && <p className="text-[10px] text-green-600 mt-1 font-medium">Seleção habilitada para seu setor.</p>}
           </div>
 
-          {/* Status Field - Only visible/editable for Managers */}
           {isManager && (
             <div className="flex flex-col md:col-span-2">
                 <label className="text-xs font-semibold text-gray-600 mb-1">Status *</label>
@@ -864,14 +847,11 @@ export const Events: React.FC<EventsProps> = ({
             </div>
           </div>
 
-          {/* --- JORNADA TEMPORÁRIA --- */}
           {isWorkingType && isManager && (
               <div className="md:col-span-2 border-t border-gray-100 pt-6">
-                  {/* ... (mantido igual ao anterior, omitido para brevidade) ... */}
                   <h3 className="text-sm font-bold text-gray-800 mb-4 bg-purple-50 p-2 rounded text-purple-800 border border-purple-100">Jornada Temporária</h3>
                   
                   <div className="flex flex-col md:flex-row gap-4 mb-4">
-                        {/* Carregar Modelo (Filtrado por Filial) */}
                         {settings.scheduleTemplates && settings.scheduleTemplates.length > 0 && (
                         <div className="flex-1 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
                             <span className="text-xs font-bold text-blue-800 whitespace-nowrap">Carregar Modelo:</span>
@@ -891,13 +871,11 @@ export const Events: React.FC<EventsProps> = ({
                         </div>
                         )}
 
-                        {/* Copiar de Colaborador (SEARCHABLE DROPDOWN) */}
                         <div className="flex-1 bg-purple-50 p-3 rounded-lg border border-purple-100 relative" ref={copyDropdownRef}>
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs font-bold text-purple-800 whitespace-nowrap">Copiar Escala de:</span>
                             </div>
                             
-                            {/* Dropdown Trigger */}
                             <div 
                                 onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)}
                                 className="w-full bg-white border border-purple-200 rounded p-1.5 flex justify-between items-center cursor-pointer hover:border-purple-300"
@@ -908,7 +886,6 @@ export const Events: React.FC<EventsProps> = ({
                                 <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                             </div>
 
-                            {/* Dropdown Content */}
                             {isCopyDropdownOpen && (
                                 <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl z-50 max-h-60 flex flex-col overflow-hidden animate-fadeIn">
                                     <div className="p-2 border-b border-gray-100 bg-gray-50">
@@ -1046,7 +1023,6 @@ export const Events: React.FC<EventsProps> = ({
 
         <div className="space-y-3">
           {allowedEvents.length === 0 ? <p className="text-gray-400 text-center py-4">Nenhum evento encontrado.</p> : allowedEvents.map(e => {
-            // Determine visual style based on status
             let statusColor = 'bg-gray-100 text-gray-600 border-gray-200';
             let statusLabel = 'Pendente';
             
@@ -1059,7 +1035,6 @@ export const Events: React.FC<EventsProps> = ({
                 case 'pendente': statusColor = 'bg-gray-100 text-gray-600 border-gray-200'; statusLabel = 'Pendente'; break;
             }
 
-            // --- APPROVAL INFO DISPLAY ---
             let approverInfo = null;
             if (evtStatus === 'pendente' && e.currentApproverId) {
                 const approver = collaborators.find(c => c.id === e.currentApproverId);
@@ -1072,7 +1047,6 @@ export const Events: React.FC<EventsProps> = ({
                 );
             }
 
-            // Escalation Indicator
             const isEscalated = e.escalationHistory && e.escalationHistory.length > 0;
 
             return (
