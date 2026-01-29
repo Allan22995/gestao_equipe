@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Collaborator, EventRecord, SystemSettings, UserProfile, EventStatus, Schedule, DaySchedule } from '../types';
-import { generateUUID, calculateDaysBetween, formatDate, promptForUser, buildApprovalChain, weekDayMap, checkRotationDay } from '../utils/helpers';
+import { generateUUID, calculateDaysBetween, formatDate, promptForUser, buildApprovalChain } from '../utils/helpers';
 
 interface EventsProps {
   collaborators: Collaborator[];
@@ -396,55 +396,23 @@ export const Events: React.FC<EventsProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // --- CÁLCULO DE DIAS ÚTEIS (Considerando Escala Individual) ---
-  const calculateEffect = (typeId: string, startStr: string, endStr: string, collaboratorId: string) => {
-      if (!startStr || !endStr || !typeId || !collaboratorId) return { gained: 0, used: 0 };
+  const calculateEffect = (typeId: string, start: string, end: string) => {
+      if (!start || !end || !typeId) return { gained: 0, used: 0 };
       
-      const colab = collaborators.find(c => c.id === collaboratorId);
-      if (!colab) return { gained: 0, used: 0 };
-
+      const days = calculateDaysBetween(start, end);
       const typeConfig = settings.eventTypes.find(t => t.id === typeId);
-      let behavior = typeConfig?.behavior || 'neutral';
       
+      let behavior = typeConfig?.behavior || 'neutral';
       if (typeId === 'ferias') behavior = 'neutral';
       if (typeId === 'folga') behavior = 'debit';
       if (typeId === 'trabalhado') behavior = 'credit_2x';
 
-      // Iterar dias entre start e end
-      let effectiveDays = 0;
-      const start = new Date(startStr + 'T00:00:00');
-      const end = new Date(endStr + 'T00:00:00');
-      
-      const loopDate = new Date(start);
-      
-      while (loopDate <= end) {
-          const dayIndex = loopDate.getDay();
-          const dayKey = weekDayMap[dayIndex] as keyof Schedule;
-          
-          let isWorkingDay = colab.schedule[dayKey].enabled;
-
-          // Se for Domingo e tiver rotação, verificar se é folga de escala
-          if (dayIndex === 0 && colab.hasRotation && colab.rotationGroup) {
-              const isRotationOff = checkRotationDay(loopDate, colab.rotationStartDate);
-              if (isRotationOff) {
-                  isWorkingDay = false; // Domingo de folga na escala
-              }
-          }
-
-          if (isWorkingDay) {
-              effectiveDays++;
-          }
-
-          // Avançar para o próximo dia
-          loopDate.setDate(loopDate.getDate() + 1);
-      }
-
       let daysGained = 0;
       let daysUsed = 0;
 
-      if (behavior === 'credit_2x') daysGained = effectiveDays * 2;
-      else if (behavior === 'credit_1x') daysGained = effectiveDays;
-      else if (behavior === 'debit') daysUsed = effectiveDays;
+      if (behavior === 'credit_2x') daysGained = days * 2;
+      else if (behavior === 'credit_1x') daysGained = days;
+      else if (behavior === 'debit') daysUsed = days;
 
       return { gained: daysGained, used: daysUsed, label: typeConfig?.label };
   };
@@ -509,6 +477,8 @@ export const Events: React.FC<EventsProps> = ({
             let finalType = formData.type;
             
             // Lógica de Permissão de Tipo:
+            // Se NÃO é manager E NÃO tem permissão de seleção (baseado no setor), força 'folga'.
+            // Se tem permissão (canSelectType=true), usa o que foi selecionado no form.
             if (!isManager && !canSelectType) finalType = 'folga';
 
             if (!finalType) {
@@ -523,14 +493,10 @@ export const Events: React.FC<EventsProps> = ({
                     return;
                 }
 
+                const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
                 let count = 0;
-                let batchLabel = '';
 
                 const promises = multiSelectedIds.map(colId => {
-                    // Calcular individualmente para cada colaborador (respeitando escalas diferentes)
-                    const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate, colId);
-                    if (!batchLabel) batchLabel = label || '';
-
                     const newEvent: EventRecord = {
                         id: generateUUID(),
                         collaboratorId: colId,
@@ -541,9 +507,10 @@ export const Events: React.FC<EventsProps> = ({
                         observation: formData.observation,
                         daysGained: gained,
                         daysUsed: used,
-                        status: formData.status, 
+                        status: formData.status, // Admin defines status directly
                         schedule: finalSchedule, 
                         createdAt: new Date().toISOString()
+                        // createdBy is handled by App.tsx
                     };
                     count++;
                     return Promise.resolve(onAdd(newEvent));
@@ -551,7 +518,7 @@ export const Events: React.FC<EventsProps> = ({
 
                 await Promise.all(promises);
 
-                logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${batchLabel}`, user);
+                logAction('create', 'evento', `Lançamento em Lote: ${count} eventos do tipo ${label}`, user);
                 showToast(`${count} eventos registrados com sucesso!`);
                 resetForm();
                 return;
@@ -581,8 +548,7 @@ export const Events: React.FC<EventsProps> = ({
                 }
             }
 
-            // Calcular dias baseado na escala deste colaborador específico
-            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate, finalColabId);
+            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
 
             const newEvent: EventRecord = {
                 id: generateUUID(),
@@ -614,7 +580,7 @@ export const Events: React.FC<EventsProps> = ({
                 return;
             }
 
-            // Validar se o usuário pode aprovar
+            // Validar se o usuário pode aprovar (se estiver tentando aprovar)
             if (formData.status === 'aprovado' && isManager) {
                 const existing = events.find(e => e.id === editingId);
                 if (existing && existing.status === 'pendente' && existing.currentApproverId) {
@@ -625,8 +591,10 @@ export const Events: React.FC<EventsProps> = ({
             }
 
             let finalType = formData.type;
+            
+            // Mesma lógica de permissão no Update
             if (!isManager && !canSelectType) finalType = 'folga';
-            if (!finalType) finalType = 'folga';
+            if (!finalType) finalType = 'folga'; // Fallback
 
             let finalStatus: EventStatus = formData.status;
             let acceptedFlag = false;
@@ -638,9 +606,9 @@ export const Events: React.FC<EventsProps> = ({
                 if (formData.status === 'nova_opcao') acceptedFlag = false;
             }
 
-            // Recalcular com a escala do colaborador
-            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate, formData.collaboratorId);
+            const { gained, used, label } = calculateEffect(finalType, formData.startDate, formData.endDate);
 
+            // Se for aprovado ou reprovado, limpa o currentApproverId (fluxo encerra)
             const isFinished = finalStatus === 'aprovado' || finalStatus === 'reprovado';
             
             const existingEvent = events.find(e => e.id === editingId);
