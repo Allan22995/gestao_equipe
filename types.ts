@@ -72,6 +72,8 @@ export interface Collaborator {
   lastBalanceImport?: string;
   // NOVO: Skills do Colaborador (SkillID -> Level)
   skills?: Record<string, SkillLevel>;
+  // NOVO: Horário de Almoço
+  lunchStartTime?: string; // Formato "HH:mm"
 }
 
 export type EventBehavior = 'neutral' | 'debit' | 'credit_1x' | 'credit_2x';

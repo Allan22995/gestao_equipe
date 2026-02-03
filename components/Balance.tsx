@@ -187,7 +187,7 @@ export const Balance: React.FC<BalanceProps> = ({
   const negativeLastUpdate = useMemo(() => getLatestImportDate(importedNegative), [importedNegative]);
 
   // Filter Log Items based on Sector, Search Term, and Profile
-  const filteredLogItems = useMemo(() => {
+  const filteredLogItems = useMemo<any[]>(() => {
      const allLogs = [
         ...events
             .filter(e => e.status === 'aprovado' || e.status === undefined)

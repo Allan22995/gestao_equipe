@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Collaborator, Schedule, DaySchedule, SystemSettings, UserProfile } from '../types';
 import { generateUUID, formatTitleCase } from '../utils/helpers';
@@ -53,6 +54,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     rotationGroup: '',
     rotationStartDate: '',
     active: true,
+    lunchStartTime: '',
   });
   
   const [schedule, setSchedule] = useState<Schedule>(JSON.parse(JSON.stringify(initialSchedule)));
@@ -148,7 +150,8 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', 
       branch: initialBranch,
       role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
-      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
+      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true,
+      lunchStartTime: ''
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setCopySourceId('');
@@ -177,6 +180,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
       rotationGroup: colab.rotationGroup || '',
       rotationStartDate: colab.rotationStartDate || '',
       active: colab.active ?? true,
+      lunchStartTime: colab.lunchStartTime || '',
     });
     
     const safeSchedule = JSON.parse(JSON.stringify(colab.schedule));
@@ -197,7 +201,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
     setShowForm(false);
     setFormData({ 
       colabId: '', name: '', email: '', phone: '', otherContact: '', profile: 'colaborador', branch: '', role: '', sector: '', leaderId: '', allowedSectors: [], login: '', shiftType: '', 
-      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true
+      hasRotation: false, rotationGroup: '', rotationStartDate: '', active: true, lunchStartTime: ''
     });
     setSchedule(JSON.parse(JSON.stringify(initialSchedule)));
     setSelectedTemplateId('');
@@ -645,6 +649,17 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({
                         ? "Exibe líderes da filial principal e das filiais vinculadas."
                         : "Exibe líderes desta filial."}
               </span>
+            </div>
+
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-gray-600 mb-1">Início Almoço (Opcional)</label>
+              <input 
+                type="time" 
+                className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white" 
+                value={formData.lunchStartTime || ''} 
+                onChange={e => setFormData({...formData, lunchStartTime: e.target.value})} 
+              />
+              <span className="text-[10px] text-gray-400">Pausa automática de 1 hora</span>
             </div>
             
              {isRoleRestricted && (

@@ -467,6 +467,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
       }
 
+      // Check for Lunch Break if Active
+      if (isActive && c.lunchStartTime) {
+          const [lh, lm] = c.lunchStartTime.split(':').map(Number);
+          const lunchStartMins = lh * 60 + lm;
+          const lunchEndMins = lunchStartMins + 60; // 1 hora de almoço
+          if (currentMinutes >= lunchStartMins && currentMinutes < lunchEndMins) {
+              status = 'Em Almoço';
+              statusColor = 'bg-amber-100 text-amber-800 border border-amber-200';
+              isActive = false;
+          }
+      }
+
       if (isActive) activeCount++;
       else inactiveCount++;
 
@@ -1002,6 +1014,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <span className="block text-gray-500 text-xs uppercase font-bold">Email</span>
                     <span className="font-medium text-xs">{selectedColab.email}</span>
                   </div>
+                  {selectedColab.lunchStartTime && (
+                    <div>
+                      <span className="block text-gray-500 text-xs uppercase font-bold">Início Almoço</span>
+                      <span className="font-medium text-xs bg-amber-50 text-amber-800 px-1 rounded">{selectedColab.lunchStartTime}</span>
+                    </div>
+                  )}
                </div>
 
                {canViewPhones && (
